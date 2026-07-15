@@ -13,6 +13,7 @@
   "keywords": ["journal", "agent", "mcp", "retrospective", "codex"],
   "skills": "../skills/",
   "mcpServers": "../.mcp.json",
+  "hooks": "./hooks.json",
   "interface": {
     "displayName": "agent-journal",
     "shortDescription": "Journal for autonomous agents",

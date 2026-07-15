@@ -7,7 +7,7 @@
           {
             "type": "command",
             "command": "node",
-            "args": ["${CLAUDE_PLUGIN_ROOT}/plugins/agent-journal/hooks/session-start.mjs"]
+            "args": ["${PLUGIN_ROOT}/hooks/session-start.mjs"]
           }
         ]
       }

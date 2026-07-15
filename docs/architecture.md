@@ -87,7 +87,7 @@ validity through timing. See [`lambda.md`](lambda.md#configuration) for how
 ## Session lifecycle
 
 A journal entry's `sessionId` is meant to track the agent's own session, so
-that starting a new session (e.g. running `/clear` in Claude Code)
+that starting a new session (e.g. running `/clear`, or a fresh Codex thread)
 automatically starts a fresh journal stream — no manual reset needed.
 Resolution order (`resolveSessionId`, re-read fresh on every call, never
 cached — so a long-lived process like the MCP server picks up a rewritten
@@ -97,11 +97,36 @@ session file without restarting):
 2. `.agent-journal/session.json` (gitignored), written by the plugin's
    `SessionStart` hook (`plugins/agent-journal/hooks/session-start.mjs`) on
    `startup`/`clear`/`resume`/`compact` — this is what makes session
-   switches automatic.
+   switches automatic, for both Claude Code and Codex (see caveat below).
 3. `CLAUDE_CODE_SESSION_ID` env var.
 4. `CODEX_THREAD_ID` env var.
 5. A generated id (`crypto.randomUUID()`), memoized for the process's
    lifetime as a last resort.
+
+**The hook, not the env var, is the reliable mechanism for Codex.** Step 4
+exists as a cheap fallback, but don't rely on it: Codex does not currently
+inject `CODEX_THREAD_ID` into local stdio MCP server processes at all
+([openai/codex#19937](https://github.com/openai/codex/issues/19937)), and
+even where the equivalent env var _is_ available to a shell/tool execution,
+nested Codex sessions have been observed inheriting a parent thread's stale
+id rather than their own
+([openai/codex#15527](https://github.com/openai/codex/issues/15527)). In
+practice, a Codex MCP server that never receives the hook-written state file
+falls straight through to step 5 — one generated id memoized for the life of
+the server process, which is only correct if Codex spawns a fresh MCP server
+process per thread (an open question even in the upstream issue discussion,
+not something this project can assume). Step 2 sidesteps the whole problem:
+`plugins/agent-journal/.codex-plugin/hooks.json` registers the same
+`session-start.mjs` script as a Codex plugin-bundled hook (Codex's hook
+payload uses the same `session_id`/`cwd` field names Claude Code's does, so
+one script covers both hosts), which keeps the state file fresh regardless
+of `CODEX_THREAD_ID`'s reliability. The one real gap: Codex requires a
+one-time manual trust step for plugin-bundled hooks — after installing the
+plugin, run `/hooks` in Codex and trust `agent-journal`'s `SessionStart`
+hook, or the hook is skipped and step 2 never fires. Claude Code's plugin
+hooks did not surface an equivalent trust-gate in this project's testing,
+but that wasn't exhaustively verified either — treat it as unconfirmed
+either way, not as a guarantee.
 
 ## Streaming reads
 
