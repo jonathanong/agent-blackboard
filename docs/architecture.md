@@ -153,6 +153,28 @@ because each is a genuinely separate MCP server process), and a
 dispatched subagent gets its own independent session id, diverging from
 its parent's.
 
+**Update from a real dispatched-agent test against Claude Code** (see
+[`smoke-test.md`](smoke-test.md)): installing this plugin against a
+locally running Claude Code CLI and dispatching non-interactive `claude -p`
+sessions confirmed the `SessionStart` hook genuinely fires — checked by
+reading `.agent-journal/session.json`'s actual file content after each
+dispatch, not just inferring it from behavior — and that a fresh session
+(no prior `--resume`/`--continue`) reliably gets a new session id with no
+leakage from an earlier session's entries. The append→get→patch→get round
+trip and merge semantics matched the Codex results exactly. One
+significant, confirmed **divergence from Codex**: dispatching a subagent
+via the Task tool has it **share the parent's session id** — the subagent's
+own `journal_append` call returned the identical `sessionId` its parent
+was using, the opposite of Codex's `codex exec` subagent dispatch, which
+gets an independent one (see above). Anything journaling from within a
+Claude Code Task-tool subagent should expect its entries to land in the
+_parent's_ session stream, not a session of its own. Separately,
+`claude plugin details` reported "MCP servers (0)" for this plugin even
+though `claude mcp list` showed it `✔ Connected` and it worked correctly
+end-to-end — treat that command's server count as an unreliable display
+detail, not a signal the server isn't wired up; this wasn't tracked to a
+root cause.
+
 ## Streaming reads
 
 `GET /journals` supports three wire formats (`json`, `jsonl`, `markdown`),

@@ -136,3 +136,25 @@ instance's credentials from `~/.zshrc` mid-test (confirmed harmless — the
 client fails closed with a synchronous "Invalid URL" before any network
 call, rather than silently writing anywhere). Full account in
 [`architecture.md#session-lifecycle`](architecture.md#session-lifecycle).
+
+**2026-07-15, `claude` CLI on macOS, local in-memory server, plugin
+installed as a local Claude Code marketplace source.** Phases 1–2 passed
+for real (append → get → patch-merge → get, one consistent `sessionId`
+throughout, dispatched via `claude -p --output-format json
+--dangerously-skip-permissions`). Phase 3 passed with a genuinely fresh
+session id and no leakage from the phase-1/2 session — and this time the
+`SessionStart` hook was confirmed to have actually fired, not just
+inferred from a correct outcome: `.agent-journal/session.json` was read
+directly after the dispatch and its content matched the new session id
+exactly. Phase 4 diverged from the Codex data point above: the dispatched
+Task-tool subagent's `journal_append` call shared its parent's session id
+rather than getting an independent one — the opposite of `codex exec`'s
+subagent behavior. This is the interesting divergence phase 4's own
+write-up anticipated; see
+[`architecture.md#session-lifecycle`](architecture.md#session-lifecycle)
+for the full account.
+
+Also surfaced along the way: `claude plugin details` reported "MCP
+servers (0)" for the installed plugin even though `claude mcp list` showed
+it connected and the tool calls worked correctly end-to-end — an apparent
+display bug in that one command, not a functional gap.
