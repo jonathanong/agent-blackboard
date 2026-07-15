@@ -38,7 +38,7 @@ Without MCP, or from a shell/script, use the `agent-journal` CLI:
 
 ```bash
 agent-journal append '{"note": "started investigating the flaky test"}'
-agent-journal get --format markdown
+agent-journal get --all-sessions --format markdown   # --all-sessions: safe even if this shell has no session id resolved
 agent-journal patch <id> --data '{"pr": 1234}'
 ```
 

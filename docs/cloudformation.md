@@ -113,7 +113,12 @@ needed for managing credentials, never for journaling.
 export AGENT_JOURNAL_TOKEN=ag_sk_...   # from step 5
 
 agent-journal append '{"note": "first deploy works"}'
-agent-journal get --format markdown
+# --all-sessions: each CLI invocation here is a separate process with no
+# CLAUDE_CODE_SESSION_ID/CODEX_THREAD_ID and no SessionStart hook to inherit
+# a session id from, so append and get would otherwise land in two
+# different auto-generated sessions. See
+# architecture.md#session-lifecycle.
+agent-journal get --all-sessions --format markdown
 ```
 
 ## Redeploying

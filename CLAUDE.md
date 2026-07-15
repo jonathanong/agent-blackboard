@@ -23,6 +23,11 @@ for the product description.
   `lychee` isn't an npm package — install it separately (`brew install lychee`, `cargo install
 lychee`, or a GitHub release binary) to run this locally; CI installs it via `lycheeverse/lychee-action`.
 - `packages/server`: `pnpm run dev` (local server), `pnpm run deploy` (CloudFormation via AWS CLI).
+- Running the CLI locally, before it's ever published: `pnpm exec agent-journal` does **not**
+  work from this repo — a workspace package's own `bin` field isn't self-linked into its own
+  `node_modules/.bin` (that only happens for actual dependencies), and `pnpm link --global`
+  no longer does that self-registration in pnpm 11. Invoke it directly instead:
+  `node packages/agent-journal/dist/cli/index.mjs <args>` (build first: `pnpm run build`).
 
 ## Conventions
 

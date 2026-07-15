@@ -33,7 +33,12 @@ export AGENT_JOURNAL_URL=https://your-deployment.lambda-url.us-east-1.on.aws
 export AGENT_JOURNAL_TOKEN=ag_sk_...
 
 agent-journal append '{"note": "found a flaky retry in the payments worker"}'
-agent-journal get --format markdown
+# --all-sessions: from a plain shell, each invocation is a separate process
+# with no session to inherit, so append and get land in different
+# auto-generated sessions unless you pass --session-id yourself. Inside
+# Claude Code/Codex, session id is resolved automatically instead — see
+# docs/architecture.md#session-lifecycle.
+agent-journal get --all-sessions --format markdown
 ```
 
 ## Deploying the server
