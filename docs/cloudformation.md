@@ -166,3 +166,21 @@ aws s3 rb s3://agent-journal-deploy-<account-id>-<region> --force
   relying on the Lambda runtime's copy — see
   [`lambda.md`](lambda.md#pnpm-run-build)) — if you see this, the build step
   didn't run before deploy, or a stale `dist/lambda.zip` is being reused.
+- **`Dynamic require of "node:https" is not supported`** — a real bug hit
+  and fixed during this project's first actual deploy, not a hypothetical:
+  the AWS SDK's bundled CJS dependencies (`@smithy/node-http-handler`) call
+  `require('node:https')` at the point of an actual network call, not at
+  import or client-construction time — which is why it only ever showed up
+  once a real DynamoDB request went out on live Lambda, never in local
+  testing (unit/integration tests exercise the source directly via `tsx`,
+  never the esbuild-bundled `dist/handler.mjs`, and the bundle/deploy
+  scripts are excluded from coverage — see the testing-strategy notes in
+  the original plan). esbuild's ESM output only inlines `require()` calls it
+  can resolve statically, so a genuinely dynamic one throws. Fixed in
+  `infra/bundle.mjs` with an esbuild `banner` that rebinds `require` to
+  `node:module`'s `createRequire(import.meta.url)`, which resolves builtins
+  like any real CJS `require()` would. If you see this again after changing
+  `bundle.mjs`, confirm the banner survived the edit — verify by hitting the
+  deployed Function URL with any request that reaches a DynamoDB call (a
+  local `dist/handler.mjs` import alone won't reproduce it; it only
+  surfaces on Lambda's actual Node runtime under a real network call).

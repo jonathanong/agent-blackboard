@@ -42,6 +42,19 @@ export async function bundle() {
     sourcemap: false,
     minify: false,
     logLevel: 'info',
+    // The AWS SDK's bundled CJS dependencies (e.g. @smithy/node-http-handler)
+    // call require('node:https') at runtime, not just at static-analysis
+    // time. esbuild's synthesized `require` shim for ESM output only inlines
+    // requires it can resolve at bundle time, so those runtime calls throw
+    // "Dynamic require of \"node:https\" is not supported" — this only
+    // surfaces once a real network call is attempted (e.g. a live DynamoDB
+    // request), not at import or client-construction time, which is why it
+    // was never caught locally. Rebinding `require` to Node's real
+    // `createRequire` output makes those calls resolve like normal CJS
+    // `require()` of a builtin.
+    banner: {
+      js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);",
+    },
   })
 
   // Lambda needs to know the bundle is ESM; there's no package.json in
