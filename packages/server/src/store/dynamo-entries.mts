@@ -1,14 +1,14 @@
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
-import { PutCommand, QueryCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
+import { PutCommand, QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb'
 import type { JournalEntry } from '../core/types.mjs'
 import { generateEntryId } from './ids.mjs'
-import type { EntryFilter, EntryPatch, NewJournalEntry } from './store.mjs'
+import type { EntryFilter, NewJournalEntry } from './store.mjs'
+import { MAX_APPEND_BATCH_SIZE } from './store.mjs'
 
 const QUERY_PAGE_LIMIT = 100
-const PATCH_CONCURRENCY = 10
 
-/** Narrows a raw DynamoDB item (which also carries `PK`/`SK`) down to the public `JournalEntry` shape. */
-function itemToEntry(item: Record<string, unknown>): JournalEntry {
+/** Narrows a raw DynamoDB item (which also carries `PK`/`SK`) down to the public `JournalEntry` shape. Exported for dynamo-entries-patch.mts. */
+export function itemToEntry(item: Record<string, unknown>): JournalEntry {
   return {
     id: item.id as string,
     credId: item.credId as string,
@@ -44,6 +44,50 @@ export async function dynamoAppendEntry(
     new PutCommand({ TableName: tableName, Item: { PK: record.credId, SK: record.id, ...record } }),
   )
   return record
+}
+
+/**
+ * Appends every entry in one atomic transaction — all commit or none do.
+ * Fixes a real failure mode of appending sequentially with independent
+ * `PutItem` calls: a partial failure (or a Lambda timeout) could leave an
+ * unknown prefix of the batch committed, and a client retry with fresh ids
+ * would then duplicate that prefix. `TransactWriteItems` has a hard 100-item
+ * limit, hence `MAX_APPEND_BATCH_SIZE` — callers must reject an oversized
+ * batch before it reaches here (the HTTP layer does); this is a defensive
+ * backstop, not the primary enforcement point.
+ */
+export async function dynamoAppendEntries(
+  doc: DynamoDBDocumentClient,
+  tableName: string,
+  ttlDays: number,
+  now: () => Date,
+  entries: NewJournalEntry[],
+): Promise<JournalEntry[]> {
+  if (entries.length === 0) return []
+  if (entries.length > MAX_APPEND_BATCH_SIZE) {
+    throw new Error(
+      `Batch of ${entries.length} entries exceeds MAX_APPEND_BATCH_SIZE (${MAX_APPEND_BATCH_SIZE})`,
+    )
+  }
+  const nowDate = now()
+  const records: JournalEntry[] = entries.map((entry) => ({
+    id: `${entry.sessionId}#${generateEntryId(nowDate)}`,
+    credId: entry.credId,
+    sessionId: entry.sessionId,
+    agent: entry.agent,
+    createdAt: nowDate.toISOString(),
+    archived: false,
+    data: entry.data,
+    ttl: Math.floor(nowDate.getTime() / 1000) + ttlDays * 86400,
+  }))
+  await doc.send(
+    new TransactWriteCommand({
+      TransactItems: records.map((record) => ({
+        Put: { TableName: tableName, Item: { PK: record.credId, SK: record.id, ...record } },
+      })),
+    }),
+  )
+  return records
 }
 
 function buildEntryFilter(filter: EntryFilter): {
@@ -102,83 +146,4 @@ export async function* dynamoGetEntries(
     }
     exclusiveStartKey = page.LastEvaluatedKey
   } while (exclusiveStartKey)
-}
-
-function buildPatchUpdate(patch: EntryPatch): {
-  setClauses: string[]
-  expressionNames: Record<string, string>
-  expressionValues: Record<string, unknown>
-} {
-  const setClauses: string[] = []
-  const expressionNames: Record<string, string> = {}
-  const expressionValues: Record<string, unknown> = {}
-  if (patch.archived !== undefined) {
-    setClauses.push('#archived = :archived')
-    expressionNames['#archived'] = 'archived'
-    expressionValues[':archived'] = patch.archived
-  }
-  if (patch.data !== undefined) {
-    expressionNames['#data'] = 'data'
-    Object.entries(patch.data).forEach(([key, value], i) => {
-      setClauses.push(`#data.#dk${i} = :dv${i}`)
-      expressionNames[`#dk${i}`] = key
-      expressionValues[`:dv${i}`] = value
-    })
-  }
-  return { setClauses, expressionNames, expressionValues }
-}
-
-/**
- * Applies one patch. Relies on the HTTP layer having already rejected
- * effectively-empty patches (no `archived`, no non-empty `data`) — this
- * assumes `setClauses` is non-empty. Uses `attribute_exists(PK)` so a patch
- * for an unknown id fails the condition instead of upserting a bare item
- * (DynamoDB's `UpdateItem` creates the item by default otherwise).
- */
-async function dynamoPatchOne(
-  doc: DynamoDBDocumentClient,
-  tableName: string,
-  credId: string,
-  patch: EntryPatch,
-): Promise<JournalEntry | undefined> {
-  const { setClauses, expressionNames, expressionValues } = buildPatchUpdate(patch)
-  try {
-    const result = await doc.send(
-      new UpdateCommand({
-        TableName: tableName,
-        Key: { PK: credId, SK: patch.id },
-        UpdateExpression: `SET ${setClauses.join(', ')}`,
-        ConditionExpression: 'attribute_exists(PK)',
-        ExpressionAttributeNames: expressionNames,
-        ExpressionAttributeValues: expressionValues,
-        ReturnValues: 'ALL_NEW',
-      }),
-    )
-    return result.Attributes ? itemToEntry(result.Attributes) : undefined
-  } catch (error) {
-    if (error instanceof Error && error.name === 'ConditionalCheckFailedException') return undefined
-    throw error
-  }
-}
-
-export async function dynamoPatchEntries(
-  doc: DynamoDBDocumentClient,
-  tableName: string,
-  credId: string,
-  patches: EntryPatch[],
-): Promise<JournalEntry[]> {
-  const results: Array<JournalEntry | undefined> = Array.from(
-    { length: patches.length },
-    () => undefined,
-  )
-  for (let start = 0; start < patches.length; start += PATCH_CONCURRENCY) {
-    const batch = patches.slice(start, start + PATCH_CONCURRENCY)
-    const batchResults = await Promise.all(
-      batch.map((patch) => dynamoPatchOne(doc, tableName, credId, patch)),
-    )
-    batchResults.forEach((result, i) => {
-      results[start + i] = result
-    })
-  }
-  return results.filter((entry): entry is JournalEntry => entry !== undefined)
 }

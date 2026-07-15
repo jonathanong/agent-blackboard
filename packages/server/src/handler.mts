@@ -3,12 +3,18 @@
 // `handleRequest` request shape, call it, and pipe the response back as it
 // streams. All the routing/business logic lives in ./core/handle-request.mts
 // — this file only translates between the Lambda event/stream shapes and
-// that framework-agnostic contract.
+// that framework-agnostic contract. Streaming primitives live in
+// ./handler-stream.mts (split out to stay under the 200-line file cap).
 import { handleRequest } from './core/handle-request.mjs'
 import type { HandleRequestDeps } from './core/handle-request.mjs'
-import type { BodyChunk, HandlerRequest, HandlerResponse } from './core/types.mjs'
+import type { HandlerRequest, HandlerResponse } from './core/types.mjs'
 import { createDynamoStore } from './store/dynamo.mjs'
 import type { AdminEnv } from './auth/admin.mjs'
+import { errorMessage, nodeStreamSink, streamResponseBody } from './handler-stream.mjs'
+import type { ResponseStreamSink, WritableSink } from './handler-stream.mjs'
+
+export type { ResponseStreamSink, WritableSink } from './handler-stream.mjs'
+export { errorMessage, nodeStreamSink, streamResponseBody } from './handler-stream.mjs'
 
 // Injected by the Lambda Node runtime only under InvokeMode: RESPONSE_STREAM
 // — doesn't exist outside it, hence the test-time polyfill in
@@ -19,15 +25,15 @@ declare global {
     streamifyResponse: (
       fn: (
         event: LambdaFunctionUrlEvent,
-        stream: NodeJS.WritableStream,
+        stream: WritableSink,
         ctx: LambdaContext,
       ) => Promise<void>,
     ) => unknown
     HttpResponseStream: {
       from: (
-        stream: NodeJS.WritableStream,
+        stream: WritableSink,
         metadata: { statusCode: number; headers?: Record<string, string> },
-      ) => NodeJS.WritableStream
+      ) => WritableSink
     }
   }
 }
@@ -67,29 +73,6 @@ function normalizeHeaders(headers: Record<string, string>): Record<string, strin
 function decodeBody(raw: string | null | undefined, isBase64Encoded: boolean): unknown {
   if (raw === null || raw === undefined || raw === '') return undefined
   return isBase64Encoded ? Buffer.from(raw, 'base64').toString('utf8') : raw
-}
-
-// ---- Pure response streaming ----
-
-export interface ResponseStreamSink {
-  write(chunk: BodyChunk): Promise<void>
-  end(): Promise<void>
-}
-
-export async function streamResponseBody(
-  body: BodyChunk | AsyncIterable<BodyChunk>,
-  sink: ResponseStreamSink,
-): Promise<void> {
-  if (typeof body === 'string' || body instanceof Uint8Array) {
-    if (body.length > 0) await sink.write(body)
-  } else {
-    for await (const chunk of body) await sink.write(chunk)
-  }
-  await sink.end()
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
 }
 
 function logError(msg: string, error: unknown, requestId?: string): void {
@@ -146,24 +129,22 @@ export async function handle(
     await streamResponseBody(response.body, sink)
   } catch (error) {
     // The response has already started (status/headers sent) — we can't
-    // change it now, only log and make sure the stream closes.
+    // change them now. Destroy, don't end: a clean end() here would look
+    // to the client exactly like a complete, successful response, silently
+    // truncating whatever data hadn't streamed yet (see
+    // docs/architecture.md's streaming-reads section).
     logError('error while streaming response body', error, deps.requestId)
-    await sink.end().catch(() => {})
+    try {
+      sink.destroy(error instanceof Error ? error : new Error(errorMessage(error)))
+    } catch {
+      // destroy() itself failing shouldn't crash the handler — the
+      // connection is already broken one way or another at this point.
+    }
   }
 }
 
 // ---- Real Lambda wiring below. Kept intentionally thin and delegated to
 // handle(), which carries all the logic tested above. ----
-
-export function nodeStreamSink(stream: NodeJS.WritableStream): ResponseStreamSink {
-  return {
-    write: (chunk) =>
-      new Promise((resolve, reject) => {
-        stream.write(chunk, (error) => (error ? reject(error) : resolve()))
-      }),
-    end: () => new Promise((resolve) => stream.end(resolve)),
-  }
-}
 
 // Constructed lazily (not at module scope) and memoized per execution
 // environment, so a warm Lambda container reuses one DynamoDB client/store

@@ -6,6 +6,7 @@ import type {
   LambdaContext,
   LambdaFunctionUrlEvent,
   ResponseStreamSink,
+  WritableSink,
 } from './handler.mjs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -59,19 +60,24 @@ function throwingBody(message: string): AsyncIterable<string> {
   }
 }
 
-function recordingSink(
-  opts: { failEnd?: boolean } = {},
-): ResponseStreamSink & { writes: BodyChunk[]; ended: boolean } {
+function recordingSink(): ResponseStreamSink & {
+  writes: BodyChunk[]
+  ended: boolean
+  destroyedWith?: Error | undefined
+} {
   const writes: BodyChunk[] = []
   return {
     writes,
     ended: false,
+    destroyedWith: undefined,
     async write(chunk) {
       writes.push(chunk)
     },
     async end() {
       this.ended = true
-      if (opts.failEnd) throw new Error('end failed')
+    },
+    destroy(error) {
+      this.destroyedWith = error
     },
   }
 }
@@ -79,9 +85,11 @@ function recordingSink(
 function fakeWritable(fail = false) {
   const written: unknown[] = []
   let ended = false
+  let destroyedWith: Error | undefined
   const stream = {
     written,
     isEnded: () => ended,
+    destroyedWith: () => destroyedWith,
     write: (chunk: unknown, cb: (error?: Error) => void) => {
       written.push(chunk)
       cb(fail ? new Error('write failed') : undefined)
@@ -91,8 +99,15 @@ function fakeWritable(fail = false) {
       ended = true
       cb()
     },
+    destroy: (error?: Error) => {
+      destroyedWith = error
+    },
   }
-  return stream as unknown as NodeJS.WritableStream & { written: unknown[]; isEnded: () => boolean }
+  return stream as unknown as WritableSink & {
+    written: unknown[]
+    isEnded: () => boolean
+    destroyedWith: () => Error | undefined
+  }
 }
 
 describe('parseFunctionUrlEvent', () => {
@@ -208,6 +223,14 @@ describe('nodeStreamSink', () => {
   it('rejects write() when the underlying stream errors', async () => {
     const sink = nodeStreamSink(fakeWritable(true))
     await expect(sink.write('chunk')).rejects.toThrow('write failed')
+  })
+
+  it('delegates destroy() to the underlying stream', () => {
+    const stream = fakeWritable()
+    const sink = nodeStreamSink(stream)
+    const error = new Error('boom')
+    sink.destroy(error)
+    expect(stream.destroyedWith()).toBe(error)
   })
 })
 
@@ -339,7 +362,11 @@ describe('handle', () => {
     expect(sink.ended).toBe(true)
   })
 
-  it('logs and still ends the sink when streaming the body throws mid-flight', async () => {
+  it('logs and destroys — never cleanly ends — the sink when streaming the body throws mid-flight', async () => {
+    // A clean end() here would look to the client exactly like a complete,
+    // successful response, silently truncating the rest of the stream. The
+    // sink must be destroyed instead, so the client sees a genuine
+    // transport-level error (see docs/architecture.md#streaming-reads).
     const sink = recordingSink()
     async function* explode(): AsyncIterable<string> {
       yield 'partial'
@@ -351,12 +378,36 @@ describe('handle', () => {
       deps({ handleRequest: async () => ({ status: 200, headers: {}, body: explode() }) }),
     )
     expect(sink.writes).toEqual(['partial'])
-    expect(sink.ended).toBe(true)
+    expect(sink.ended).toBe(false)
+    expect(sink.destroyedWith?.message).toBe('stream broke')
     expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('stream broke'))
   })
 
-  it('swallows a failure to end() the sink after a mid-flight streaming error', async () => {
-    const sink = recordingSink({ failEnd: true })
+  it('wraps a non-Error thrown value in a real Error before destroying the sink', async () => {
+    const sink = recordingSink()
+    // Not a generator function (which would need a `yield` to satisfy
+    // require-yield) — matches throwingBody's shape above, just rejecting
+    // with a non-Error value instead of an Error.
+    const explode: AsyncIterable<string> = {
+      [Symbol.asyncIterator]: () => ({
+        // eslint-disable-next-line no-throw-literal -- exercises the non-Error branch of the destroy() wrap
+        next: (): Promise<IteratorResult<string>> => Promise.reject('stream broke (string)'),
+      }),
+    }
+    await handle(
+      baseEvent(),
+      () => sink,
+      deps({ handleRequest: async () => ({ status: 200, headers: {}, body: explode }) }),
+    )
+    expect(sink.destroyedWith).toBeInstanceOf(Error)
+    expect(sink.destroyedWith?.message).toBe('stream broke (string)')
+  })
+
+  it('swallows a failure from destroy() itself after a mid-flight streaming error', async () => {
+    const sink = recordingSink()
+    sink.destroy = () => {
+      throw new Error('destroy failed')
+    }
     await expect(
       handle(
         baseEvent(),
@@ -370,7 +421,6 @@ describe('handle', () => {
         }),
       ),
     ).resolves.toBeUndefined()
-    expect(sink.ended).toBe(true)
   })
 })
 
@@ -383,11 +433,7 @@ describe('handler (real Lambda wiring, end-to-end via the awslambda polyfill)', 
     })
     const context: LambdaContext = { awsRequestId: 'req-smoke' }
     await (
-      handler as (
-        e: LambdaFunctionUrlEvent,
-        s: NodeJS.WritableStream,
-        c: LambdaContext,
-      ) => Promise<void>
+      handler as (e: LambdaFunctionUrlEvent, s: WritableSink, c: LambdaContext) => Promise<void>
     )(event, responseStream, context)
     expect(responseStream.isEnded()).toBe(true)
     expect(JSON.parse(responseStream.written[0] as string)).toEqual({ error: 'not found' })

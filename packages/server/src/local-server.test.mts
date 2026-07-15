@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { hashToken } from './auth/hash.mjs'
 import { generateJournalingToken } from './auth/tokens.mjs'
-import type { CredentialRecord } from './core/types.mjs'
+import type { CredentialRecord, JournalEntry } from './core/types.mjs'
 import {
   adminEnvFromProcess,
   createServer,
@@ -23,6 +23,7 @@ function fakeServerResponse(opts: { failWriteHead?: boolean; failWrite?: boolean
   const written: unknown[] = []
   let headersSent = false
   let ended = false
+  let destroyedWith: Error | undefined
   const res = {
     get headersSent() {
       return headersSent
@@ -47,8 +48,16 @@ function fakeServerResponse(opts: { failWriteHead?: boolean; failWrite?: boolean
       if (body !== undefined) written.push(body)
       return res
     },
+    destroy: (error?: Error) => {
+      destroyedWith = error
+      return res
+    },
   }
-  return Object.assign(res, { written, isEnded: () => ended })
+  return Object.assign(res, {
+    written,
+    isEnded: () => ended,
+    destroyedWith: () => destroyedWith,
+  })
 }
 
 function notImplementedStore(overrides: Partial<JournalStore> = {}): JournalStore {
@@ -184,7 +193,7 @@ describe('respond (unit, fake req/res)', () => {
     expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('db string error'))
   })
 
-  it('logs and still ends the response when writeHead itself throws', async () => {
+  it('logs and destroys — never cleanly ends — the response when writeHead itself throws', async () => {
     consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const req = fakeIncomingMessage({ method: 'GET', url: '/nope' })
     const res = fakeServerResponse({ failWriteHead: true })
@@ -192,11 +201,12 @@ describe('respond (unit, fake req/res)', () => {
 
     await respond(req, res as unknown as ServerResponse, { store })
 
-    expect(res.isEnded()).toBe(true)
+    expect(res.isEnded()).toBe(false)
+    expect(res.destroyedWith()?.message).toBe('writeHead failed')
     expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('writeHead failed'))
   })
 
-  it('writes entries as they stream and logs+closes on a mid-stream failure', async () => {
+  it('writes entries as they stream and destroys — not cleanly ends — on a mid-stream failure', async () => {
     consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const { token, credId } = generateJournalingToken()
     const record: CredentialRecord = {
@@ -232,11 +242,46 @@ describe('respond (unit, fake req/res)', () => {
 
     expect(res.written[0]).toEqual({ status: 200, headers: { 'content-type': 'application/json' } })
     expect(res.written).toContain('[')
-    expect(res.isEnded()).toBe(true)
+    expect(res.isEnded()).toBe(false)
+    expect(res.destroyedWith()?.message).toBe('scan broke')
     expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('scan broke'))
   })
 
-  it('logs and still ends the response when the socket write itself fails', async () => {
+  it('wraps a non-Error thrown value in a real Error before destroying on a mid-stream failure', async () => {
+    consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const { token, credId } = generateJournalingToken()
+    const record: CredentialRecord = {
+      id: credId,
+      name: 'test',
+      tokenHash: hashToken(token),
+      createdAt: new Date(0).toISOString(),
+    }
+    const store = notImplementedStore({
+      getCredentialById: async (id) => (id === credId ? record : undefined),
+      // Not a generator function (which would need a `yield` to satisfy
+      // require-yield) — a plain async-iterable object still satisfies
+      // AsyncIterable<JournalEntry> structurally.
+      getEntries: () => ({
+        [Symbol.asyncIterator]: () => ({
+          // eslint-disable-next-line no-throw-literal -- exercises the non-Error branch of the destroy() wrap
+          next: (): Promise<IteratorResult<JournalEntry>> => Promise.reject('scan broke (string)'),
+        }),
+      }),
+    })
+    const req = fakeIncomingMessage({
+      method: 'GET',
+      url: '/journals',
+      headers: { authorization: `Bearer ${token}` },
+    })
+    const res = fakeServerResponse()
+
+    await respond(req, res as unknown as ServerResponse, { store })
+
+    expect(res.destroyedWith()).toBeInstanceOf(Error)
+    expect(res.destroyedWith()?.message).toBe('scan broke (string)')
+  })
+
+  it('logs and destroys — never cleanly ends — the response when the socket write itself fails', async () => {
     consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const req = fakeIncomingMessage({ method: 'GET', url: '/nope' })
     const res = fakeServerResponse({ failWrite: true })
@@ -244,7 +289,8 @@ describe('respond (unit, fake req/res)', () => {
 
     await respond(req, res as unknown as ServerResponse, { store })
 
-    expect(res.isEnded()).toBe(true)
+    expect(res.isEnded()).toBe(false)
+    expect(res.destroyedWith()?.message).toBe('write failed')
     expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('write failed'))
   })
 })

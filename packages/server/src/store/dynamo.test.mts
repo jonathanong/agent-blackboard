@@ -43,6 +43,55 @@ describe('createDynamoStore', () => {
     })
   })
 
+  describe('appendEntries', () => {
+    it('writes every entry in one TransactWriteCommand, sharing one timestamp', async () => {
+      let transactInput: Record<string, unknown> | undefined
+      const client = fakeDocClient((command) => {
+        if (command.constructor.name === 'TransactWriteCommand') {
+          transactInput = command.input
+          return {}
+        }
+        throw new Error(`unexpected command ${command.constructor.name}`)
+      })
+      const store = createDynamoStore({ client, tableName: 'T', ttlDays: 10, now: () => FIXED_NOW })
+      const results = await store.appendEntries([
+        { credId: 'cred1', sessionId: 'sess1', agent: 'claude', data: { a: 1 } },
+        { credId: 'cred1', sessionId: 'sess1', agent: 'claude', data: { a: 2 } },
+      ])
+      expect(results).toHaveLength(2)
+      expect(results[0]!.id).not.toBe(results[1]!.id)
+      expect(results[0]!.createdAt).toBe(results[1]!.createdAt)
+      const items = transactInput?.TransactItems as Array<{
+        Put: { Item: Record<string, unknown> }
+      }>
+      expect(items).toHaveLength(2)
+      expect(items[0]!.Put.Item).toMatchObject({ PK: 'cred1', SK: results[0]!.id })
+      expect(items[1]!.Put.Item).toMatchObject({ PK: 'cred1', SK: results[1]!.id })
+    })
+
+    it('returns [] without calling the client for an empty batch', async () => {
+      const send = vi.fn()
+      const client = { send } as unknown as DynamoDBDocumentClient
+      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
+      await expect(store.appendEntries([])).resolves.toEqual([])
+      expect(send).not.toHaveBeenCalled()
+    })
+
+    it('throws instead of calling the client for a batch over MAX_APPEND_BATCH_SIZE', async () => {
+      const send = vi.fn()
+      const client = { send } as unknown as DynamoDBDocumentClient
+      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
+      const entries = Array.from({ length: 101 }, () => ({
+        credId: 'cred1',
+        sessionId: 's',
+        agent: 'a',
+        data: {},
+      }))
+      await expect(store.appendEntries(entries)).rejects.toThrow('101')
+      expect(send).not.toHaveBeenCalled()
+    })
+  })
+
   describe('getEntries', () => {
     function rawItem(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
       return {

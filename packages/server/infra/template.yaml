@@ -144,6 +144,22 @@ Resources:
       Action: lambda:InvokeFunctionUrl
       Principal: '*'
 
+  # As of October 2025, AWS requires BOTH lambda:InvokeFunctionUrl (above) and
+  # lambda:InvokeFunction (this statement) on a NONE-auth Function URL, or
+  # every request 403s — see
+  # https://docs.aws.amazon.com/lambda/latest/dg/urls-auth.html
+  # ("If a function's resource-based policy doesn't grant
+  # lambda:invokeFunctionUrl and lambda:InvokeFunction permissions, users
+  # will get a 403 Forbidden error code"). InvokedViaFunctionUrl restricts
+  # this grant to function-URL invocations only, not direct Invoke calls.
+  JournalFunctionPublicInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref JournalFunction
+      Action: lambda:InvokeFunction
+      Principal: '*'
+      InvokedViaFunctionUrl: true
+
 Outputs:
   FunctionUrl:
     Description: Public HTTPS endpoint (set as AGENT_JOURNAL_URL).

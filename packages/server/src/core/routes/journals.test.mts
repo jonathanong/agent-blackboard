@@ -88,6 +88,20 @@ describe('handleJournalsRoute', () => {
       )
       expect(response.status).toBe(400)
     })
+
+    it('400s a batch over the MAX_APPEND_BATCH_SIZE limit, before it reaches the store', async () => {
+      const entries = Array.from({ length: 101 }, () => ({ sessionId: 's1', agent: 'claude' }))
+      const response = await handleJournalsRoute(
+        withAuth({ method: 'POST', body: JSON.stringify(entries) }),
+        store,
+      )
+      expect(response.status).toBe(400)
+      const body = JSON.parse(await collect(response.body))
+      expect(body.error).toContain('101')
+      const remaining: unknown[] = []
+      for await (const entry of store.getEntries(credId, {})) remaining.push(entry)
+      expect(remaining).toHaveLength(0)
+    })
   })
 
   describe('GET', () => {

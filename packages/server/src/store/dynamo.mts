@@ -7,7 +7,8 @@ import {
   dynamoGetCredentialById,
   dynamoListCredentials,
 } from './dynamo-credentials.mjs'
-import { dynamoAppendEntry, dynamoGetEntries, dynamoPatchEntries } from './dynamo-entries.mjs'
+import { dynamoAppendEntries, dynamoAppendEntry, dynamoGetEntries } from './dynamo-entries.mjs'
+import { dynamoPatchEntries } from './dynamo-entries-patch.mjs'
 import type {
   CredentialIdOrName,
   EntryFilter,
@@ -32,6 +33,9 @@ export function createDynamoStore(options: DynamoStoreOptions = {}): JournalStor
   return {
     appendEntry(entry: NewJournalEntry): Promise<JournalEntry> {
       return dynamoAppendEntry(doc, tableName, ttlDays, now, entry)
+    },
+    appendEntries(entries: NewJournalEntry[]): Promise<JournalEntry[]> {
+      return dynamoAppendEntries(doc, tableName, ttlDays, now, entries)
     },
     getEntries(credId: string, filter: EntryFilter): AsyncIterable<JournalEntry> {
       return dynamoGetEntries(doc, tableName, credId, filter)

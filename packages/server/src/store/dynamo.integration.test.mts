@@ -97,6 +97,24 @@ describe.skipIf(!ENDPOINT)('createDynamoStore (DynamoDB Local integration)', () 
     expect(active).toHaveLength(0)
   })
 
+  it('appendEntries writes a real batch via an actual DynamoDB transaction', async () => {
+    const credId = randomUUID()
+    const sessionId = randomUUID()
+
+    const created = await store.appendEntries([
+      { credId, sessionId, agent: 'claude', data: { i: 0 } },
+      { credId, sessionId, agent: 'claude', data: { i: 1 } },
+      { credId, sessionId, agent: 'claude', data: { i: 2 } },
+    ])
+    expect(created).toHaveLength(3)
+    expect(new Set(created.map((e) => e.id)).size).toBe(3) // all distinct ids
+
+    const found = []
+    for await (const e of store.getEntries(credId, { sessionId })) found.push(e)
+    expect(found).toHaveLength(3)
+    expect((found.map((e) => e.data.i) as number[]).sort((a, b) => a - b)).toEqual([0, 1, 2])
+  })
+
   it('returns undefined for patching an id that does not exist (no upsert)', async () => {
     const credId = randomUUID()
     const results = await store.patchEntries(credId, [{ id: 'does-not-exist', archived: true }])

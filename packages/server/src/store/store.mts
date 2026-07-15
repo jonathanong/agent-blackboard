@@ -32,6 +32,14 @@ export interface CredentialIdOrName {
 }
 
 /**
+ * Hard cap on one `appendEntries` batch — matches DynamoDB's own
+ * `TransactWriteItems` limit of 100 items per transaction, which the
+ * DynamoDB-backed store relies on for atomicity. The HTTP layer rejects
+ * (400) a batch larger than this before it ever reaches the store.
+ */
+export const MAX_APPEND_BATCH_SIZE = 100
+
+/**
  * Framework-agnostic journal storage interface. All methods are async so a
  * DynamoDB-backed implementation and an in-memory test double can share one
  * contract. `getEntries` streams/paginates internally rather than buffering
@@ -40,6 +48,16 @@ export interface CredentialIdOrName {
  */
 export interface JournalStore {
   appendEntry(entry: NewJournalEntry): Promise<JournalEntry>
+
+  /**
+   * Appends every entry atomically — all succeed or none do. This is the
+   * fix for a real failure mode: sequential independent per-entry writes
+   * mean a partial failure (or a timeout) can leave an unknown prefix of
+   * the batch committed, and a client retry with fresh ids then duplicates
+   * that prefix. Bounded to `MAX_APPEND_BATCH_SIZE` entries — callers must
+   * enforce this before calling (the store may also enforce it defensively).
+   */
+  appendEntries(entries: NewJournalEntry[]): Promise<JournalEntry[]>
 
   /** Entries for one credential, optionally narrowed by session/agent/archived. Newest-appended-last within a session is NOT guaranteed by this interface beyond insertion order. */
   getEntries(credId: string, filter: EntryFilter): AsyncIterable<JournalEntry>

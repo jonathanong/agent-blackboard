@@ -88,13 +88,16 @@ export async function respond(
   try {
     res.writeHead(response.status, response.headers)
     for await (const chunk of response.body) await writeChunk(res, chunk)
+    res.end()
   } catch (error) {
     // Covers both a `writeHead` failure (nothing sent yet) and a mid-stream
-    // failure (status/headers already sent, so we can't change them now) —
-    // either way we can only log and make sure the socket closes.
+    // failure (status/headers already sent, so we can't change them now).
+    // Either way, destroy — don't end — the socket: a clean end() here
+    // would look to the client exactly like a complete, successful
+    // response, silently truncating whatever data hadn't streamed yet (see
+    // docs/architecture.md#streaming-reads).
     logError('error while streaming response body', error)
-  } finally {
-    res.end()
+    res.destroy(error instanceof Error ? error : new Error(errorMessage(error)))
   }
 }
 
