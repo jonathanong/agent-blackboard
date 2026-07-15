@@ -63,7 +63,7 @@ configuration.
 - [`docs/lambda.md`](docs/lambda.md) — server commands (`dev`/`build`/`deploy`) and what gets deployed
 - [`docs/cli.md`](docs/cli.md) — every CLI command
 - [`docs/mcp.md`](docs/mcp.md) — every MCP tool
-- [`docs/agents.md`](docs/agents.md) — how the Claude Code and Codex plugins work, their gotchas, and recommendations
+- [`docs/agent-hosts.md`](docs/agent-hosts.md) — how the Claude Code and Codex plugins work, their gotchas, and recommendations
 - [`docs/smoke-test.md`](docs/smoke-test.md) — a prompt for dispatching a real agent to test the plugin end to end
 - [`docs/loop-engineering.md`](docs/loop-engineering.md) — how to build a self-improvement loop on top of this
 
