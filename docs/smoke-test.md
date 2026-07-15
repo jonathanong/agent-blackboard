@@ -5,13 +5,11 @@ A prompt to hand a real agent (Claude Code or Codex) so it exercises
 two things automated tests can't observe: whether a real session-boundary
 event (`/clear`, or Codex's equivalent) actually starts a fresh journal
 stream, and whether a subagent's journal entries land in the same session as
-its parent or a different one. Both are open questions flagged in
-[`architecture.md#session-lifecycle`](architecture.md#session-lifecycle) —
-this test gathers real data on them rather than asserting an expected
-answer, since the correct behavior for Codex specifically depends on
-upstream behavior this project doesn't control
-([openai/codex#19937](https://github.com/openai/codex/issues/19937),
-[openai/codex#15527](https://github.com/openai/codex/issues/15527)).
+its parent or a different one. Both were open questions flagged in
+[`architecture.md#session-lifecycle`](architecture.md#session-lifecycle);
+one real run (2026-07-15, `codex exec`) has since answered the subagent
+question empirically — see [Prior run log](#prior-run-log) — but treat that
+as one data point, not a universal guarantee across hosts/versions.
 
 ## Before dispatching
 
@@ -21,11 +19,30 @@ upstream behavior this project doesn't control
   deployed) with `agent-journal credentials create --name "smoke-test"`
   using an **admin** token, then hand only the resulting `ag_sk_...` token
   and `AGENT_JOURNAL_URL` to the agent being tested.
+- **Check for a pre-existing `AGENT_JOURNAL_URL`/`AGENT_JOURNAL_TOKEN` in the
+  dispatched agent's actual runtime shell profile** (`~/.zshrc`, `~/.bashrc`,
+  etc.) before assuming your own exported test values will reach it. `codex
+exec` in particular spawns its subprocesses via a **login shell**
+  (`zsh -lc`), which re-sources the real shell profile — if a real
+  deployment's credentials already live there (yours might; check first),
+  they silently win over whatever you exported in your own calling shell,
+  and the test talks to production instead of your sandbox. The one
+  mechanism confirmed to sidestep this reliably: set the plugin's MCP
+  server config (`.mcp.json` / the Codex plugin's resolved config) to
+  **literal, hardcoded test values** rather than `${VAR}` templates or
+  relying on ambient inheritance, for the duration of the test only —
+  revert afterward.
 - **Codex specifically**: after installing the plugin, run `/hooks`, review
   `agent-journal`'s `SessionStart` hook, and trust it. If this step is
-  skipped, the hook never fires and phase 3 below is expected to fail (see
-  what that means, below) — that failure mode is itself useful information,
-  not a dead end.
+  skipped, the hook never fires — expect phase 3 to fall back to
+  per-process session isolation instead (see [Prior run
+  log](#prior-run-log); this has so far produced the same observable
+  outcome, but for a different reason than the hook actually working).
+  Separately, `.codex-plugin/plugin.json`'s `mcpServers`/`hooks` override
+  keys were not observed to change what `codex mcp get` resolves in the
+  Codex CLI version tested — if your dispatched agent's config doesn't
+  match what you edited, that's a known, unexplained gap, not something
+  you're doing wrong.
 
 ## The prompt
 
@@ -36,6 +53,13 @@ Copy-paste this to the agent being tested:
 > every step, state which tool you called, its arguments, and its raw
 > result (especially any `sessionId` values you observe). Don't summarize
 > away the session ids; they're the point of this test.
+>
+> **Phase 0 — sanity check.** Before doing anything else, confirm what
+> server you're actually configured to talk to (e.g. check the env var or
+> config your `agent-journal` MCP server was given, if you can see it) and
+> report it. If it doesn't match the `AGENT_JOURNAL_URL` you were told to
+> expect, stop and report the mismatch instead of proceeding — you may be
+> pointed at a real deployment instead of the intended test sandbox.
 >
 > **Phase 1 — basic round trip.** Call `journal_append` with
 > `{"data": {"marker": "smoke-test-phase-1"}}`. Then call `journal_get` with
@@ -50,15 +74,13 @@ Copy-paste this to the agent being tested:
 >
 > **Phase 3 — session boundary.** Now reset your session context: if you're
 > Claude Code, run `/clear`. If you're Codex, start a genuinely new
-> thread/session (not a resume of this one). In that new session, call
-> `journal_append` with `{"data": {"marker": "smoke-test-phase-3"}}`, then
-> `journal_get` with no arguments. Report: does this `journal_get` show the
-> phase-1/phase-2 entry, or only phase-3? Report both entries' `sessionId`
-> values. (Expected: only phase-3, with a different `sessionId` than phase
-> 1's. If phase-1 shows up too, in the same session as phase-3, session
-> resolution silently fell back to a generated id or a stale hook state
-> file rather than picking up the new session — check whether the plugin's
-> hook is trusted, if applicable.)
+> thread/session (not a resume of this one) — a fresh `codex exec`
+> invocation is the simplest way to guarantee this. In that new session,
+> call `journal_append` with `{"data": {"marker": "smoke-test-phase-3"}}`,
+> then `journal_get` with no arguments. Report: does this `journal_get` show
+> the phase-1/phase-2 entry, or only phase-3? Report both entries'
+> `sessionId` values. (Expected: only phase-3, with a different `sessionId`
+> than phase 1's.)
 >
 > **Phase 4 — subagent attribution.** From your current (phase-3) session,
 > dispatch a subagent — in Claude Code, use the Task/Agent tool; in Codex,
@@ -67,9 +89,11 @@ Copy-paste this to the agent being tested:
 > with `{"data": {"marker": "smoke-test-subagent"}}` itself (not you, on its
 > behalf) and report the `sessionId` it got back to you. Then, from the
 > parent, call `journal_get` again and report whether the subagent's entry
-> shares the parent's phase-3 `sessionId` or has a different one.
+> shares the parent's phase-3 `sessionId` or has a different one. (One prior
+> `codex exec` run saw the subagent get its own independent session id —
+> confirm whether that holds here too, don't assume it.)
 >
-> **Report.** Summarize: every `sessionId` observed across all four phases,
+> **Report.** Summarize: every `sessionId` observed across all five phases,
 > whether phase 3 correctly started a new session, whether the phase-4
 > subagent entry matched or diverged from its parent's session, and
 > anything that errored, required manual approval (e.g. a hook-trust
@@ -77,60 +101,38 @@ Copy-paste this to the agent being tested:
 
 ## Interpreting the results
 
+- **Phase 0 failing (wrong server)** means the dispatch setup is wrong, not
+  the tool — fix the agent's env/config before drawing any conclusion from
+  the rest of the phases.
 - **Phases 1–2 failing** is a real regression — file it against this repo.
-- **Phase 3 showing the old entry** means the `SessionStart` hook either
-  isn't trusted (Codex) or isn't firing, and session resolution fell
-  through to `CLAUDE_CODE_SESSION_ID`/`CODEX_THREAD_ID`/a memoized
-  generated id — all of which can plausibly stay constant across a `/clear`
-  or thread switch depending on the host. Check hook-trust status first.
-- **Phase 4's outcome is the actual open question.** Either answer is
-  "correct" in the sense that neither is a bug in this project — it
-  reflects how the host attributes subagent environments/threads, which
-  this project can only detect, not control. Record whichever behavior you
-  observe here (in a journal entry, fittingly) so it's not re-litigated
-  from scratch next time.
+- **Phase 3 showing the old entry** means neither the `SessionStart` hook
+  nor per-process fallback isolation kicked in — session resolution fell
+  through to a stale hook state file or a cached generated id. Check
+  hook-trust status first (Codex), or whether `/clear` genuinely started a
+  new process (Claude Code).
+- **Phase 4's outcome diverging from the one prior data point is itself
+  interesting** — it would mean this host/version/subagent-mechanism
+  combination attributes subagent work differently than the one `codex
+exec` run on record. Either outcome is informative; record whichever you
+  observe (in a journal entry, fittingly) rather than assuming the prior
+  result generalizes.
 
-## Findings from a real run (2026-07-15, `codex-cli` on macOS, local server)
+## Prior run log
 
-This test has actually been dispatched once, against a local in-memory
-server with the plugin installed from this repo as a local Codex
-marketplace source. Real results, so future runs have a baseline instead of
-starting cold:
+**2026-07-15, `codex-cli` on macOS, local in-memory server, plugin installed
+as a local Codex marketplace source.** Phases 1–2 passed for real (append →
+get → patch-merge → get, one consistent `sessionId`). Phase 3 passed, but
+via per-process fallback isolation rather than a confirmed-working hook —
+each fresh `codex exec` is a fresh MCP server process with its own
+generated id, which produces the right observable outcome regardless of
+whether the hook itself fired. Phase 4: the dispatched subagent got its own
+independent session id, different from its parent's.
 
-- **Phases 1–2 passed for real**: `journal_append` → `journal_get` →
-  `journal_patch` (merging `{"pr": 9999}` onto an existing entry) →
-  `journal_get` again all round-tripped correctly, confirming the merge
-  (not replace) semantics on the same entry, under one consistent
-  `sessionId` for the whole exec run.
-- **Phase 3 passed**, but by a different mechanism than the hook: a fresh
-  `codex exec` invocation is a fresh MCP server process, which generates
-  its own fallback session id regardless of whether the `SessionStart`
-  hook actually fired. The prior session's entry correctly did not appear.
-  This doesn't confirm the hook path works — only that per-process
-  fallback isolation happens to produce the same observable outcome for
-  "one exec call = one thread."
-- **Phase 4 has a real answer now, for this dispatch mechanism**: a
-  subagent dispatched from within a `codex exec` run received its own
-  independent session id, different from its parent's. Not necessarily
-  true for every Codex subagent mechanism or version — but for `codex
-exec`'s own subagent dispatch, parent and subagent entries do not share
-  a session.
-- **A real, separate blocker surfaced along the way**: getting the plugin's
-  bundled MCP server to actually see valid `AGENT_JOURNAL_URL`/
-  `AGENT_JOURNAL_TOKEN` values took several attempts — the `mcpServers`/
-  `hooks` override keys in `.codex-plugin/plugin.json` didn't appear to
-  change what Codex actually loaded, and `codex exec`'s subprocess spawns
-  a _login_ shell (`zsh -lc`), which re-sources real shell profile state
-  (in this run, a genuine separate deployment's env vars set in
-  `~/.zshrc`, unrelated to this project's own dev/test setup — confirmed
-  harmless since the client fails closed with a synchronous "Invalid URL"
-  before ever making a network call, rather than silently sending
-  anything). The only mechanism confirmed to work in this run was a
-  literal, hardcoded value in the `env` field — `env_vars`-based
-  passthrough and the override keys remain unverified, not confirmed
-  either way. See [`architecture.md#session-lifecycle`](architecture.md#session-lifecycle)
-  for the full account. If you dispatch this test again: know before you
-  start whether the environment you're testing from has its own
-  `AGENT_JOURNAL_*` variables already set somewhere persistent, and
-  don't assume exporting them in your own shell is sufficient to reach a
-  login-shell-spawned subprocess.
+Also surfaced along the way (not phase failures, but real integration
+gaps): the Codex plugin's `mcpServers`/`hooks` manifest override keys didn't
+appear to change what `codex mcp get` resolved, and `codex exec`'s
+login-shell subprocess spawning re-sourced a real, separately-deployed
+instance's credentials from `~/.zshrc` mid-test (confirmed harmless — the
+client fails closed with a synchronous "Invalid URL" before any network
+call, rather than silently writing anywhere). Full account in
+[`architecture.md#session-lifecycle`](architecture.md#session-lifecycle).
