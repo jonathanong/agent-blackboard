@@ -26,7 +26,8 @@
     "ast-grep": "node scripts/run-ast-grep.mjs scan",
     "knip": "knip",
     "dependency-cruiser": "depcruise packages",
-    "actionlint": "github-actionlint"
+    "actionlint": "github-actionlint",
+    "lint:links": "lychee --config lychee.toml '**/*.md' '**/*.json'"
   },
   "devDependencies": {
     "@ast-grep/cli": "^0.44.1",

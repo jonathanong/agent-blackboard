@@ -4,6 +4,9 @@
   // command/args (a JSON convention knip has no plugin for), not imported
   // by anything in this repo — not real dead code.
   "ignore": ["plugins/agent-journal/hooks/*.mjs"],
+  // Not an npm package — a separately-installed Rust binary (brew/cargo/GitHub release
+  // locally, lycheeverse/lychee-action in CI). See CLAUDE.md.
+  "ignoreBinaries": ["lychee"],
   "workspaces": {
     "packages/agent-journal": {
       "entry": ["src/index.mts!", "src/cli/index.mts!"],

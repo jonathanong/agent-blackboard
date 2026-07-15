@@ -1,0 +1,30 @@
+exclude_path = [
+  "(^|/)node_modules($|/)",
+  "(^|/)dist($|/)",
+  "(^|/)coverage($|/)",
+  "(^|/)\\.git($|/)",
+]
+
+# Accept 403 (npmjs.com and some others bot-reject plain HTTP clients) and 429 (rate-limited).
+accept = [200, 203, 206, 403, 429]
+
+max_concurrency = 8
+timeout = 20
+max_retries = 3
+retry_wait_time = 2
+user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+
+exclude = [
+  # The repo isn't pushed to GitHub yet — remove this line once it is.
+  "^https?://github\\.com/jonathanong/agent-journal",
+  # The package hasn't had its first npm publish yet — remove this line once it has.
+  "^https?://www\\.npmjs\\.com/package/@jongleberry/agent-journal",
+  # Documentation placeholders, never meant to resolve.
+  "^https?://your-deployment\\.lambda-url",
+  "^https?://abc123xyz\\.lambda-url",
+  "^https?://localhost",
+  "^https?://127\\.0\\.0\\.1",
+  # Convention inherited from jonathanong/pr-shepherd's identical marketplace.json
+  # $schema value — an identifier, not a fetchable resource.
+  "^https?://anthropic\\.com/claude-code/marketplace\\.schema\\.json",
+]

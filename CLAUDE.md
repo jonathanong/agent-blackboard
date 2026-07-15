@@ -19,6 +19,9 @@ for the product description.
 - `pnpm typecheck` — native `tsc --noEmit`.
 - `pnpm test:coverage` — vitest + v8 coverage; 100% required (project + patch, see `codecov.yml`).
 - `pnpm run actionlint` — lints `.github/workflows/*.yml`.
+- `pnpm run lint:links` — checks links in `**/*.md`/`**/*.json` via `lychee` (`lychee.toml`).
+  `lychee` isn't an npm package — install it separately (`brew install lychee`, `cargo install
+lychee`, or a GitHub release binary) to run this locally; CI installs it via `lycheeverse/lychee-action`.
 - `packages/server`: `pnpm run dev` (local server), `pnpm run deploy` (CloudFormation via AWS CLI).
 
 ## Conventions
