@@ -49,3 +49,17 @@ agent-journal <args>` from anywhere in the repo. This works because the root `pa
 - Unit tests use the in-memory store (`packages/server/src/store/memory.mts`).
 - Integration tests exercise the real DynamoDB store against **DynamoDB Local**; they skip
   gracefully when no local endpoint is configured, and CI runs them via a service container.
+- [`docs/smoke-test.md`](docs/smoke-test.md) is a prompt for a real agent (not an automated
+  test) that exercises session-lifecycle behavior automated tests can't observe — a real
+  `/clear`-equivalent boundary and subagent session attribution. Dispatch it after any change
+  to session resolution, hooks, or the Codex/Claude Code plugin manifests.
+
+## Dogfooding
+
+Agents working on this repo should journal real friction, decisions, and findings using
+`agent-journal` itself as they go (`journal_append` via MCP, or `agent-journal append` via the
+CLI against a local server — `JOURNAL_STORE=memory pnpm run dev`, no AWS account needed) —
+not placeholder text, actual findings from the session. This is the same practice
+`plugins/agent-journal/skills/agent-journal/SKILL.md` and
+[`docs/loop-engineering.md`](docs/loop-engineering.md) describe for downstream users; there's
+no reason this repo shouldn't use its own tool.
