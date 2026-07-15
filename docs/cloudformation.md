@@ -167,20 +167,25 @@ aws s3 rb s3://agent-journal-deploy-<account-id>-<region> --force
   [`lambda.md`](lambda.md#pnpm-run-build)) — if you see this, the build step
   didn't run before deploy, or a stale `dist/lambda.zip` is being reused.
 - **`Dynamic require of "node:https" is not supported`** — a real bug hit
-  and fixed during this project's first actual deploy, not a hypothetical:
-  the AWS SDK's bundled CJS dependencies (`@smithy/node-http-handler`) call
-  `require('node:https')` at the point of an actual network call, not at
-  import or client-construction time — which is why it only ever showed up
-  once a real DynamoDB request went out on live Lambda, never in local
-  testing (unit/integration tests exercise the source directly via `tsx`,
-  never the esbuild-bundled `dist/handler.mjs`, and the bundle/deploy
-  scripts are excluded from coverage — see the testing-strategy notes in
-  the original plan). esbuild's ESM output only inlines `require()` calls it
-  can resolve statically, so a genuinely dynamic one throws. Fixed in
-  `infra/bundle.mjs` with an esbuild `banner` that rebinds `require` to
-  `node:module`'s `createRequire(import.meta.url)`, which resolves builtins
-  like any real CJS `require()` would. If you see this again after changing
-  `bundle.mjs`, confirm the banner survived the edit — verify by hitting the
-  deployed Function URL with any request that reaches a DynamoDB call (a
-  local `dist/handler.mjs` import alone won't reproduce it; it only
-  surfaces on Lambda's actual Node runtime under a real network call).
+  and fixed during this project's first actual deploy, not a hypothetical.
+  The AWS SDK's bundled CJS dependencies (`@smithy/node-http-handler`) call
+  `require('node:https')`, and esbuild's ESM output only inlines `require()`
+  calls it can resolve statically, so that call throws — this reproduces in
+  plain local Node just as much as on Lambda (confirmed directly: running
+  the actual bundled `dist/handler.mjs` in a child Node process and forcing
+  a real `DynamoDBDocumentClient` call reproduces it identically outside
+  Lambda). It only ever showed up on the deployed Lambda in practice because
+  nothing else in this repo runs the bundled artifact at all — every
+  unit/integration test exercises `src/` directly via `tsx`, and the
+  bundle/deploy scripts themselves are excluded from coverage (see the
+  testing-strategy notes in the original plan) — not because the failure
+  needs Lambda's runtime specifically. Fixed in `infra/bundle.mjs` with an
+  esbuild `banner` that rebinds `require` to `node:module`'s
+  `createRequire(import.meta.url)`, which resolves builtins like any real
+  CJS `require()` would.
+  [`bundle.regression.test.mts`](../packages/server/src/bundle.regression.test.mts)
+  guards against this regressing — it builds the real bundle, runs it in a
+  genuine child Node process, and forces an actual `send()` call against a
+  bogus endpoint (fast and hermetic, no real AWS needed) to confirm
+  `node:https` still resolves. If you see this error again, that test
+  should already be failing in CI.
