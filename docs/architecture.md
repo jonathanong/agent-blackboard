@@ -128,6 +128,31 @@ hooks did not surface an equivalent trust-gate in this project's testing,
 but that wasn't exhaustively verified either — treat it as unconfirmed
 either way, not as a guarantee.
 
+**Update from a real dispatched-agent test** (see
+[`smoke-test.md`](smoke-test.md)): installing this plugin against a locally
+running Codex CLI (`codex-cli`, installed via the `codex` binary on this
+machine) showed the `mcpServers`/`hooks` override keys in
+`.codex-plugin/plugin.json` do not appear to change what `codex mcp get`
+resolves — pointing them at a different file had no effect, and Codex kept
+reading the plugin's default-location `.mcp.json`/`hooks/hooks.json`
+regardless. This contradicts what Codex's own plugin documentation
+describes, so treat it as a possible bug/version quirk in the installed
+CLI, not a confirmed permanent limitation — worth re-checking after a
+`codex` CLI upgrade. Separately, the `env`/`env_vars` interaction wasn't
+cleanly isolated in that same test run (a `~/.zshrc`-set real deployment's
+env vars confounded one attempt — see the smoke test doc's own findings
+log for the full account), so neither "does `env_vars` reliably pass
+ambient shell env vars through to a plugin-bundled Codex MCP server" nor
+"does `env`'s literal value take precedence over `env_vars`' whitelist
+when both are present" should be treated as confirmed either way. What
+_is_ confirmed: the append/get/patch round trip and the data-merge
+semantics all work correctly once the MCP server has valid config by any
+means, session boundaries are correctly isolated across separate Codex
+threads (each gets its own generated id, even without the hook firing —
+because each is a genuinely separate MCP server process), and a
+dispatched subagent gets its own independent session id, diverging from
+its parent's.
+
 ## Streaming reads
 
 `GET /journals` supports three wire formats (`json`, `jsonl`, `markdown`),

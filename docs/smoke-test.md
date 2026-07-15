@@ -89,3 +89,48 @@ Copy-paste this to the agent being tested:
   this project can only detect, not control. Record whichever behavior you
   observe here (in a journal entry, fittingly) so it's not re-litigated
   from scratch next time.
+
+## Findings from a real run (2026-07-15, `codex-cli` on macOS, local server)
+
+This test has actually been dispatched once, against a local in-memory
+server with the plugin installed from this repo as a local Codex
+marketplace source. Real results, so future runs have a baseline instead of
+starting cold:
+
+- **Phases 1–2 passed for real**: `journal_append` → `journal_get` →
+  `journal_patch` (merging `{"pr": 9999}` onto an existing entry) →
+  `journal_get` again all round-tripped correctly, confirming the merge
+  (not replace) semantics on the same entry, under one consistent
+  `sessionId` for the whole exec run.
+- **Phase 3 passed**, but by a different mechanism than the hook: a fresh
+  `codex exec` invocation is a fresh MCP server process, which generates
+  its own fallback session id regardless of whether the `SessionStart`
+  hook actually fired. The prior session's entry correctly did not appear.
+  This doesn't confirm the hook path works — only that per-process
+  fallback isolation happens to produce the same observable outcome for
+  "one exec call = one thread."
+- **Phase 4 has a real answer now, for this dispatch mechanism**: a
+  subagent dispatched from within a `codex exec` run received its own
+  independent session id, different from its parent's. Not necessarily
+  true for every Codex subagent mechanism or version — but for `codex
+exec`'s own subagent dispatch, parent and subagent entries do not share
+  a session.
+- **A real, separate blocker surfaced along the way**: getting the plugin's
+  bundled MCP server to actually see valid `AGENT_JOURNAL_URL`/
+  `AGENT_JOURNAL_TOKEN` values took several attempts — the `mcpServers`/
+  `hooks` override keys in `.codex-plugin/plugin.json` didn't appear to
+  change what Codex actually loaded, and `codex exec`'s subprocess spawns
+  a _login_ shell (`zsh -lc`), which re-sources real shell profile state
+  (in this run, a genuine separate deployment's env vars set in
+  `~/.zshrc`, unrelated to this project's own dev/test setup — confirmed
+  harmless since the client fails closed with a synchronous "Invalid URL"
+  before ever making a network call, rather than silently sending
+  anything). The only mechanism confirmed to work in this run was a
+  literal, hardcoded value in the `env` field — `env_vars`-based
+  passthrough and the override keys remain unverified, not confirmed
+  either way. See [`architecture.md#session-lifecycle`](architecture.md#session-lifecycle)
+  for the full account. If you dispatch this test again: know before you
+  start whether the environment you're testing from has its own
+  `AGENT_JOURNAL_*` variables already set somewhere persistent, and
+  don't assume exporting them in your own shell is sufficient to reach a
+  login-shell-spawned subprocess.
