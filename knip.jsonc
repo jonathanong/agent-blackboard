@@ -7,6 +7,9 @@
   // Not an npm package — a separately-installed Rust binary (brew/cargo/GitHub release
   // locally, lycheeverse/lychee-action in CI). See CLAUDE.md.
   "ignoreBinaries": ["lychee"],
+  // A workspace self-dependency of the root, added only so pnpm links its bin into
+  // root's node_modules/.bin (`pnpm exec agent-journal` locally). Never imported.
+  "ignoreDependencies": ["@jongleberry/agent-journal"],
   "workspaces": {
     "packages/agent-journal": {
       "entry": ["src/index.mts!", "src/cli/index.mts!"],

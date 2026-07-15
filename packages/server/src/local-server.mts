@@ -9,6 +9,7 @@
 // AWS account needed for local dev (see README).
 import type { IncomingHttpHeaders, IncomingMessage, Server, ServerResponse } from 'node:http'
 import { createServer as createHttpServer } from 'node:http'
+import { realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import type { AdminEnv } from './auth/admin.mjs'
 import { handleRequest } from './core/handle-request.mjs'
@@ -127,7 +128,10 @@ export function storeFromProcess(): JournalStore {
  * wires together (createServer, storeFromProcess, adminEnvFromProcess) is
  * fully covered above/via the exported helpers; this block is just glue +
  * console output. See README for manual verification steps. */
-const isMain = process.argv[1] === fileURLToPath(import.meta.url)
+// realpathSync: process.argv[1] isn't resolved through symlinks, but
+// import.meta.url is — comparing raw strings would misfire if this file is
+// ever reached through one (see the identical fix in cli/index.mts).
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])
 if (isMain) {
   const port = process.env.PORT ? Number(process.env.PORT) : 3000
   const usingMemory = process.env.JOURNAL_STORE === 'memory'

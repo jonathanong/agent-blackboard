@@ -31,6 +31,7 @@
   },
   "devDependencies": {
     "@ast-grep/cli": "^0.44.1",
+    "@jongleberry/agent-journal": "workspace:*",
     "@types/node": "^26.1.1",
     "@vitest/coverage-v8": "^4.1.10",
     "dependency-cruiser": "^18.1.0",

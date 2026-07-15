@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { realpathSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { formatError } from '../format-error.mjs'
 import { startMcpServer } from '../mcp/server.mjs'
@@ -68,7 +69,13 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
 }
 
 /* v8 ignore start -- real process entrypoint; exercised via the built `agent-journal` binary, not under vitest */
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// realpathSync, not a raw string compare: every real install path (npx, a
+// global install, or a workspace-linked bin like this package's own) invokes
+// this file through a symlink. `import.meta.url` resolves through it to the
+// real file, but `process.argv[1]` is the symlink path as typed on the
+// command line — comparing them directly would silently never match and
+// this entrypoint would never run.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   const code = await runCli(process.argv.slice(2))
   process.exitCode = code
 }
