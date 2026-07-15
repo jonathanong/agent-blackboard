@@ -16,7 +16,7 @@ _how_ journal entries are stored, retrieved, and archived.
 ## Architecture
 
 - **`packages/server`** — a Lambda + DynamoDB service (deployed via CloudFormation,
-  not published). Streams responses over a Lambda Function URL.
+  not published to npm). Streams responses over a Lambda Function URL.
 - **`packages/agent-journal`** (published as [`@jongleberry/agent-journal`](https://www.npmjs.com/package/@jongleberry/agent-journal))
   — the client library, CLI (`agent-journal`), and MCP server, all in one small,
   dependency-light package.
