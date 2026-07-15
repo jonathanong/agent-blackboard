@@ -8,10 +8,10 @@ them an append-only, per-session journal they can write to as a stream of
 consciousness, and pull back later — from the same session or a fresh one — to
 distill learnings and self-improve.
 
-This project does **not** decide *what* an agent should journal. That's up to
+This project does **not** decide _what_ an agent should journal. That's up to
 you: write a skill for your own workflow (see [`plugins/agent-journal/skills/agent-journal`](plugins/agent-journal/skills/agent-journal/SKILL.md)
 for a minimal starting point, or bring your own). `agent-journal` only handles
-*how* journal entries are stored, retrieved, and archived.
+_how_ journal entries are stored, retrieved, and archived.
 
 ## Architecture
 
@@ -50,14 +50,14 @@ configuration.
 
 ## Configuration
 
-| Env var | Where | Meaning |
-| --- | --- | --- |
-| `JOURNAL_TABLE` | server | DynamoDB table name |
-| `JOURNAL_TTL_DAYS` | server | entry retention, default 90 |
-| `ADMIN_CREDENTIALS` | server | base64 JSON `[{ "name", "token" }]`, admin-only |
-| `AGENT_JOURNAL_URL` | client/CLI/MCP | server base URL |
-| `AGENT_JOURNAL_TOKEN` | client/CLI/MCP | journaling credential |
-| `AGENT_JOURNAL_ADMIN_TOKEN` | CLI | admin credential, for `credentials` subcommands |
+| Env var                     | Where          | Meaning                                         |
+| --------------------------- | -------------- | ----------------------------------------------- |
+| `JOURNAL_TABLE`             | server         | DynamoDB table name                             |
+| `JOURNAL_TTL_DAYS`          | server         | entry retention, default 90                     |
+| `ADMIN_CREDENTIALS`         | server         | base64 JSON `[{ "name", "token" }]`, admin-only |
+| `AGENT_JOURNAL_URL`         | client/CLI/MCP | server base URL                                 |
+| `AGENT_JOURNAL_TOKEN`       | client/CLI/MCP | journaling credential                           |
+| `AGENT_JOURNAL_ADMIN_TOKEN` | CLI            | admin credential, for `credentials` subcommands |
 
 ## License
 

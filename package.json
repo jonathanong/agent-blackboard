@@ -23,7 +23,7 @@
     "oxlint:fix": "oxlint --type-aware --fix --deny-warnings",
     "oxfmt": "oxfmt",
     "oxfmt:check": "oxfmt --check",
-    "ast-grep": "ast-grep scan",
+    "ast-grep": "node scripts/run-ast-grep.mjs scan",
     "knip": "knip",
     "dependency-cruiser": "depcruise packages",
     "actionlint": "github-actionlint"

@@ -1,14 +1,17 @@
 {
   "$schema": "https://unpkg.com/knip/schema.json",
+  // Invoked externally by the Claude Code hook runtime via hooks.json's
+  // command/args (a JSON convention knip has no plugin for), not imported
+  // by anything in this repo — not real dead code.
+  "ignore": ["plugins/agent-journal/hooks/*.mjs"],
   "workspaces": {
     "packages/agent-journal": {
-      "entry": ["src/index.mts!", "src/cli/index.mts!", "src/mcp/index.mts!"],
-      "project": ["src/**/*.mts!", "!src/**/*.test.mts!"]
+      "entry": ["src/index.mts!", "src/cli/index.mts!"],
+      "project": ["src/**/*.mts!", "!src/**/*.test.mts!"],
     },
     "packages/server": {
-      "entry": ["src/handler.mts!", "src/local-server.mts!", "infra/*.mjs"],
-      "project": ["src/**/*.mts!", "!src/**/*.test.mts!"]
-    }
+      "entry": ["src/handler.mts!", "infra/*.mjs"],
+      "project": ["src/**/*.mts!", "!src/**/*.test.mts!"],
+    },
   },
-  "ignoreDependencies": ["oxlint-tsgolint"]
 }

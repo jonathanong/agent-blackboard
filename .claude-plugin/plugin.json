@@ -1,0 +1,16 @@
+{
+  "name": "agent-journal",
+  "description": "Journal MCP server and skill for autonomous agents to record a stream-of-consciousness while working unmonitored, then pull it back later to distill learnings.",
+  "version": "0.0.0",
+  "author": {
+    "name": "Jonathan Ong",
+    "email": "jonathanrichardong@gmail.com"
+  },
+  "homepage": "https://github.com/jonathanong/agent-journal",
+  "repository": "https://github.com/jonathanong/agent-journal",
+  "license": "MIT",
+  "keywords": ["journal", "agent", "mcp", "retrospective", "self-improvement"],
+  "skills": "./plugins/agent-journal/skills/",
+  "hooks": "./plugins/agent-journal/hooks/hooks.json",
+  "mcpServers": "./plugins/agent-journal/.mcp.json"
+}

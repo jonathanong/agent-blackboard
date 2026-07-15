@@ -1,0 +1,30 @@
+source:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'packages/**/*.mts'
+server:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'packages/server/**'
+client:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'packages/agent-journal/**'
+plugins:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'plugins/**'
+          - '.claude-plugin/**'
+          - '.agents/**'
+docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'README.md'
+          - 'docs/**'
+          - '**/*.md'
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.github/**'
+          - 'package.json'
+          - 'pnpm-lock.yaml'

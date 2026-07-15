@@ -1,0 +1,34 @@
+{
+  "name": "agent-journal",
+  "version": "0.0.0",
+  "description": "Journal for autonomous agents to record a stream-of-consciousness while working unmonitored, for Codex.",
+  "author": {
+    "name": "Jonathan Ong",
+    "email": "jonathanrichardong@gmail.com",
+    "url": "https://github.com/jonathanong"
+  },
+  "homepage": "https://github.com/jonathanong/agent-journal",
+  "repository": "https://github.com/jonathanong/agent-journal",
+  "license": "MIT",
+  "keywords": ["journal", "agent", "mcp", "retrospective", "codex"],
+  "skills": "../skills/",
+  "mcpServers": "../.mcp.json",
+  "interface": {
+    "displayName": "agent-journal",
+    "shortDescription": "Journal for autonomous agents",
+    "longDescription": "Use agent-journal from Codex to record a stream-of-consciousness while working unmonitored, then pull journals back later to distill learnings and self-improve.",
+    "developerName": "Jonathan Ong",
+    "category": "Coding",
+    "capabilities": ["Interactive", "Write"],
+    "websiteURL": "https://github.com/jonathanong/agent-journal",
+    "privacyPolicyURL": "https://github.com/jonathanong/agent-journal",
+    "termsOfServiceURL": "https://github.com/jonathanong/agent-journal",
+    "defaultPrompt": [
+      "Journal a note about what I just did",
+      "Get my journal entries for this session",
+      "Patch my journal entries with the PR number"
+    ],
+    "brandColor": "#2563EB",
+    "screenshots": []
+  }
+}

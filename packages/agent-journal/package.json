@@ -12,12 +12,16 @@
     "url": "https://github.com/jonathanong/agent-journal",
     "directory": "packages/agent-journal"
   },
-  "type": "module",
-  "main": "./dist/index.mjs",
-  "types": "./dist/index.d.mts",
   "bin": {
     "agent-journal": "./dist/cli/index.mjs"
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
       "types": "./dist/index.d.mts",
@@ -25,7 +29,9 @@
       "default": "./dist/index.mjs"
     }
   },
-  "files": ["dist", "README.md"],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc --project tsconfig.build.json",
     "typecheck": "tsc --noEmit --project tsconfig.json"
@@ -35,8 +41,5 @@
   },
   "engines": {
     "node": ">=24.0.0"
-  },
-  "publishConfig": {
-    "access": "public"
   }
 }

@@ -1,0 +1,154 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  agent-journal: a single Lambda Function URL (streaming) backed by one
+  DynamoDB table. Deployed with `pnpm --filter agent-journal-server run
+  deploy` (infra/deploy.mjs), which wraps `aws cloudformation deploy`.
+
+Parameters:
+  JournalTtlDays:
+    Type: Number
+    Default: 90
+    MinValue: 1
+    Description: Days a journal entry lives before DynamoDB TTL deletes it.
+
+  AdminCredentials:
+    Type: String
+    NoEcho: true
+    Description: >-
+      Base64 JSON [{"name","token"}] of admin credentials. Lives only in this
+      parameter / the Lambda's environment — never written to DynamoDB.
+
+  LambdaCodeS3Bucket:
+    Type: String
+    Description: >-
+      S3 bucket holding the packaged handler zip. Supplied by
+      infra/deploy.mjs, which owns this bucket's lifecycle (see README) — not
+      meant to be set by hand.
+
+  LambdaCodeS3Key:
+    Type: String
+    Description: >-
+      S3 key (content-hash-addressed) of the packaged handler zip. Supplied
+      by infra/deploy.mjs.
+
+Resources:
+  JournalTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  JournalFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        # Least privilege: only the DynamoDB actions handle-request.mts
+        # actually issues against this one table (append=PutItem,
+        # get/pull=Query, patch=UpdateItem, plus GetItem/DeleteItem for
+        # credential lookups+removal). No CreateTable — that's an infra-time
+        # concern this template already owns.
+        - PolicyName: JournalTableAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:Query
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                Resource: !GetAtt JournalTable.Arn
+        - PolicyName: JournalFunctionLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                # Built from the same literal name as JournalFunction.FunctionName
+                # below, NOT via !Ref/!GetAtt on JournalFunction — referencing the
+                # function resource here would create a circular dependency
+                # (Function.Role -> this Role -> this policy -> Function), which
+                # `aws cloudformation validate-template` rejects outright.
+                Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/agent-journal-${AWS::StackName}:*'
+
+  JournalFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'agent-journal-${AWS::StackName}'
+      Handler: handler.handler
+      # Verified via AWS's Node.js 24 Lambda runtime announcement
+      # (https://aws.amazon.com/blogs/compute/node-js-24-runtime-now-available-in-aws-lambda/):
+      # nodejs24.x is a current, actively-supported managed runtime (EOL
+      # ~April 2028), not a guess — this is a runtime-availability fact, not
+      # a design choice. If it ever ages out, bump this to the highest
+      # available managed nodejsNN.x; the esbuild bundle itself targets
+      # modern JS and isn't tied to a specific runtime version.
+      Runtime: nodejs24.x
+      Role: !GetAtt JournalFunctionRole.Arn
+      Code:
+        S3Bucket: !Ref LambdaCodeS3Bucket
+        S3Key: !Ref LambdaCodeS3Key
+      MemorySize: 256
+      Timeout: 60
+      # DoS backstop: caps total concurrent invocations regardless of
+      # traffic, at the cost of 429s under a burst above this ceiling.
+      ReservedConcurrentExecutions: 20
+      Environment:
+        Variables:
+          JOURNAL_TABLE: !Ref JournalTable
+          JOURNAL_TTL_DAYS: !Ref JournalTtlDays
+          ADMIN_CREDENTIALS: !Ref AdminCredentials
+
+  # AuthType: NONE makes the Function URL publicly reachable — the handler
+  # itself is responsible for validating the bearer token on every request
+  # (see src/auth). This tradeoff is deliberate: AWS_IAM auth would require
+  # every caller to sign requests with AWS credentials, which defeats the
+  # point of a portable `ag_sk_...`/`ag_admin_...` bearer token that agents
+  # carry in an env var. ReservedConcurrentExecutions above is the backstop
+  # against abuse of the public endpoint.
+  JournalFunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !GetAtt JournalFunction.Arn
+      AuthType: NONE
+      InvokeMode: RESPONSE_STREAM
+
+  JournalFunctionUrlPublicInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref JournalFunction
+      FunctionUrlAuthType: NONE
+      Action: lambda:InvokeFunctionUrl
+      Principal: '*'
+
+Outputs:
+  FunctionUrl:
+    Description: Public HTTPS endpoint (set as AGENT_JOURNAL_URL).
+    Value: !GetAtt JournalFunctionUrl.FunctionUrl
+
+  TableName:
+    Description: DynamoDB table name (set as JOURNAL_TABLE for local dev against real DynamoDB).
+    Value: !Ref JournalTable

@@ -35,6 +35,11 @@ module.exports = {
   options: {
     tsPreCompilationDeps: true,
     tsConfig: { fileName: 'tsconfig.json' },
+    // Record the edge into node_modules (needed for the no-aws-sdk rule
+    // above) but don't recurse into third-party packages' own internals —
+    // otherwise `no-circular` reports cycles inside dependencies' own code,
+    // which isn't ours to fix and isn't what this rule is for.
+    doNotFollow: { path: 'node_modules' },
     enhancedResolveOptions: {
       exportsFields: ['exports'],
       conditionNames: ['import', 'node', 'default'],

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "jonathanong",
+  "description": "Jonathan Ong's Claude Code plugins",
+  "owner": {
+    "name": "Jonathan Ong",
+    "email": "jonathanrichardong@gmail.com"
+  },
+  "plugins": [
+    {
+      "name": "agent-journal",
+      "description": "Journal for autonomous agents to record findings for later self-review and distillation",
+      "source": "./",
+      "category": "productivity",
+      "homepage": "https://github.com/jonathanong/agent-journal"
+    }
+  ]
+}
