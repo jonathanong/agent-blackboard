@@ -45,8 +45,20 @@ pnpm run deploy
 
 Deploys a single CloudFormation stack: one Lambda (streaming Function URL),
 one DynamoDB table (TTL-enabled, on-demand billing), and the IAM role between
-them. See [`packages/server/README.md`](packages/server/README.md) for
+them. See [`docs/cloudformation.md`](docs/cloudformation.md) for a full
+first-time walkthrough (prerequisites, generating admin credentials,
+verifying the deploy, tearing down), or
+[`packages/server/README.md`](packages/server/README.md) for package-level
 configuration.
+
+## Docs
+
+- [`docs/architecture.md`](docs/architecture.md) — request flow, data model, auth model, session lifecycle
+- [`docs/cloudformation.md`](docs/cloudformation.md) — step-by-step deploy walkthrough
+- [`docs/lambda.md`](docs/lambda.md) — server commands (`dev`/`build`/`deploy`) and what gets deployed
+- [`docs/cli.md`](docs/cli.md) — every CLI command
+- [`docs/mcp.md`](docs/mcp.md) — every MCP tool
+- [`docs/loop-engineering.md`](docs/loop-engineering.md) — how to build a self-improvement loop on top of this
 
 ## Configuration
 

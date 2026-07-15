@@ -39,6 +39,11 @@ subtly-incompatible-version) failure at cold start. The tradeoff costs
 
 ## `pnpm run deploy`
 
+See [`cloudformation.md`](cloudformation.md) for a full first-time
+walkthrough (prerequisites, generating admin credentials, verifying the
+deploy, tearing down). This section covers what the command does
+internally.
+
 Runs `infra/deploy.mjs`, which:
 
 1. Runs the build step above.
