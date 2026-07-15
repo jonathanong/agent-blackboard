@@ -1,0 +1,42 @@
+{
+  "name": "@jongleberry/agent-journal",
+  "version": "0.0.0",
+  "description": "Client library, CLI, and MCP server for agent-journal — a journal for autonomous agents.",
+  "homepage": "https://github.com/jonathanong/agent-journal#readme",
+  "bugs": {
+    "url": "https://github.com/jonathanong/agent-journal/issues"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jonathanong/agent-journal",
+    "directory": "packages/agent-journal"
+  },
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "bin": {
+    "agent-journal": "./dist/cli/index.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc --project tsconfig.build.json",
+    "typecheck": "tsc --noEmit --project tsconfig.json"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
