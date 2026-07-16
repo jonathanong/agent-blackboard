@@ -9,7 +9,7 @@
   "ignoreBinaries": ["lychee"],
   // A workspace self-dependency of the root, added only so pnpm links its bin into
   // root's node_modules/.bin (`pnpm exec atel` locally). Never imported.
-  "ignoreDependencies": ["atel"],
+  "ignoreDependencies": ["@jongleberry/atel"],
   "workspaces": {
     "packages/atel": {
       "entry": ["src/index.mts!", "src/cli/index.mts!"],

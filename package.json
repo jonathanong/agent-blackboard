@@ -1,5 +1,5 @@
 {
-  "name": "atel-workspace",
+  "name": "atel",
   "private": true,
   "description": "Agent Telemetry: a stream for autonomous agents to record findings for later self-review and distillation.",
   "homepage": "https://github.com/jonathanong/atel#readme",
@@ -31,9 +31,9 @@
   },
   "devDependencies": {
     "@ast-grep/cli": "^0.44.1",
+    "@jongleberry/atel": "workspace:*",
     "@types/node": "^26.1.1",
     "@vitest/coverage-v8": "^4.1.10",
-    "atel": "workspace:*",
     "dependency-cruiser": "^18.1.0",
     "github-actionlint": "^1.7.12",
     "knip": "^6.26.0",

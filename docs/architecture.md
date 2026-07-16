@@ -12,7 +12,7 @@ command references.
 | Path              | What                                                                                               | Published?                              |
 | ----------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------- |
 | `packages/server` | The storage service: one Lambda (streaming Function URL) + one DynamoDB table                      | No — deployed via CloudFormation        |
-| `packages/atel`   | The client library, CLI (`atel`), and MCP server                                                   | Yes — `atel` on npm                     |
+| `packages/atel`   | The client library, CLI (`atel`), and MCP server                                                   | Yes — `@jongleberry/atel` on npm        |
 | `plugins/atel`    | Claude Code + Codex plugin: bundles the MCP server, a `SessionStart` hook, and a basic usage skill | No — installed via a plugin marketplace |
 
 ## Request flow

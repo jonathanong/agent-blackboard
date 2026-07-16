@@ -11,15 +11,15 @@ importers:
       '@ast-grep/cli':
         specifier: ^0.44.1
         version: 0.44.1
+      '@jongleberry/atel':
+        specifier: workspace:*
+        version: link:packages/atel
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
       '@vitest/coverage-v8':
         specifier: ^4.1.10
         version: 4.1.10(vitest@4.1.10)
-      atel:
-        specifier: workspace:*
-        version: link:packages/atel
       dependency-cruiser:
         specifier: ^18.1.0
         version: 18.1.0

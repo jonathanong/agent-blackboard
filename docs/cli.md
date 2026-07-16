@@ -1,11 +1,11 @@
 # CLI commands
 
-The `atel` command (published in `atel`).
+The `atel` command (published in `@jongleberry/atel`).
 Output is JSON by default; exit code is `0` on success, `1` on any error,
 with a one-line `Error: ...` message on stderr — never a raw stack trace.
 
 ```sh
-npx atel --help
+npx @jongleberry/atel --help
 ```
 
 ## Configuration

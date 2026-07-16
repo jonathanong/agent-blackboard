@@ -24,7 +24,7 @@ Codex plugin installs:
   "mcpServers": {
     "atel": {
       "command": "npx",
-      "args": ["-y", "atel", "mcp"],
+      "args": ["-y", "@jongleberry/atel", "mcp"],
       "env": {
         "ATEL_URL": "${ATEL_URL}",
         "ATEL_TOKEN": "${ATEL_TOKEN}"
