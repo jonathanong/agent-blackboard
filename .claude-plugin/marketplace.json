@@ -8,11 +8,11 @@
   },
   "plugins": [
     {
-      "name": "agent-journal",
-      "description": "Journal for autonomous agents to record findings for later self-review and distillation",
+      "name": "atel",
+      "description": "Telemetry for autonomous agents to record findings for later self-review and distillation",
       "source": "./",
       "category": "productivity",
-      "homepage": "https://github.com/jonathanong/agent-journal"
+      "homepage": "https://github.com/jonathanong/atel"
     }
   ]
 }

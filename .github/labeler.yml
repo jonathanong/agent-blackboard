@@ -9,7 +9,7 @@ server:
 client:
   - changed-files:
       - any-glob-to-any-file:
-          - 'packages/agent-journal/**'
+          - 'packages/atel/**'
 plugins:
   - changed-files:
       - any-glob-to-any-file:

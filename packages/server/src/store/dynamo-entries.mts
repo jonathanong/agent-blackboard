@@ -1,14 +1,14 @@
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
 import { PutCommand, QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb'
-import type { JournalEntry } from '../core/types.mjs'
+import type { TelemetryEntry } from '../core/types.mjs'
 import { generateEntryId } from './ids.mjs'
-import type { EntryFilter, NewJournalEntry } from './store.mjs'
+import type { EntryFilter, NewTelemetryEntry } from './store.mjs'
 import { MAX_APPEND_BATCH_SIZE } from './store.mjs'
 
 const QUERY_PAGE_LIMIT = 100
 
-/** Narrows a raw DynamoDB item (which also carries `PK`/`SK`) down to the public `JournalEntry` shape. Exported for dynamo-entries-patch.mts. */
-export function itemToEntry(item: Record<string, unknown>): JournalEntry {
+/** Narrows a raw DynamoDB item (which also carries `PK`/`SK`) down to the public `TelemetryEntry` shape. Exported for dynamo-entries-patch.mts. */
+export function itemToEntry(item: Record<string, unknown>): TelemetryEntry {
   return {
     id: item.id as string,
     credId: item.credId as string,
@@ -26,11 +26,11 @@ export async function dynamoAppendEntry(
   tableName: string,
   ttlDays: number,
   now: () => Date,
-  entry: NewJournalEntry,
-): Promise<JournalEntry> {
+  entry: NewTelemetryEntry,
+): Promise<TelemetryEntry> {
   const nowDate = now()
   const id = `${entry.sessionId}#${generateEntryId(nowDate)}`
-  const record: JournalEntry = {
+  const record: TelemetryEntry = {
     id,
     credId: entry.credId,
     sessionId: entry.sessionId,
@@ -61,8 +61,8 @@ export async function dynamoAppendEntries(
   tableName: string,
   ttlDays: number,
   now: () => Date,
-  entries: NewJournalEntry[],
-): Promise<JournalEntry[]> {
+  entries: NewTelemetryEntry[],
+): Promise<TelemetryEntry[]> {
   if (entries.length === 0) return []
   if (entries.length > MAX_APPEND_BATCH_SIZE) {
     throw new Error(
@@ -70,7 +70,7 @@ export async function dynamoAppendEntries(
     )
   }
   const nowDate = now()
-  const records: JournalEntry[] = entries.map((entry) => ({
+  const records: TelemetryEntry[] = entries.map((entry) => ({
     id: `${entry.sessionId}#${generateEntryId(nowDate)}`,
     credId: entry.credId,
     sessionId: entry.sessionId,
@@ -120,7 +120,7 @@ export async function* dynamoGetEntries(
   tableName: string,
   credId: string,
   filter: EntryFilter,
-): AsyncGenerator<JournalEntry> {
+): AsyncGenerator<TelemetryEntry> {
   const { filterExpression, expressionValues, expressionNames } = buildEntryFilter(filter)
   let exclusiveStartKey: Record<string, unknown> | undefined
   do {

@@ -1,6 +1,6 @@
 # Architecture
 
-`agent-journal` is a journal for autonomous agents, not a knowledge base:
+`atel` is a telemetry stream for autonomous agents, not a knowledge base:
 append-only, per-session, unstructured, and TTL'd. Agents write a stream of
 consciousness while working unmonitored; they (or a distiller skill) pull it
 back later to self-improve. This doc covers how the pieces fit together —
@@ -9,11 +9,11 @@ command references.
 
 ## Repo layout
 
-| Path                     | What                                                                                               | Published?                                |
-| ------------------------ | -------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `packages/server`        | The storage service: one Lambda (streaming Function URL) + one DynamoDB table                      | No — deployed via CloudFormation          |
-| `packages/agent-journal` | The client library, CLI (`agent-journal`), and MCP server                                          | Yes — `@jongleberry/agent-journal` on npm |
-| `plugins/agent-journal`  | Claude Code + Codex plugin: bundles the MCP server, a `SessionStart` hook, and a basic usage skill | No — installed via a plugin marketplace   |
+| Path              | What                                                                                               | Published?                              |
+| ----------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| `packages/server` | The storage service: one Lambda (streaming Function URL) + one DynamoDB table                      | No — deployed via CloudFormation        |
+| `packages/atel`   | The client library, CLI (`atel`), and MCP server                                                   | Yes — `@jongleberry/atel` on npm        |
+| `plugins/atel`    | Claude Code + Codex plugin: bundles the MCP server, a `SessionStart` hook, and a basic usage skill | No — installed via a plugin marketplace |
 
 ## Request flow
 
@@ -40,13 +40,13 @@ available through API Gateway.
 One DynamoDB table (`PK`/`SK`, on-demand billing, TTL on the `ttl`
 attribute), holding two kinds of item:
 
-**Journal entry**
+**Telemetry entry**
 
 - `PK = <credId>` — a credential only ever sees its own entries
 - `SK = <sessionId>#<entryId>` (`entryId` is a ULID-shaped, time-sortable id)
 - Attributes: `credId`, `sessionId`, `agent`, `createdAt`, `archived`, `data`
   (an arbitrary JSON object — no imposed schema), `ttl` (epoch seconds,
-  `createdAt + JOURNAL_TTL_DAYS`, default 90 days)
+  `createdAt + ATEL_TTL_DAYS`, default 90 days)
 
 **Credential**
 
@@ -54,7 +54,7 @@ attribute), holding two kinds of item:
 - Attributes: `name`, `tokenHash` (SHA-256 of the raw token — never the token
   itself), `createdAt`
 
-Reads (`GET /journals`) `Query` by `PK` (optionally `begins_with(SK,
+Reads (`GET /telemetry`) `Query` by `PK` (optionally `begins_with(SK,
 "<sessionId>#")` to scope to one session), paginate over
 `ExclusiveStartKey`/`LastEvaluatedKey`, and stream results out as they're
 fetched — never buffering the full result set.
@@ -70,32 +70,32 @@ session's entries with a PR number once it exists.
 
 Two credential types, deliberately never interchangeable:
 
-|              | Journaling credential             | Admin credential                                        |
-| ------------ | --------------------------------- | ------------------------------------------------------- |
-| Token format | `ag_sk_<credId>_<secret>`         | `ag_admin_<name>_<secret>`                              |
-| Stored       | DynamoDB (`tokenHash` only)       | Nowhere — lives only in the `ADMIN_CREDENTIALS` env var |
-| Can call     | `/journals*`                      | `/credentials*`                                         |
-| Created via  | `POST /credentials` (by an admin) | Set directly in server config                           |
+|              | Telemetry credential              | Admin credential                                             |
+| ------------ | --------------------------------- | ------------------------------------------------------------ |
+| Token format | `atl_sk_<credId>_<secret>`        | `atl_admin_<name>_<secret>`                                  |
+| Stored       | DynamoDB (`tokenHash` only)       | Nowhere — lives only in the `ATEL_ADMIN_CREDENTIALS` env var |
+| Can call     | `/telemetry*`                     | `/credentials*`                                              |
+| Created via  | `POST /credentials` (by an admin) | Set directly in server config                                |
 
-A journaling token presented to `/credentials*`, or an admin token presented
-to `/journals*`, is rejected outright (401) before any store lookup — there
+A telemetry token presented to `/credentials*`, or an admin token presented
+to `/telemetry*`, is rejected outright (401) before any store lookup — there
 is no code path where one credential type can act as the other. Token
 comparisons are constant-time (`crypto.timingSafeEqual`) to avoid leaking
 validity through timing. See [`lambda.md`](lambda.md#configuration) for how
-`ADMIN_CREDENTIALS` is set.
+`ATEL_ADMIN_CREDENTIALS` is set.
 
 ## Session lifecycle
 
-A journal entry's `sessionId` is meant to track the agent's own session, so
+A telemetry entry's `sessionId` is meant to track the agent's own session, so
 that starting a new session (e.g. running `/clear`, or a fresh Codex thread)
-automatically starts a fresh journal stream — no manual reset needed.
+automatically starts a fresh telemetry stream — no manual reset needed.
 Resolution order (`resolveSessionId`, re-read fresh on every call, never
 cached — so a long-lived process like the MCP server picks up a rewritten
 session file without restarting):
 
 1. An explicit `sessionId` passed by the caller.
-2. `.agent-journal/session.json` (gitignored), written by the plugin's
-   `SessionStart` hook (`plugins/agent-journal/hooks/session-start.mjs`) on
+2. `.atel/session.json` (gitignored), written by the plugin's
+   `SessionStart` hook (`plugins/atel/hooks/session-start.mjs`) on
    `startup`/`clear`/`resume`/`compact` — this is what makes session
    switches automatic, for both Claude Code and Codex (see caveat below).
 3. `CLAUDE_CODE_SESSION_ID` env var.
@@ -116,13 +116,13 @@ falls straight through to step 5 — one generated id memoized for the life of
 the server process, which is only correct if Codex spawns a fresh MCP server
 process per thread (an open question even in the upstream issue discussion,
 not something this project can assume). Step 2 sidesteps the whole problem:
-`plugins/agent-journal/.codex-plugin/hooks.json` registers the same
+`plugins/atel/.codex-plugin/hooks.json` registers the same
 `session-start.mjs` script as a Codex plugin-bundled hook (Codex's hook
 payload uses the same `session_id`/`cwd` field names Claude Code's does, so
 one script covers both hosts), which keeps the state file fresh regardless
 of `CODEX_THREAD_ID`'s reliability. The one real gap: Codex requires a
 one-time manual trust step for plugin-bundled hooks — after installing the
-plugin, run `/hooks` in Codex and trust `agent-journal`'s `SessionStart`
+plugin, run `/hooks` in Codex and trust `atel`'s `SessionStart`
 hook, or the hook is skipped and step 2 never fires. Claude Code's plugin
 hooks did not surface an equivalent trust-gate in this project's testing,
 but that wasn't exhaustively verified either — treat it as unconfirmed
@@ -157,16 +157,16 @@ its parent's.
 [`smoke-test.md`](smoke-test.md)): installing this plugin against a
 locally running Claude Code CLI and dispatching non-interactive `claude -p`
 sessions confirmed the `SessionStart` hook genuinely fires — checked by
-reading `.agent-journal/session.json`'s actual file content after each
+reading `.atel/session.json`'s actual file content after each
 dispatch, not just inferring it from behavior — and that a fresh session
 (no prior `--resume`/`--continue`) reliably gets a new session id with no
 leakage from an earlier session's entries. The append→get→patch→get round
 trip and merge semantics matched the Codex results exactly. One
 significant, confirmed **divergence from Codex**: dispatching a subagent
 via the Task tool has it **share the parent's session id** — the subagent's
-own `journal_append` call returned the identical `sessionId` its parent
+own `telemetry_append` call returned the identical `sessionId` its parent
 was using, the opposite of Codex's `codex exec` subagent dispatch, which
-gets an independent one (see above). Anything journaling from within a
+gets an independent one (see above). Anything recording telemetry from within a
 Claude Code Task-tool subagent should expect its entries to land in the
 _parent's_ session stream, not a session of its own. Separately,
 `claude plugin details` reported "MCP servers (0)" for this plugin even
@@ -177,7 +177,7 @@ root cause.
 
 ## Streaming reads
 
-`GET /journals` supports three wire formats (`json`, `jsonl`, `markdown`),
+`GET /telemetry` supports three wire formats (`json`, `jsonl`, `markdown`),
 negotiated via `?format=` or `Accept`. The client library defaults to
 requesting `jsonl` and parses it **genuinely incrementally** — each line is
 yielded as soon as it fully arrives, never after buffering the whole
@@ -189,8 +189,8 @@ to stdout as they arrive, so output is incremental regardless of format.
 
 ## What this project does not decide
 
-`agent-journal` only handles _how_ entries are stored, retrieved, and
-archived — not _what_ an agent should journal. That's left to
+`atel` only handles _how_ entries are stored, retrieved, and
+archived — not _what_ an agent should record. That's left to
 project-specific skills layered on top (see
-[`plugins/agent-journal/skills/agent-journal/SKILL.md`](../plugins/agent-journal/skills/agent-journal/SKILL.md)
+[`plugins/atel/skills/atel/SKILL.md`](../plugins/atel/skills/atel/SKILL.md)
 for a minimal starting point).

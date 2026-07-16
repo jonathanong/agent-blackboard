@@ -1,16 +1,16 @@
 {
-  "name": "agent-journal",
+  "name": "atel",
   "private": true,
-  "description": "A journal for autonomous agents to record findings for later self-review and distillation.",
-  "homepage": "https://github.com/jonathanong/agent-journal#readme",
+  "description": "Agent Telemetry: a stream for autonomous agents to record findings for later self-review and distillation.",
+  "homepage": "https://github.com/jonathanong/atel#readme",
   "bugs": {
-    "url": "https://github.com/jonathanong/agent-journal/issues"
+    "url": "https://github.com/jonathanong/atel/issues"
   },
   "license": "MIT",
   "author": "",
   "repository": {
     "type": "git",
-    "url": "https://github.com/jonathanong/agent-journal"
+    "url": "https://github.com/jonathanong/atel"
   },
   "type": "module",
   "scripts": {
@@ -31,7 +31,7 @@
   },
   "devDependencies": {
     "@ast-grep/cli": "^0.44.1",
-    "@jongleberry/agent-journal": "workspace:*",
+    "@jongleberry/atel": "workspace:*",
     "@types/node": "^26.1.1",
     "@vitest/coverage-v8": "^4.1.10",
     "dependency-cruiser": "^18.1.0",

@@ -2,7 +2,7 @@
 // file cap — patchEntries' DynamoDB implementation.
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
 import { UpdateCommand } from '@aws-sdk/lib-dynamodb'
-import type { JournalEntry } from '../core/types.mjs'
+import type { TelemetryEntry } from '../core/types.mjs'
 import { itemToEntry } from './dynamo-entries.mjs'
 import type { EntryPatch } from './store.mjs'
 
@@ -44,7 +44,7 @@ async function dynamoPatchOne(
   tableName: string,
   credId: string,
   patch: EntryPatch,
-): Promise<JournalEntry | undefined> {
+): Promise<TelemetryEntry | undefined> {
   const { setClauses, expressionNames, expressionValues } = buildPatchUpdate(patch)
   try {
     const result = await doc.send(
@@ -70,8 +70,8 @@ export async function dynamoPatchEntries(
   tableName: string,
   credId: string,
   patches: EntryPatch[],
-): Promise<JournalEntry[]> {
-  const results: Array<JournalEntry | undefined> = Array.from(
+): Promise<TelemetryEntry[]> {
+  const results: Array<TelemetryEntry | undefined> = Array.from(
     { length: patches.length },
     () => undefined,
   )
@@ -84,5 +84,5 @@ export async function dynamoPatchEntries(
       results[start + i] = result
     })
   }
-  return results.filter((entry): entry is JournalEntry => entry !== undefined)
+  return results.filter((entry): entry is TelemetryEntry => entry !== undefined)
 }

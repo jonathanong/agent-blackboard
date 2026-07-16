@@ -1,6 +1,6 @@
 import type { AdminEnv } from './auth/admin.mjs'
 import type { BodyChunk, HandlerRequest, HandlerResponse } from './core/types.mjs'
-import type { JournalStore } from './store/store.mjs'
+import type { TelemetryStore } from './store/store.mjs'
 import type {
   HandleDeps,
   LambdaContext,
@@ -34,11 +34,11 @@ const {
 
 // Never actually invoked in these tests — `handle()` only threads `store`
 // through to the (faked) `handleRequest`, it never touches it directly.
-const fakeStore = {} as JournalStore
+const fakeStore = {} as TelemetryStore
 
 function baseEvent(overrides: Partial<LambdaFunctionUrlEvent> = {}): LambdaFunctionUrlEvent {
   return {
-    requestContext: { http: { method: 'GET', path: '/journals' } },
+    requestContext: { http: { method: 'GET', path: '/telemetry' } },
     headers: {},
     queryStringParameters: null,
     body: null,
@@ -114,22 +114,22 @@ describe('parseFunctionUrlEvent', () => {
   it('prefers rawPath, lowercases headers, and parses query params', () => {
     const request = parseFunctionUrlEvent(
       baseEvent({
-        rawPath: '/journals',
+        rawPath: '/telemetry',
         requestContext: { http: { method: 'GET', path: '/ignored' } },
         headers: { 'Content-Type': 'application/json', 'X-Token': 'abc' },
         queryStringParameters: { sessionId: 's1', archived: 'false' },
       }),
     )
-    expect(request.path).toBe('/journals')
+    expect(request.path).toBe('/telemetry')
     expect(request.headers).toEqual({ 'content-type': 'application/json', 'x-token': 'abc' })
     expect(request.query).toEqual({ sessionId: 's1', archived: 'false' })
   })
 
   it('falls back to requestContext.http.path when rawPath is absent', () => {
     const request = parseFunctionUrlEvent(
-      baseEvent({ requestContext: { http: { method: 'POST', path: '/journals' } } }),
+      baseEvent({ requestContext: { http: { method: 'POST', path: '/telemetry' } } }),
     )
-    expect(request.path).toBe('/journals')
+    expect(request.path).toBe('/telemetry')
     expect(request.method).toBe('POST')
   })
 
@@ -144,7 +144,7 @@ describe('parseFunctionUrlEvent', () => {
 
   it('defaults isBase64Encoded to false when the event omits the key entirely', () => {
     const event: LambdaFunctionUrlEvent = {
-      requestContext: { http: { method: 'GET', path: '/journals' } },
+      requestContext: { http: { method: 'GET', path: '/telemetry' } },
       headers: {},
       queryStringParameters: null,
       body: 'plain',
@@ -241,7 +241,7 @@ describe('realStore', () => {
 })
 
 describe('adminEnv', () => {
-  const KEY = 'ADMIN_CREDENTIALS'
+  const KEY = 'ATEL_ADMIN_CREDENTIALS'
   const original = process.env[KEY]
 
   afterEach(() => {
@@ -249,14 +249,14 @@ describe('adminEnv', () => {
     else process.env[KEY] = original
   })
 
-  it('returns {} when ADMIN_CREDENTIALS is unset', () => {
+  it('returns {} when ATEL_ADMIN_CREDENTIALS is unset', () => {
     delete process.env[KEY]
     expect(adminEnv()).toEqual({})
   })
 
-  it('returns { ADMIN_CREDENTIALS } when set', () => {
+  it('returns { ATEL_ADMIN_CREDENTIALS } when set', () => {
     process.env[KEY] = 'token123'
-    expect(adminEnv()).toEqual({ ADMIN_CREDENTIALS: 'token123' })
+    expect(adminEnv()).toEqual({ ATEL_ADMIN_CREDENTIALS: 'token123' })
   })
 })
 
@@ -321,9 +321,9 @@ describe('handle', () => {
   })
 
   it('threads store/now/env through to handleRequest', async () => {
-    let seen: { store: JournalStore; now: () => Date; env: AdminEnv } | undefined
+    let seen: { store: TelemetryStore; now: () => Date; env: AdminEnv } | undefined
     const now = () => new Date(0)
-    const env: AdminEnv = { ADMIN_CREDENTIALS: 'x' }
+    const env: AdminEnv = { ATEL_ADMIN_CREDENTIALS: 'x' }
     await handle(
       baseEvent(),
       () => recordingSink(),

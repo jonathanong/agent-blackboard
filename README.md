@@ -1,44 +1,44 @@
-# agent-journal
+# atel
 
-A journal for autonomous agents — not a knowledge base.
+A telemetry stream for autonomous agents — not a knowledge base.
 
 Agents that work unmonitored (no human watching) need somewhere to jot down what
-happened: friction, decisions, dead ends, useful context. `agent-journal` gives
-them an append-only, per-session journal they can write to as a stream of
+happened: friction, decisions, dead ends, useful context. `atel` gives
+them an append-only, per-session telemetry stream they can write to as a stream of
 consciousness, and pull back later — from the same session or a fresh one — to
 distill learnings and self-improve.
 
-This project does **not** decide _what_ an agent should journal. That's up to
-you: write a skill for your own workflow (see [`plugins/agent-journal/skills/agent-journal`](plugins/agent-journal/skills/agent-journal/SKILL.md)
-for a minimal starting point, or bring your own). `agent-journal` only handles
-_how_ journal entries are stored, retrieved, and archived.
+This project does **not** decide _what_ an agent should record. That's up to
+you: write a skill for your own workflow (see [`plugins/atel/skills/atel`](plugins/atel/skills/atel/SKILL.md)
+for a minimal starting point, or bring your own). `atel` only handles
+_how_ telemetry entries are stored, retrieved, and archived.
 
 ## Architecture
 
 - **`packages/server`** — a Lambda + DynamoDB service (deployed via CloudFormation,
   not published to npm). Streams responses over a Lambda Function URL.
-- **`packages/agent-journal`** (published as [`@jongleberry/agent-journal`](https://www.npmjs.com/package/@jongleberry/agent-journal))
-  — the client library, CLI (`agent-journal`), and MCP server, all in one small,
+- **`packages/atel`** (published as [`@jongleberry/atel`](https://www.npmjs.com/package/@jongleberry/atel))
+  — the client library, CLI (`atel`), and MCP server, all in one small,
   dependency-light package.
-- **`plugins/agent-journal`** — a Claude Code + Codex plugin bundling the MCP
+- **`plugins/atel`** — a Claude Code + Codex plugin bundling the MCP
   server and a basic usage skill.
 
 ## Quick start
 
 ```sh
-npx @jongleberry/agent-journal credentials create --name "my laptop"
-# -> { "id": "...", "token": "ag_sk_..." }
+npx @jongleberry/atel credentials create --name "my laptop"
+# -> { "id": "...", "token": "atl_sk_..." }
 
-export AGENT_JOURNAL_URL=https://your-deployment.lambda-url.us-east-1.on.aws
-export AGENT_JOURNAL_TOKEN=ag_sk_...
+export ATEL_URL=https://your-deployment.lambda-url.us-east-1.on.aws
+export ATEL_TOKEN=atl_sk_...
 
-agent-journal append '{"note": "found a flaky retry in the payments worker"}'
+atel append '{"note": "found a flaky retry in the payments worker"}'
 # --all-sessions: from a plain shell, each invocation is a separate process
 # with no session to inherit, so append and get land in different
 # auto-generated sessions unless you pass --session-id yourself. Inside
 # Claude Code/Codex, session id is resolved automatically instead — see
 # docs/architecture.md#session-lifecycle.
-agent-journal get --all-sessions --format markdown
+atel get --all-sessions --format markdown
 ```
 
 ## Deploying the server
@@ -69,14 +69,14 @@ configuration.
 
 ## Configuration
 
-| Env var                     | Where          | Meaning                                         |
-| --------------------------- | -------------- | ----------------------------------------------- |
-| `JOURNAL_TABLE`             | server         | DynamoDB table name                             |
-| `JOURNAL_TTL_DAYS`          | server         | entry retention, default 90                     |
-| `ADMIN_CREDENTIALS`         | server         | base64 JSON `[{ "name", "token" }]`, admin-only |
-| `AGENT_JOURNAL_URL`         | client/CLI/MCP | server base URL                                 |
-| `AGENT_JOURNAL_TOKEN`       | client/CLI/MCP | journaling credential                           |
-| `AGENT_JOURNAL_ADMIN_TOKEN` | CLI            | admin credential, for `credentials` subcommands |
+| Env var                  | Where          | Meaning                                         |
+| ------------------------ | -------------- | ----------------------------------------------- |
+| `ATEL_TABLE`             | server         | DynamoDB table name                             |
+| `ATEL_TTL_DAYS`          | server         | entry retention, default 90                     |
+| `ATEL_ADMIN_CREDENTIALS` | server         | base64 JSON `[{ "name", "token" }]`, admin-only |
+| `ATEL_URL`               | client/CLI/MCP | server base URL                                 |
+| `ATEL_TOKEN`             | client/CLI/MCP | telemetry credential                            |
+| `ATEL_ADMIN_TOKEN`       | CLI            | admin credential, for `credentials` subcommands |
 
 ## License
 

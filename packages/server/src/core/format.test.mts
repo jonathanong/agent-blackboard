@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { formatEntries, FORMAT_CONTENT_TYPE, resolveFormat } from './format.mjs'
-import type { JournalEntry } from './types.mjs'
+import type { TelemetryEntry } from './types.mjs'
 
-async function* entries(list: JournalEntry[]): AsyncGenerator<JournalEntry> {
+async function* entries(list: TelemetryEntry[]): AsyncGenerator<TelemetryEntry> {
   for (const entry of list) yield entry
 }
 
@@ -12,7 +12,7 @@ async function collect(iter: AsyncIterable<string>): Promise<string> {
   return out
 }
 
-const ENTRY: JournalEntry = {
+const ENTRY: TelemetryEntry = {
   id: 's1#01',
   credId: 'cred1',
   sessionId: 's1',

@@ -19,7 +19,7 @@ const FIXED_NOW = new Date('2024-06-01T00:00:00.000Z')
 
 describe('createDynamoStore', () => {
   describe('appendEntry', () => {
-    it('PUTs an item with computed id/createdAt/ttl and returns a clean JournalEntry', async () => {
+    it('PUTs an item with computed id/createdAt/ttl and returns a clean TelemetryEntry', async () => {
       let putInput: Record<string, unknown> | undefined
       const client = fakeDocClient((command) => {
         if (command.constructor.name === 'PutCommand') {
@@ -330,7 +330,7 @@ describe('createDynamoStore', () => {
       const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
       const { record, token } = await store.createCredential('agent-1')
       expect(record.name).toBe('agent-1')
-      expect(token.startsWith('ag_sk_')).toBe(true)
+      expect(token.startsWith('atl_sk_')).toBe(true)
       expect(putInput?.Item).toMatchObject({ PK: 'CRED', SK: record.id, name: 'agent-1' })
     })
 
@@ -460,19 +460,19 @@ describe('createDynamoStore', () => {
   })
 
   describe('resolveDynamoConfig defaults', () => {
-    const originalTable = process.env.JOURNAL_TABLE
-    const originalTtl = process.env.JOURNAL_TTL_DAYS
+    const originalTable = process.env.ATEL_TABLE
+    const originalTtl = process.env.ATEL_TTL_DAYS
 
     beforeEach(() => {
-      delete process.env.JOURNAL_TABLE
-      delete process.env.JOURNAL_TTL_DAYS
+      delete process.env.ATEL_TABLE
+      delete process.env.ATEL_TTL_DAYS
     })
 
     afterEach(() => {
-      if (originalTable === undefined) delete process.env.JOURNAL_TABLE
-      else process.env.JOURNAL_TABLE = originalTable
-      if (originalTtl === undefined) delete process.env.JOURNAL_TTL_DAYS
-      else process.env.JOURNAL_TTL_DAYS = originalTtl
+      if (originalTable === undefined) delete process.env.ATEL_TABLE
+      else process.env.ATEL_TABLE = originalTable
+      if (originalTtl === undefined) delete process.env.ATEL_TTL_DAYS
+      else process.env.ATEL_TTL_DAYS = originalTtl
     })
 
     it('builds a real client and default config when no options are given', () => {
@@ -487,9 +487,9 @@ describe('createDynamoStore', () => {
       expect(new Date(entry.createdAt).getTime()).toBeGreaterThanOrEqual(before)
     })
 
-    it('reads JOURNAL_TABLE and JOURNAL_TTL_DAYS from the environment', async () => {
-      process.env.JOURNAL_TABLE = 'FromEnv'
-      process.env.JOURNAL_TTL_DAYS = '45'
+    it('reads ATEL_TABLE and ATEL_TTL_DAYS from the environment', async () => {
+      process.env.ATEL_TABLE = 'FromEnv'
+      process.env.ATEL_TTL_DAYS = '45'
       let putInput: Record<string, unknown> | undefined
       const client = fakeDocClient((command) => {
         putInput = command.input

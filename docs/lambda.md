@@ -2,7 +2,7 @@
 
 Commands for `packages/server` — the Lambda + DynamoDB storage service.
 Run from the repo root or from `packages/server/` (`pnpm --filter
-agent-journal-server run <script>` vs. `pnpm run <script>` inside the
+atel-server run <script>` vs. `pnpm run <script>` inside the
 package directory). This package is **deployed, never published to npm**.
 
 ## `pnpm run dev`
@@ -12,12 +12,12 @@ Runs `tsx src/local-server.mts` directly — no build step. Starts a
 requests into the same `handleRequest` core the Lambda handler uses.
 
 ```sh
-JOURNAL_STORE=memory \
-ADMIN_CREDENTIALS=$(node -e "console.log(Buffer.from(JSON.stringify([{name:'local-admin',token:'ag_admin_local_dev'}])).toString('base64'))") \
+ATEL_STORE=memory \
+ATEL_ADMIN_CREDENTIALS=$(node -e "console.log(Buffer.from(JSON.stringify([{name:'local-admin',token:'atl_admin_local_dev'}])).toString('base64'))") \
   pnpm run dev
 ```
 
-With `JOURNAL_STORE=memory`, it uses an in-memory store — no AWS account or
+With `ATEL_STORE=memory`, it uses an in-memory store — no AWS account or
 DynamoDB needed at all. Omit it (or set it to anything else) to run against
 a real DynamoDB table, including [DynamoDB
 Local](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html)
@@ -63,13 +63,13 @@ Runs `infra/deploy.mjs`, which:
    `aws cloudformation describe-stacks`.
 
 ```sh
-ADMIN_CREDENTIALS=$(node -e "console.log(Buffer.from(JSON.stringify([{name:'prod-admin',token:'ag_admin_prod_<random>'}])).toString('base64'))") \
+ATEL_ADMIN_CREDENTIALS=$(node -e "console.log(Buffer.from(JSON.stringify([{name:'prod-admin',token:'atl_admin_prod_<random>'}])).toString('base64'))") \
   pnpm run deploy
 ```
 
-`ADMIN_CREDENTIALS` is required — there's no default, since an empty admin
+`ATEL_ADMIN_CREDENTIALS` is required — there's no default, since an empty admin
 list would just make `/credentials*` permanently 401 on a fresh deploy.
-Override `JOURNAL_TTL_DAYS`/`STACK_NAME` via env vars.
+Override `ATEL_TTL_DAYS`/`STACK_NAME` via env vars.
 
 **Prerequisites**: an AWS account and the AWS CLI (`aws`), configured with
 credentials that can manage CloudFormation, Lambda, IAM roles, DynamoDB, and
@@ -102,14 +102,14 @@ A single CloudFormation stack:
 
 ## Configuration
 
-| Var                 | Used by                                 | Meaning                                                                                                                |
-| ------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `JOURNAL_TABLE`     | handler, local-server                   | DynamoDB table name. Default `AgentJournal`; on the deployed Lambda, always set from the CloudFormation-managed table. |
-| `JOURNAL_TTL_DAYS`  | handler, local-server                   | Entry retention in days. Default `90`.                                                                                 |
-| `ADMIN_CREDENTIALS` | handler, local-server                   | Base64 JSON `[{ "name", "token" }]`. Never written to DynamoDB. Unset = `/credentials*` always 401s.                   |
-| `JOURNAL_STORE`     | local-server only                       | Set to `memory` to use the in-memory store instead of DynamoDB.                                                        |
-| `PORT`              | local-server only                       | Listen port for `pnpm run dev`. Default `3000`.                                                                        |
-| `AWS_REGION`        | handler, local-server (via the AWS SDK) | Region for the DynamoDB client — read automatically by `@aws-sdk/client-dynamodb`'s default provider chain.            |
+| Var                      | Used by                                 | Meaning                                                                                                        |
+| ------------------------ | --------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `ATEL_TABLE`             | handler, local-server                   | DynamoDB table name. Default `Atel`; on the deployed Lambda, always set from the CloudFormation-managed table. |
+| `ATEL_TTL_DAYS`          | handler, local-server                   | Entry retention in days. Default `90`.                                                                         |
+| `ATEL_ADMIN_CREDENTIALS` | handler, local-server                   | Base64 JSON `[{ "name", "token" }]`. Never written to DynamoDB. Unset = `/credentials*` always 401s.           |
+| `ATEL_STORE`             | local-server only                       | Set to `memory` to use the in-memory store instead of DynamoDB.                                                |
+| `PORT`                   | local-server only                       | Listen port for `pnpm run dev`. Default `3000`.                                                                |
+| `AWS_REGION`             | handler, local-server (via the AWS SDK) | Region for the DynamoDB client — read automatically by `@aws-sdk/client-dynamodb`'s default provider chain.    |
 
 ## Testing
 

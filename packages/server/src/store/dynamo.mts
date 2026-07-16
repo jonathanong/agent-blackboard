@@ -1,4 +1,4 @@
-import type { CredentialRecord, JournalEntry } from '../core/types.mjs'
+import type { CredentialRecord, TelemetryEntry } from '../core/types.mjs'
 import type { DynamoStoreOptions } from './dynamo-client.mjs'
 import { resolveDynamoConfig } from './dynamo-client.mjs'
 import {
@@ -13,34 +13,34 @@ import type {
   CredentialIdOrName,
   EntryFilter,
   EntryPatch,
-  JournalStore,
-  NewJournalEntry,
+  TelemetryStore,
+  NewTelemetryEntry,
 } from './store.mjs'
 
 export type { DynamoStoreOptions } from './dynamo-client.mjs'
 
 /**
- * DynamoDB-backed `JournalStore` — single-table design (table name from
- * `JOURNAL_TABLE` env, default `AgentJournal`).
- *  - Journal entry item: `PK = credId`, `SK = "${sessionId}#${entryId}"`
+ * DynamoDB-backed `TelemetryStore` — single-table design (table name from
+ * `ATEL_TABLE` env, default `Atel`).
+ *  - Telemetry entry item: `PK = credId`, `SK = "${sessionId}#${entryId}"`
  *    (`entryId` a local ULID-style id — see `ids.mts`).
  *  - Credential item: `PK = "CRED"`, `SK = credId`.
  * See `dynamo-entries.mts` / `dynamo-credentials.mts` for the query/update
  * logic, and `dynamo-client.mts` for client + config resolution.
  */
-export function createDynamoStore(options: DynamoStoreOptions = {}): JournalStore {
+export function createDynamoStore(options: DynamoStoreOptions = {}): TelemetryStore {
   const { doc, tableName, ttlDays, now } = resolveDynamoConfig(options)
   return {
-    appendEntry(entry: NewJournalEntry): Promise<JournalEntry> {
+    appendEntry(entry: NewTelemetryEntry): Promise<TelemetryEntry> {
       return dynamoAppendEntry(doc, tableName, ttlDays, now, entry)
     },
-    appendEntries(entries: NewJournalEntry[]): Promise<JournalEntry[]> {
+    appendEntries(entries: NewTelemetryEntry[]): Promise<TelemetryEntry[]> {
       return dynamoAppendEntries(doc, tableName, ttlDays, now, entries)
     },
-    getEntries(credId: string, filter: EntryFilter): AsyncIterable<JournalEntry> {
+    getEntries(credId: string, filter: EntryFilter): AsyncIterable<TelemetryEntry> {
       return dynamoGetEntries(doc, tableName, credId, filter)
     },
-    patchEntries(credId: string, patches: EntryPatch[]): Promise<JournalEntry[]> {
+    patchEntries(credId: string, patches: EntryPatch[]): Promise<TelemetryEntry[]> {
       return dynamoPatchEntries(doc, tableName, credId, patches)
     },
     createCredential(name: string): Promise<{ record: CredentialRecord; token: string }> {

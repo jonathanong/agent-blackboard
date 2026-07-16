@@ -1,11 +1,8 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync, writeFileSync } from 'node:fs'
 
-const version = JSON.parse(readFileSync('packages/agent-journal/package.json', 'utf8')).version
-const pluginPaths = [
-  '.claude-plugin/plugin.json',
-  'plugins/agent-journal/.codex-plugin/plugin.json',
-]
+const version = JSON.parse(readFileSync('packages/atel/package.json', 'utf8')).version
+const pluginPaths = ['.claude-plugin/plugin.json', 'plugins/atel/.codex-plugin/plugin.json']
 
 for (const pluginPath of pluginPaths) {
   const plugin = JSON.parse(readFileSync(pluginPath, 'utf8'))

@@ -30,7 +30,7 @@ export type RequestBody = unknown
 export interface HandlerRequest {
   /** Already upper-cased, e.g. "GET" — matches `node:http` and Lambda Function URL events. */
   method: string
-  /** URL path only, no query string, e.g. "/journals". */
+  /** URL path only, no query string, e.g. "/telemetry". */
   path: string
   query: QueryMap
   headers: HeaderMap
@@ -48,8 +48,8 @@ export interface HandlerResponse {
   body: AsyncIterable<BodyChunk>
 }
 
-/** A single journal entry, as stored and returned by the API. */
-export interface JournalEntry {
+/** A single telemetry entry, as stored and returned by the API. */
+export interface TelemetryEntry {
   id: string
   credId: string
   sessionId: string
@@ -68,8 +68,8 @@ export interface CredentialRecord {
   createdAt: string
 }
 
-/** Body accepted for one entry in `POST /journals`, before `credId` is attached from auth. */
-export interface JournalEntryInput {
+/** Body accepted for one entry in `POST /telemetry`, before `credId` is attached from auth. */
+export interface TelemetryEntryInput {
   sessionId: string
   agent: string
   data?: Record<string, unknown>

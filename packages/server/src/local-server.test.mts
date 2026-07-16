@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { hashToken } from './auth/hash.mjs'
-import { generateJournalingToken } from './auth/tokens.mjs'
-import type { CredentialRecord, JournalEntry } from './core/types.mjs'
+import { generateTelemetryToken } from './auth/tokens.mjs'
+import type { CredentialRecord, TelemetryEntry } from './core/types.mjs'
 import {
   adminEnvFromProcess,
   createServer,
@@ -11,8 +11,8 @@ import {
   respond,
   storeFromProcess,
 } from './local-server.mjs'
-import { MemoryJournalStore } from './store/memory.mjs'
-import type { JournalStore } from './store/store.mjs'
+import { MemoryTelemetryStore } from './store/memory.mjs'
+import type { TelemetryStore } from './store/store.mjs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 function fakeIncomingMessage(overrides: Partial<IncomingMessage> = {}): IncomingMessage {
@@ -60,7 +60,7 @@ function fakeServerResponse(opts: { failWriteHead?: boolean; failWrite?: boolean
   })
 }
 
-function notImplementedStore(overrides: Partial<JournalStore> = {}): JournalStore {
+function notImplementedStore(overrides: Partial<TelemetryStore> = {}): TelemetryStore {
   const notImplemented = (name: string) => () => {
     throw new Error(`${name} not implemented in this test double`)
   }
@@ -73,16 +73,16 @@ function notImplementedStore(overrides: Partial<JournalStore> = {}): JournalStor
     getCredentialById: notImplemented('getCredentialById'),
     deleteCredential: notImplemented('deleteCredential'),
     ...overrides,
-  } as JournalStore
+  } as TelemetryStore
 }
 
 describe('parseIncomingRequest', () => {
   it('parses method, path, and query params (last value wins on repeats)', () => {
     const request = parseIncomingRequest(
-      fakeIncomingMessage({ url: '/journals?a=1&b=2&a=3', method: 'get' }),
+      fakeIncomingMessage({ url: '/telemetry?a=1&b=2&a=3', method: 'get' }),
     )
     expect(request.method).toBe('GET')
-    expect(request.path).toBe('/journals')
+    expect(request.path).toBe('/telemetry')
     expect(request.query).toEqual({ a: '3', b: '2' })
   })
 
@@ -96,7 +96,7 @@ describe('parseIncomingRequest', () => {
   })
 
   it('defaults method to GET when absent and passes the raw message through as body', () => {
-    const req = fakeIncomingMessage({ method: undefined, url: '/journals' })
+    const req = fakeIncomingMessage({ method: undefined, url: '/telemetry' })
     const request = parseIncomingRequest(req)
     expect(request.method).toBe('GET')
     expect(request.body).toBe(req)
@@ -115,28 +115,28 @@ describe('currentTime', () => {
 })
 
 describe('adminEnvFromProcess / storeFromProcess', () => {
-  const ORIGINAL_ADMIN = process.env.ADMIN_CREDENTIALS
-  const ORIGINAL_STORE = process.env.JOURNAL_STORE
+  const ORIGINAL_ADMIN = process.env.ATEL_ADMIN_CREDENTIALS
+  const ORIGINAL_STORE = process.env.ATEL_STORE
 
   afterEach(() => {
-    if (ORIGINAL_ADMIN === undefined) delete process.env.ADMIN_CREDENTIALS
-    else process.env.ADMIN_CREDENTIALS = ORIGINAL_ADMIN
-    if (ORIGINAL_STORE === undefined) delete process.env.JOURNAL_STORE
-    else process.env.JOURNAL_STORE = ORIGINAL_STORE
+    if (ORIGINAL_ADMIN === undefined) delete process.env.ATEL_ADMIN_CREDENTIALS
+    else process.env.ATEL_ADMIN_CREDENTIALS = ORIGINAL_ADMIN
+    if (ORIGINAL_STORE === undefined) delete process.env.ATEL_STORE
+    else process.env.ATEL_STORE = ORIGINAL_STORE
   })
 
-  it('adminEnvFromProcess reflects ADMIN_CREDENTIALS presence', () => {
-    delete process.env.ADMIN_CREDENTIALS
+  it('adminEnvFromProcess reflects ATEL_ADMIN_CREDENTIALS presence', () => {
+    delete process.env.ATEL_ADMIN_CREDENTIALS
     expect(adminEnvFromProcess()).toEqual({})
-    process.env.ADMIN_CREDENTIALS = 'abc'
-    expect(adminEnvFromProcess()).toEqual({ ADMIN_CREDENTIALS: 'abc' })
+    process.env.ATEL_ADMIN_CREDENTIALS = 'abc'
+    expect(adminEnvFromProcess()).toEqual({ ATEL_ADMIN_CREDENTIALS: 'abc' })
   })
 
-  it('storeFromProcess picks the in-memory store only when JOURNAL_STORE=memory', () => {
-    process.env.JOURNAL_STORE = 'memory'
-    expect(storeFromProcess()).toBeInstanceOf(MemoryJournalStore)
-    process.env.JOURNAL_STORE = 'dynamo'
-    expect(storeFromProcess()).not.toBeInstanceOf(MemoryJournalStore)
+  it('storeFromProcess picks the in-memory store only when ATEL_STORE=memory', () => {
+    process.env.ATEL_STORE = 'memory'
+    expect(storeFromProcess()).toBeInstanceOf(MemoryTelemetryStore)
+    process.env.ATEL_STORE = 'dynamo'
+    expect(storeFromProcess()).not.toBeInstanceOf(MemoryTelemetryStore)
   })
 })
 
@@ -151,7 +151,7 @@ describe('respond (unit, fake req/res)', () => {
     consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const req = fakeIncomingMessage({
       method: 'GET',
-      url: '/journals',
+      url: '/telemetry',
       headers: { authorization: 'Bearer nope' },
     })
     const res = fakeServerResponse()
@@ -160,8 +160,8 @@ describe('respond (unit, fake req/res)', () => {
         throw new Error('db unavailable')
       },
     })
-    // A syntactically valid journaling token so auth resolution reaches the store.
-    const { token } = generateJournalingToken()
+    // A syntactically valid telemetry token so auth resolution reaches the store.
+    const { token } = generateTelemetryToken()
     req.headers.authorization = `Bearer ${token}`
 
     await respond(req, res as unknown as ServerResponse, { store })
@@ -174,10 +174,10 @@ describe('respond (unit, fake req/res)', () => {
 
   it('responds 500 and logs a non-Error throw from handleRequest', async () => {
     consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    const { token } = generateJournalingToken()
+    const { token } = generateTelemetryToken()
     const req = fakeIncomingMessage({
       method: 'GET',
-      url: '/journals',
+      url: '/telemetry',
       headers: { authorization: `Bearer ${token}` },
     })
     const res = fakeServerResponse()
@@ -208,7 +208,7 @@ describe('respond (unit, fake req/res)', () => {
 
   it('writes entries as they stream and destroys — not cleanly ends — on a mid-stream failure', async () => {
     consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    const { token, credId } = generateJournalingToken()
+    const { token, credId } = generateTelemetryToken()
     const record: CredentialRecord = {
       id: credId,
       name: 'test',
@@ -233,7 +233,7 @@ describe('respond (unit, fake req/res)', () => {
     })
     const req = fakeIncomingMessage({
       method: 'GET',
-      url: '/journals',
+      url: '/telemetry',
       headers: { authorization: `Bearer ${token}` },
     })
     const res = fakeServerResponse()
@@ -249,7 +249,7 @@ describe('respond (unit, fake req/res)', () => {
 
   it('wraps a non-Error thrown value in a real Error before destroying on a mid-stream failure', async () => {
     consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    const { token, credId } = generateJournalingToken()
+    const { token, credId } = generateTelemetryToken()
     const record: CredentialRecord = {
       id: credId,
       name: 'test',
@@ -260,17 +260,18 @@ describe('respond (unit, fake req/res)', () => {
       getCredentialById: async (id) => (id === credId ? record : undefined),
       // Not a generator function (which would need a `yield` to satisfy
       // require-yield) — a plain async-iterable object still satisfies
-      // AsyncIterable<JournalEntry> structurally.
+      // AsyncIterable<TelemetryEntry> structurally.
       getEntries: () => ({
         [Symbol.asyncIterator]: () => ({
           // eslint-disable-next-line no-throw-literal -- exercises the non-Error branch of the destroy() wrap
-          next: (): Promise<IteratorResult<JournalEntry>> => Promise.reject('scan broke (string)'),
+          next: (): Promise<IteratorResult<TelemetryEntry>> =>
+            Promise.reject('scan broke (string)'),
         }),
       }),
     })
     const req = fakeIncomingMessage({
       method: 'GET',
-      url: '/journals',
+      url: '/telemetry',
       headers: { authorization: `Bearer ${token}` },
     })
     const res = fakeServerResponse()
@@ -296,15 +297,15 @@ describe('respond (unit, fake req/res)', () => {
 })
 
 describe('createServer (end-to-end over a real socket)', () => {
-  const ADMIN_TOKEN = 'ag_admin_x_secret'
+  const ADMIN_TOKEN = 'atl_admin_x_secret'
   const adminEnv = {
-    ADMIN_CREDENTIALS: Buffer.from(
+    ATEL_ADMIN_CREDENTIALS: Buffer.from(
       JSON.stringify([{ name: 'admin', token: ADMIN_TOKEN }]),
     ).toString('base64'),
   }
 
   async function withServer<T>(
-    store: JournalStore,
+    store: TelemetryStore,
     fn: (baseUrl: string) => Promise<T>,
   ): Promise<T> {
     const server = createServer({ store, env: adminEnv })
@@ -320,22 +321,22 @@ describe('createServer (end-to-end over a real socket)', () => {
   }
 
   it('round-trips credentials -> append -> get through real HTTP against the in-memory store', async () => {
-    await withServer(new MemoryJournalStore(), async (baseUrl) => {
+    await withServer(new MemoryTelemetryStore(), async (baseUrl) => {
       const created = (await fetch(`${baseUrl}/credentials`, {
         method: 'POST',
         headers: { authorization: `Bearer ${ADMIN_TOKEN}`, 'content-type': 'application/json' },
         body: JSON.stringify({ name: 'agent-1' }),
       }).then((r) => r.json())) as { token: string }
-      expect(created.token).toMatch(/^ag_sk_/)
+      expect(created.token).toMatch(/^atl_sk_/)
 
-      const appended = await fetch(`${baseUrl}/journals`, {
+      const appended = await fetch(`${baseUrl}/telemetry`, {
         method: 'POST',
         headers: { authorization: `Bearer ${created.token}`, 'content-type': 'application/json' },
         body: JSON.stringify({ sessionId: 's1', agent: 'claude', data: { note: 'hi' } }),
       })
       expect(appended.status).toBe(201)
 
-      const listed = (await fetch(`${baseUrl}/journals`, {
+      const listed = (await fetch(`${baseUrl}/telemetry`, {
         headers: { authorization: `Bearer ${created.token}` },
       }).then((r) => r.json())) as Array<{ data: unknown }>
       expect(listed).toHaveLength(1)
@@ -343,24 +344,24 @@ describe('createServer (end-to-end over a real socket)', () => {
     })
   })
 
-  it('rejects a journaling token on /credentials and an admin token on /journals (401)', async () => {
-    await withServer(new MemoryJournalStore(), async (baseUrl) => {
-      const { token: journalingToken } = generateJournalingToken()
-      const credentialsWithJournalingToken = await fetch(`${baseUrl}/credentials`, {
-        headers: { authorization: `Bearer ${journalingToken}` },
+  it('rejects a telemetry token on /credentials and an admin token on /telemetry (401)', async () => {
+    await withServer(new MemoryTelemetryStore(), async (baseUrl) => {
+      const { token: telemetryToken } = generateTelemetryToken()
+      const credentialsWithTelemetryToken = await fetch(`${baseUrl}/credentials`, {
+        headers: { authorization: `Bearer ${telemetryToken}` },
       })
-      expect(credentialsWithJournalingToken.status).toBe(401)
+      expect(credentialsWithTelemetryToken.status).toBe(401)
 
-      const journalsWithAdminToken = await fetch(`${baseUrl}/journals`, {
+      const telemetryWithAdminToken = await fetch(`${baseUrl}/telemetry`, {
         headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
       })
-      expect(journalsWithAdminToken.status).toBe(401)
+      expect(telemetryWithAdminToken.status).toBe(401)
     })
   })
 
-  it('returns 401 for an unauthenticated /journals request and 404 for an unknown path', async () => {
-    await withServer(new MemoryJournalStore(), async (baseUrl) => {
-      const unauthorized = await fetch(`${baseUrl}/journals`)
+  it('returns 401 for an unauthenticated /telemetry request and 404 for an unknown path', async () => {
+    await withServer(new MemoryTelemetryStore(), async (baseUrl) => {
+      const unauthorized = await fetch(`${baseUrl}/telemetry`)
       expect(unauthorized.status).toBe(401)
 
       const notFound = await fetch(`${baseUrl}/nope`)

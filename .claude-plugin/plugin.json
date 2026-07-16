@@ -1,16 +1,16 @@
 {
-  "name": "agent-journal",
-  "description": "Journal MCP server and skill for autonomous agents to record a stream-of-consciousness while working unmonitored, then pull it back later to distill learnings.",
+  "name": "atel",
+  "description": "Telemetry MCP server and skill for autonomous agents to record a stream-of-consciousness while working unmonitored, then pull it back later to distill learnings.",
   "version": "0.0.0",
   "author": {
     "name": "Jonathan Ong",
     "email": "jonathanrichardong@gmail.com"
   },
-  "homepage": "https://github.com/jonathanong/agent-journal",
-  "repository": "https://github.com/jonathanong/agent-journal",
+  "homepage": "https://github.com/jonathanong/atel",
+  "repository": "https://github.com/jonathanong/atel",
   "license": "MIT",
-  "keywords": ["journal", "agent", "mcp", "retrospective", "self-improvement"],
-  "skills": "./plugins/agent-journal/skills/",
-  "hooks": "./plugins/agent-journal/hooks/hooks.json",
-  "mcpServers": "./plugins/agent-journal/.mcp.json"
+  "keywords": ["telemetry", "agent", "mcp", "retrospective", "self-improvement"],
+  "skills": "./plugins/atel/skills/",
+  "hooks": "./plugins/atel/hooks/hooks.json",
+  "mcpServers": "./plugins/atel/.mcp.json"
 }

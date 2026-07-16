@@ -1,15 +1,15 @@
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb'
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
 
-const DEFAULT_TABLE_NAME = 'AgentJournal'
+const DEFAULT_TABLE_NAME = 'Atel'
 const DEFAULT_TTL_DAYS = 90
 
 export interface DynamoStoreOptions {
   /** Inject a pre-built document client (tests use this with a hand-rolled `send()`). Defaults to a real client wrapping a default-configured `DynamoDBClient`. */
   client?: DynamoDBDocumentClient
-  /** Defaults to `process.env.JOURNAL_TABLE`, then `"AgentJournal"`. */
+  /** Defaults to `process.env.ATEL_TABLE`, then `"Atel"`. */
   tableName?: string
-  /** Defaults to `process.env.JOURNAL_TTL_DAYS`, then `90`. */
+  /** Defaults to `process.env.ATEL_TTL_DAYS`, then `90`. */
   ttlDays?: number
   now?: () => Date
 }
@@ -27,8 +27,8 @@ export function resolveDynamoConfig(options: DynamoStoreOptions = {}): DynamoSto
     DynamoDBDocumentClient.from(new DynamoDBClient({}), {
       marshallOptions: { removeUndefinedValues: true },
     })
-  const tableName = options.tableName ?? process.env.JOURNAL_TABLE ?? DEFAULT_TABLE_NAME
-  const ttlDaysEnv = process.env.JOURNAL_TTL_DAYS
+  const tableName = options.tableName ?? process.env.ATEL_TABLE ?? DEFAULT_TABLE_NAME
+  const ttlDaysEnv = process.env.ATEL_TTL_DAYS
   const ttlDays = options.ttlDays ?? (ttlDaysEnv ? Number(ttlDaysEnv) : DEFAULT_TTL_DAYS)
   const now = options.now ?? ((): Date => new Date())
   return { doc, tableName, ttlDays, now }

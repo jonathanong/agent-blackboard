@@ -7,7 +7,7 @@ import {
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { createDynamoStore } from './dynamo.mjs'
-import type { JournalStore } from './store.mjs'
+import type { TelemetryStore } from './store.mjs'
 
 // Real integration test against DynamoDB Local. Skips cleanly when no local
 // endpoint is configured (see CLAUDE.md / CI: DYNAMODB_ENDPOINT is set by a
@@ -15,7 +15,7 @@ import type { JournalStore } from './store.mjs'
 //   docker run -p 8000:8000 amazon/dynamodb-local -jar DynamoDBLocal.jar -inMemory -sharedDb
 //   DYNAMODB_ENDPOINT=http://localhost:8000 pnpm exec vitest run packages/server/src/store/dynamo.integration.test.mts
 const ENDPOINT = process.env.DYNAMODB_ENDPOINT
-const TABLE_NAME = 'AgentJournalIntegrationTest'
+const TABLE_NAME = 'AtelIntegrationTest'
 
 async function ensureTable(client: DynamoDBClient): Promise<void> {
   try {
@@ -39,7 +39,7 @@ async function ensureTable(client: DynamoDBClient): Promise<void> {
 }
 
 describe.skipIf(!ENDPOINT)('createDynamoStore (DynamoDB Local integration)', () => {
-  let store: JournalStore
+  let store: TelemetryStore
 
   beforeAll(async () => {
     // Guaranteed set: this whole describe block is skipped otherwise (see
@@ -139,7 +139,7 @@ describe.skipIf(!ENDPOINT)('createDynamoStore (DynamoDB Local integration)', () 
   it('round-trips credential creation, lookup, listing, and deletion', async () => {
     const name = `test-${randomUUID()}`
     const { record, token } = await store.createCredential(name)
-    expect(token.startsWith('ag_sk_')).toBe(true)
+    expect(token.startsWith('atl_sk_')).toBe(true)
 
     const fetched = await store.getCredentialById(record.id)
     expect(fetched).toEqual(record)

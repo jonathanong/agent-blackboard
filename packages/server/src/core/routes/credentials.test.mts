@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { AdminEnv } from '../../auth/admin.mjs'
-import { MemoryJournalStore } from '../../store/memory.mjs'
+import { MemoryTelemetryStore } from '../../store/memory.mjs'
 import type { HandlerRequest } from '../types.mjs'
 import { handleCredentialsRoute } from './credentials.mjs'
 
@@ -13,8 +13,8 @@ async function collect(iter: AsyncIterable<string | Uint8Array>): Promise<string
 
 function adminEnv(): AdminEnv {
   return {
-    ADMIN_CREDENTIALS: Buffer.from(
-      JSON.stringify([{ name: 'root', token: 'ag_admin_root_secret' }]),
+    ATEL_ADMIN_CREDENTIALS: Buffer.from(
+      JSON.stringify([{ name: 'root', token: 'atl_admin_root_secret' }]),
     ).toString('base64'),
   }
 }
@@ -24,16 +24,16 @@ function baseRequest(overrides: Partial<HandlerRequest>): HandlerRequest {
 }
 
 describe('handleCredentialsRoute', () => {
-  let store: MemoryJournalStore
+  let store: MemoryTelemetryStore
   let env: AdminEnv
 
   beforeEach(() => {
-    store = new MemoryJournalStore()
+    store = new MemoryTelemetryStore()
     env = adminEnv()
   })
 
   function withAuth(overrides: Partial<HandlerRequest> = {}): HandlerRequest {
-    return baseRequest({ headers: { authorization: 'Bearer ag_admin_root_secret' }, ...overrides })
+    return baseRequest({ headers: { authorization: 'Bearer atl_admin_root_secret' }, ...overrides })
   }
 
   describe('auth', () => {
@@ -42,7 +42,7 @@ describe('handleCredentialsRoute', () => {
       expect(response.status).toBe(401)
     })
 
-    it('401s for a journaling-shaped token', async () => {
+    it('401s for a telemetry-shaped token', async () => {
       const { token } = await store.createCredential('agent-1')
       const response = await handleCredentialsRoute(
         baseRequest({ headers: { authorization: `Bearer ${token}` } }),
@@ -54,7 +54,7 @@ describe('handleCredentialsRoute', () => {
 
     it('401s for a wrong admin token', async () => {
       const response = await handleCredentialsRoute(
-        baseRequest({ headers: { authorization: 'Bearer ag_admin_root_wrongsecret' } }),
+        baseRequest({ headers: { authorization: 'Bearer atl_admin_root_wrongsecret' } }),
         store,
         env,
       )
@@ -77,7 +77,7 @@ describe('handleCredentialsRoute', () => {
       expect(response.status).toBe(201)
       const body = JSON.parse(await collect(response.body))
       expect(body.name).toBe('agent-1')
-      expect(body.token.startsWith('ag_sk_')).toBe(true)
+      expect(body.token.startsWith('atl_sk_')).toBe(true)
       expect(body.tokenHash).toBeUndefined()
     })
 

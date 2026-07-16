@@ -1,6 +1,6 @@
-# @agent-journal/server (not published)
+# atel-server (not published)
 
-The `agent-journal` storage service: one Lambda function (streaming Function
+The `atel` storage service: one Lambda function (streaming Function
 URL) + one DynamoDB table, deployed with a single CloudFormation template via
 the AWS CLI. This package is deployed, never published to npm.
 
@@ -8,10 +8,10 @@ the AWS CLI. This package is deployed, never published to npm.
 
 - `src/core/` — framework-agnostic routing/auth/business logic
   (`handleRequest`). No knowledge of Lambda or `node:http`.
-- `src/store/` — `JournalStore` interface, a DynamoDB-backed implementation
+- `src/store/` — `TelemetryStore` interface, a DynamoDB-backed implementation
   (`store/dynamo.mts`), and an in-memory one (`store/memory.mts`) for tests
   and local dev.
-- `src/auth/` — admin (env-based) and journaling (DB-based) credential
+- `src/auth/` — admin (env-based) and telemetry (DB-based) credential
   resolution.
 - `src/handler.mts` — the Lambda entrypoint (`awslambda.streamifyResponse`).
 - `src/local-server.mts` — a `node:http` adapter for local dev and for
@@ -35,13 +35,13 @@ respective request/response shapes (Lambda Function URL event vs.
 ## Local dev
 
 ```sh
-JOURNAL_STORE=memory ADMIN_CREDENTIALS=$(node -e "console.log(Buffer.from(JSON.stringify([{name:'local-admin',token:'ag_admin_local_dev'}])).toString('base64'))") \
+ATEL_STORE=memory ATEL_ADMIN_CREDENTIALS=$(node -e "console.log(Buffer.from(JSON.stringify([{name:'local-admin',token:'atl_admin_local_dev'}])).toString('base64'))") \
   pnpm run dev
 ```
 
 `pnpm run dev` runs `tsx src/local-server.mts` directly — no build step. With
-`JOURNAL_STORE=memory`, it uses an in-memory store instead of DynamoDB, so
-local dev needs **no AWS account at all**. Omit `JOURNAL_STORE` (or set it to
+`ATEL_STORE=memory`, it uses an in-memory store instead of DynamoDB, so
+local dev needs **no AWS account at all**. Omit `ATEL_STORE` (or set it to
 anything other than `memory`) to run against a real DynamoDB table (or
 [DynamoDB Local](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html)
 via the standard `AWS_ENDPOINT_URL`/`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`
@@ -52,32 +52,32 @@ using on startup. Hit it directly:
 
 ```sh
 curl -X POST http://localhost:3000/credentials \
-  -H 'authorization: Bearer ag_admin_local_dev' -H 'content-type: application/json' \
+  -H 'authorization: Bearer atl_admin_local_dev' -H 'content-type: application/json' \
   -d '{"name":"my laptop"}'
-# -> { "id": "...", "name": "my laptop", "token": "ag_sk_...", "createdAt": "..." }
+# -> { "id": "...", "name": "my laptop", "token": "atl_sk_...", "createdAt": "..." }
 
-curl -X POST http://localhost:3000/journals \
-  -H 'authorization: Bearer ag_sk_...' -H 'content-type: application/json' \
+curl -X POST http://localhost:3000/telemetry \
+  -H 'authorization: Bearer atl_sk_...' -H 'content-type: application/json' \
   -d '{"sessionId":"s1","agent":"claude-code","data":{"note":"hello"}}'
 
-curl http://localhost:3000/journals -H 'authorization: Bearer ag_sk_...'
+curl http://localhost:3000/telemetry -H 'authorization: Bearer atl_sk_...'
 ```
 
 ## Environment variables
 
-| Var                 | Used by                                 | Meaning                                                                                                                                                 |
-| ------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `JOURNAL_TABLE`     | handler, local-server                   | DynamoDB table name. Defaults to `AgentJournal` (and, on the deployed Lambda, is always set from the CloudFormation-managed table — see template.yaml). |
-| `JOURNAL_TTL_DAYS`  | handler, local-server                   | Entry retention in days. Default `90`.                                                                                                                  |
-| `ADMIN_CREDENTIALS` | handler, local-server                   | Base64 JSON `[{ "name", "token" }]`. Admin-only; never written to DynamoDB. Unset = no admin access (`/credentials*` always 401s).                      |
-| `JOURNAL_STORE`     | local-server only                       | Set to `memory` to use the in-memory store instead of DynamoDB.                                                                                         |
-| `PORT`              | local-server only                       | Listen port for `pnpm run dev`. Default `3000`.                                                                                                         |
-| `AWS_REGION`        | handler, local-server (via the AWS SDK) | Region for the DynamoDB client. Read automatically by `@aws-sdk/client-dynamodb`'s default provider chain — not read directly by this package's code.   |
+| Var                      | Used by                                 | Meaning                                                                                                                                               |
+| ------------------------ | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ATEL_TABLE`             | handler, local-server                   | DynamoDB table name. Defaults to `Atel` (and, on the deployed Lambda, is always set from the CloudFormation-managed table — see template.yaml).       |
+| `ATEL_TTL_DAYS`          | handler, local-server                   | Entry retention in days. Default `90`.                                                                                                                |
+| `ATEL_ADMIN_CREDENTIALS` | handler, local-server                   | Base64 JSON `[{ "name", "token" }]`. Admin-only; never written to DynamoDB. Unset = no admin access (`/credentials*` always 401s).                    |
+| `ATEL_STORE`             | local-server only                       | Set to `memory` to use the in-memory store instead of DynamoDB.                                                                                       |
+| `PORT`                   | local-server only                       | Listen port for `pnpm run dev`. Default `3000`.                                                                                                       |
+| `AWS_REGION`             | handler, local-server (via the AWS SDK) | Region for the DynamoDB client. Read automatically by `@aws-sdk/client-dynamodb`'s default provider chain — not read directly by this package's code. |
 
 ## Testing
 
 `pnpm exec vitest run packages/server/src` from the repo root (or `pnpm
---filter agent-journal-server test` once wired at the root). Unit tests use
+--filter atel-server test` once wired at the root). Unit tests use
 the in-memory store and, for `handler.mts`/`local-server.mts`, fake
 req/response objects — no AWS account needed. Integration tests against a
 real DynamoDB (via DynamoDB Local) skip gracefully when no local endpoint is
@@ -116,7 +116,7 @@ see `vitest.config.mts` at the repo root.
 ## Deploying
 
 ```sh
-ADMIN_CREDENTIALS=$(node -e "console.log(Buffer.from(JSON.stringify([{name:'prod-admin',token:'ag_admin_prod_<random>'}])).toString('base64'))") \
+ATEL_ADMIN_CREDENTIALS=$(node -e "console.log(Buffer.from(JSON.stringify([{name:'prod-admin',token:'atl_admin_prod_<random>'}])).toString('base64'))") \
   pnpm run deploy
 ```
 
@@ -148,8 +148,19 @@ ADMIN_CREDENTIALS=$(node -e "console.log(Buffer.from(JSON.stringify([{name:'prod
 5. Prints the stack outputs (`FunctionUrl`, `TableName`) via
    `aws cloudformation describe-stacks`.
 
-Override `JournalTtlDays`/`STACK_NAME` via the `JOURNAL_TTL_DAYS`/
-`STACK_NAME` env vars; `ADMIN_CREDENTIALS` is required (no default — an
+The CloudFormation stack name (`agent-journal`), the deploy-artifact S3
+bucket naming pattern, and the CloudFormation template's internal logical
+resource IDs (`JournalTable`, `JournalFunction`, etc.) are intentionally
+**not** rebranded to "atel" — this repo already has a live, deployed
+`agent-journal` stack, and renaming any of those would make CloudFormation
+replace (delete + recreate) real, already-deployed resources — including the
+DynamoDB table's data — on the next deploy. Only the app-level Lambda
+environment variable names (`ATEL_TABLE`/`ATEL_TTL_DAYS`/
+`ATEL_ADMIN_CREDENTIALS`) were renamed; those are safe, in-place config
+updates.
+
+Override `JournalTtlDays`/`STACK_NAME` via the `ATEL_TTL_DAYS`/
+`STACK_NAME` env vars; `ATEL_ADMIN_CREDENTIALS` is required (no default — an
 empty admin list would just make `/credentials*` permanently 401, which is
 almost certainly not what you want on a fresh deploy).
 
@@ -176,7 +187,7 @@ itself is modern, runtime-version-agnostic JS.
 
 - The Function URL is `AuthType: NONE` (publicly reachable) — `handler.mts`
   delegates to `handleRequest`, which validates the bearer token on every
-  request (`/credentials*` admin-only, `/journals*` journaling-cred-only).
+  request (`/credentials*` admin-only, `/telemetry*` telemetry-cred-only).
   This tradeoff is deliberate: `AWS_IAM` auth would require every caller to
   sign requests with AWS credentials, defeating the point of a portable
   bearer token agents carry in an env var.

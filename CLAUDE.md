@@ -1,17 +1,17 @@
-# agent-journal
+# atel
 
-A journal for autonomous agents — not a knowledge base. See [README.md](README.md)
+A telemetry stream for autonomous agents — not a knowledge base. See [README.md](README.md)
 for the product description.
 
 ## Workspace
 
 - pnpm workspace, Node 24+, all source is `.mts` ESM.
-- `packages/agent-journal` — **published** as `@jongleberry/agent-journal` (client lib +
+- `packages/atel` — **published** as `@jongleberry/atel` (client lib +
   CLI + MCP server). Must never depend on `packages/server` or `@aws-sdk/*`
   (enforced by `.dependency-cruiser.cjs`).
 - `packages/server` — **not published**, deployed only. Lambda + DynamoDB, CloudFormation
   in `packages/server/infra/`.
-- `plugins/agent-journal` — Claude Code + Codex plugin (skill + MCP registration).
+- `plugins/atel` — Claude Code + Codex plugin (skill + MCP registration).
 
 ## Commands
 
@@ -24,8 +24,8 @@ for the product description.
 lychee`, or a GitHub release binary) to run this locally; CI installs it via `lycheeverse/lychee-action`.
 - `packages/server`: `pnpm run dev` (local server), `pnpm run deploy` (CloudFormation via AWS CLI).
 - Running the CLI locally, before it's ever published: `pnpm run build` then `pnpm exec
-agent-journal <args>` from anywhere in the repo. This works because the root `package.json`
-  lists `@jongleberry/agent-journal` as a `workspace:*` devDependency purely to get pnpm to
+atel <args>` from anywhere in the repo. This works because the root `package.json`
+  lists `@jongleberry/atel` as a `workspace:*` devDependency purely to get pnpm to
   link its bin into root's `node_modules/.bin` (a workspace package's own `bin` field is never
   self-linked into its own `node_modules/.bin` otherwise — that only happens for actual
   dependencies). Ignored in `knip.jsonc` since it's never imported, only linked for its bin.
@@ -35,10 +35,10 @@ agent-journal <args>` from anywhere in the repo. This works because the root `pa
 - Prefer `pnpm` over `npm`.
 - Max 200 lines per non-test source file (`.oxlintrc.json`).
 - Every dependency bump: check latest version (LTS if one exists) before adding.
-- Token formats: journaling `ag_sk_<credId>_<secret>`; admin `ag_admin_<name>_<secret>` — never
-  confuse the two. Admin credentials live only in the `ADMIN_CREDENTIALS` env var, never in
+- Token formats: telemetry `atl_sk_<credId>_<secret>`; admin `atl_admin_<name>_<secret>` — never
+  confuse the two. Admin credentials live only in the `ATEL_ADMIN_CREDENTIALS` env var, never in
   DynamoDB. Credential management (`/credentials*`) is CLI/admin-only, never exposed over MCP.
-- `data` on a journal entry is intentionally unstructured JSON — don't impose a schema; let
+- `data` on a telemetry entry is intentionally unstructured JSON — don't impose a schema; let
   agents decide what to attach (branch names, PR numbers, etc.) and filter client-side.
 - Runtime-only modules that can't be exercised by vitest directly (e.g. `handler.mts`'s use of
   the Lambda-only `awslambda.streamifyResponse` global) should stay a thin wrapper over tested
@@ -56,18 +56,18 @@ agent-journal <args>` from anywhere in the repo. This works because the root `pa
 
 ## Dogfooding
 
-Agents working on this repo should journal real friction, decisions, findings, and changes using
-`agent-journal` itself as they go (`journal_append` via MCP, or `agent-journal append` via the
-CLI against a local server — `JOURNAL_STORE=memory pnpm run dev`, no AWS account needed) —
-not placeholder text, actual findings from the session. Journal changes as you make them, not
+Agents working on this repo should record real friction, decisions, findings, and changes using
+`atel` itself as they go (`telemetry_append` via MCP, or `atel append` via the
+CLI against a local server — `ATEL_STORE=memory pnpm run dev`, no AWS account needed) —
+not placeholder text, actual findings from the session. Log changes as you make them, not
 just impressions after the fact: a non-trivial edit, a file added or removed, a bug fixed — the
 concrete "what changed" is what a later retrospective/distill pass needs, not a vague summary.
-This is the same practice `plugins/agent-journal/skills/agent-journal/SKILL.md` and
+This is the same practice `plugins/atel/skills/atel/SKILL.md` and
 [`docs/loop-engineering.md`](docs/loop-engineering.md) describe for downstream users; there's
 no reason this repo shouldn't use its own tool.
 
 Dogfood the full loop, not just the write side: run `/retrospective` at the end of a substantial
-session to synthesize what was journaled (and what wasn't, from your own memory of the session)
+session to synthesize what was recorded (and what wasn't, from your own memory of the session)
 into one durable entry, and periodically run `/retrospective-distill` across accumulated
 retrospectives to turn recurring themes into concrete follow-ups (a CLAUDE.md edit, a GitHub
 issue, a lint rule). See

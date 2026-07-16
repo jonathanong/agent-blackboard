@@ -5,10 +5,10 @@
   },
   "plugins": [
     {
-      "name": "agent-journal",
+      "name": "atel",
       "source": {
         "source": "local",
-        "path": "./plugins/agent-journal"
+        "path": "./plugins/atel"
       },
       "policy": {
         "installation": "AVAILABLE",

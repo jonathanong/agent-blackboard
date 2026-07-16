@@ -158,7 +158,9 @@ export function realStore(): ReturnType<typeof createDynamoStore> {
 }
 
 export function adminEnv(): AdminEnv {
-  return process.env.ADMIN_CREDENTIALS ? { ADMIN_CREDENTIALS: process.env.ADMIN_CREDENTIALS } : {}
+  return process.env.ATEL_ADMIN_CREDENTIALS
+    ? { ATEL_ADMIN_CREDENTIALS: process.env.ATEL_ADMIN_CREDENTIALS }
+    : {}
 }
 
 export function currentTime(): Date {

@@ -11,9 +11,9 @@ importers:
       '@ast-grep/cli':
         specifier: ^0.44.1
         version: 0.44.1
-      '@jongleberry/agent-journal':
+      '@jongleberry/atel':
         specifier: workspace:*
-        version: link:packages/agent-journal
+        version: link:packages/atel
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
@@ -45,7 +45,7 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@types/node@26.1.1)(@vitest/coverage-v8@4.1.10)(vite@8.1.4(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1)(yaml@2.9.0))
 
-  packages/agent-journal:
+  packages/atel:
     dependencies:
       '@modelcontextprotocol/sdk':
         specifier: ^1.29.0

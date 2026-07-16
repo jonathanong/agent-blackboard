@@ -1,7 +1,7 @@
-import type { CredentialRecord, JournalEntry } from '../core/types.mjs'
+import type { CredentialRecord, TelemetryEntry } from '../core/types.mjs'
 
 /** Body accepted by `appendEntry` — `credId` comes from the resolved auth credential, not the request body. */
-export interface NewJournalEntry {
+export interface NewTelemetryEntry {
   credId: string
   sessionId: string
   agent: string
@@ -40,14 +40,14 @@ export interface CredentialIdOrName {
 export const MAX_APPEND_BATCH_SIZE = 100
 
 /**
- * Framework-agnostic journal storage interface. All methods are async so a
+ * Framework-agnostic telemetry storage interface. All methods are async so a
  * DynamoDB-backed implementation and an in-memory test double can share one
  * contract. `getEntries` streams/paginates internally rather than buffering
  * a full result set — implementations must not load an entire table/session
  * into memory before yielding the first entry.
  */
-export interface JournalStore {
-  appendEntry(entry: NewJournalEntry): Promise<JournalEntry>
+export interface TelemetryStore {
+  appendEntry(entry: NewTelemetryEntry): Promise<TelemetryEntry>
 
   /**
    * Appends every entry atomically — all succeed or none do. This is the
@@ -57,13 +57,13 @@ export interface JournalStore {
    * that prefix. Bounded to `MAX_APPEND_BATCH_SIZE` entries — callers must
    * enforce this before calling (the store may also enforce it defensively).
    */
-  appendEntries(entries: NewJournalEntry[]): Promise<JournalEntry[]>
+  appendEntries(entries: NewTelemetryEntry[]): Promise<TelemetryEntry[]>
 
   /** Entries for one credential, optionally narrowed by session/agent/archived. Newest-appended-last within a session is NOT guaranteed by this interface beyond insertion order. */
-  getEntries(credId: string, filter: EntryFilter): AsyncIterable<JournalEntry>
+  getEntries(credId: string, filter: EntryFilter): AsyncIterable<TelemetryEntry>
 
   /** Merges each patch into its entry; patches for unknown ids are silently skipped (not included in the result). */
-  patchEntries(credId: string, patches: EntryPatch[]): Promise<JournalEntry[]>
+  patchEntries(credId: string, patches: EntryPatch[]): Promise<TelemetryEntry[]>
 
   createCredential(name: string): Promise<{ record: CredentialRecord; token: string }>
 

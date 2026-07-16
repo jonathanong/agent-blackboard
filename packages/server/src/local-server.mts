@@ -5,7 +5,7 @@
 // res.end() as chunks land — genuine streaming, not buffer-then-send.
 //
 // Run directly via `node local-server.mts` (the package's `dev` script runs
-// it through tsx). JOURNAL_STORE=memory swaps in an in-memory store — no
+// it through tsx). ATEL_STORE=memory swaps in an in-memory store — no
 // AWS account needed for local dev (see README).
 import type { IncomingHttpHeaders, IncomingMessage, Server, ServerResponse } from 'node:http'
 import { createServer as createHttpServer } from 'node:http'
@@ -15,11 +15,11 @@ import type { AdminEnv } from './auth/admin.mjs'
 import { handleRequest } from './core/handle-request.mjs'
 import type { BodyChunk, HandlerRequest, HandlerResponse } from './core/types.mjs'
 import { createDynamoStore } from './store/dynamo.mjs'
-import { MemoryJournalStore } from './store/memory.mjs'
-import type { JournalStore } from './store/store.mjs'
+import { MemoryTelemetryStore } from './store/memory.mjs'
+import type { TelemetryStore } from './store/store.mjs'
 
 export interface ServerDeps {
-  store: JournalStore
+  store: TelemetryStore
   now?: () => Date
   env?: AdminEnv
 }
@@ -119,11 +119,13 @@ export function createServer(deps: ServerDeps): Server {
 // ---- Script entrypoint: `node local-server.mts` / `pnpm run dev` ----
 
 export function adminEnvFromProcess(): AdminEnv {
-  return process.env.ADMIN_CREDENTIALS ? { ADMIN_CREDENTIALS: process.env.ADMIN_CREDENTIALS } : {}
+  return process.env.ATEL_ADMIN_CREDENTIALS
+    ? { ATEL_ADMIN_CREDENTIALS: process.env.ATEL_ADMIN_CREDENTIALS }
+    : {}
 }
 
-export function storeFromProcess(): JournalStore {
-  return process.env.JOURNAL_STORE === 'memory' ? new MemoryJournalStore() : createDynamoStore()
+export function storeFromProcess(): TelemetryStore {
+  return process.env.ATEL_STORE === 'memory' ? new MemoryTelemetryStore() : createDynamoStore()
 }
 
 /* v8 ignore start -- script entrypoint: only runs under `node local-server.mts`
@@ -137,11 +139,11 @@ export function storeFromProcess(): JournalStore {
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])
 if (isMain) {
   const port = process.env.PORT ? Number(process.env.PORT) : 3000
-  const usingMemory = process.env.JOURNAL_STORE === 'memory'
+  const usingMemory = process.env.ATEL_STORE === 'memory'
   const server = createServer({ store: storeFromProcess(), env: adminEnvFromProcess() })
   server.listen(port, () => {
     console.log(
-      `agent-journal local server listening on http://localhost:${port} (store: ${usingMemory ? 'memory' : 'dynamodb'})`,
+      `atel local server listening on http://localhost:${port} (store: ${usingMemory ? 'memory' : 'dynamodb'})`,
     )
   })
 }

@@ -5,24 +5,24 @@ module.exports = {
       name: 'published-package-no-server',
       severity: 'error',
       comment:
-        'The published agent-journal package (client/CLI/MCP) must not depend on the server package — it ships to end users and must stay free of server-only code.',
-      from: { path: '^packages/agent-journal' },
+        'The published atel package (client/CLI/MCP) must not depend on the server package — it ships to end users and must stay free of server-only code.',
+      from: { path: '^packages/atel' },
       to: { path: '^packages/server' },
     },
     {
       name: 'published-package-no-aws-sdk',
       severity: 'error',
       comment:
-        'The published agent-journal package must not depend on the AWS SDK — that weight belongs only to the server, which is deployed, not published.',
-      from: { path: '^packages/agent-journal' },
+        'The published atel package must not depend on the AWS SDK — that weight belongs only to the server, which is deployed, not published.',
+      from: { path: '^packages/atel' },
       to: { path: 'node_modules/@aws-sdk' },
     },
     {
-      name: 'server-no-agent-journal',
+      name: 'server-no-atel-package',
       severity: 'error',
       comment: 'The server must not depend on the published client/CLI/MCP package.',
       from: { path: '^packages/server' },
-      to: { path: '^packages/agent-journal' },
+      to: { path: '^packages/atel' },
     },
     {
       name: 'no-circular',

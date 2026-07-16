@@ -5,6 +5,6 @@ coverage/
 .env
 .env.local
 .DS_Store
-.agent-journal/
+.atel/
 .claude/*
 !.claude/skills/

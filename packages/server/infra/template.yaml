@@ -1,15 +1,21 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >-
-  agent-journal: a single Lambda Function URL (streaming) backed by one
-  DynamoDB table. Deployed with `pnpm --filter agent-journal-server run
+  atel: a single Lambda Function URL (streaming) backed by one
+  DynamoDB table. Deployed with `pnpm --filter atel-server run
   deploy` (infra/deploy.mjs), which wraps `aws cloudformation deploy`.
 
 Parameters:
+  # Kept as `JournalTtlDays` (not renamed to an Atel-branded name): this is a
+  # template-internal parameter name, not read directly by app code (the
+  # Lambda env var it feeds — see Environment.Variables below — is the
+  # ATEL_TTL_DAYS-branded one). Renaming template parameter/logical-resource
+  # names is intentionally out of scope for this rebrand — see the note on
+  # `JournalTable` below.
   JournalTtlDays:
     Type: Number
     Default: 90
     MinValue: 1
-    Description: Days a journal entry lives before DynamoDB TTL deletes it.
+    Description: Days a telemetry entry lives before DynamoDB TTL deletes it.
 
   AdminCredentials:
     Type: String
@@ -32,6 +38,19 @@ Parameters:
       by infra/deploy.mjs.
 
 Resources:
+  # NOTE on naming in this file: CloudFormation logical resource IDs below
+  # (JournalTable, JournalFunction, JournalFunctionRole, JournalFunctionUrl,
+  # etc.), the FunctionName/log-group-ARN literal `agent-journal-` prefix,
+  # the deploy-artifact S3 bucket pattern, and the default STACK_NAME (see
+  # infra/deploy.mjs) are all deliberately NOT renamed to "atel" as part of
+  # this rebrand. A logical-ID rename makes CloudFormation delete-and-recreate
+  # that resource on the next `deploy` against the already-live "agent-journal"
+  # stack — for JournalTable that would destroy the real, already-deployed
+  # DynamoDB table and its data; for JournalFunction, changing FunctionName
+  # similarly forces Lambda replacement. This is a branding-only source
+  # change, not a live-infra change, so all of that stays as-is. Only the
+  # app-level Lambda environment variable names (which are safe, in-place
+  # config updates) and prose/comments are rebranded.
   JournalTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -118,15 +137,15 @@ Resources:
       ReservedConcurrentExecutions: 20
       Environment:
         Variables:
-          JOURNAL_TABLE: !Ref JournalTable
-          JOURNAL_TTL_DAYS: !Ref JournalTtlDays
-          ADMIN_CREDENTIALS: !Ref AdminCredentials
+          ATEL_TABLE: !Ref JournalTable
+          ATEL_TTL_DAYS: !Ref JournalTtlDays
+          ATEL_ADMIN_CREDENTIALS: !Ref AdminCredentials
 
   # AuthType: NONE makes the Function URL publicly reachable — the handler
   # itself is responsible for validating the bearer token on every request
   # (see src/auth). This tradeoff is deliberate: AWS_IAM auth would require
   # every caller to sign requests with AWS credentials, which defeats the
-  # point of a portable `ag_sk_...`/`ag_admin_...` bearer token that agents
+  # point of a portable `atl_sk_...`/`atl_admin_...` bearer token that agents
   # carry in an env var. ReservedConcurrentExecutions above is the backstop
   # against abuse of the public endpoint.
   JournalFunctionUrl:
@@ -162,9 +181,9 @@ Resources:
 
 Outputs:
   FunctionUrl:
-    Description: Public HTTPS endpoint (set as AGENT_JOURNAL_URL).
+    Description: Public HTTPS endpoint (set as ATEL_URL).
     Value: !GetAtt JournalFunctionUrl.FunctionUrl
 
   TableName:
-    Description: DynamoDB table name (set as JOURNAL_TABLE for local dev against real DynamoDB).
+    Description: DynamoDB table name (set as ATEL_TABLE for local dev against real DynamoDB).
     Value: !Ref JournalTable

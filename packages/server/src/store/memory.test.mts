@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { MemoryJournalStore } from './memory.mjs'
+import { MemoryTelemetryStore } from './memory.mjs'
 
-describe('MemoryJournalStore', () => {
+describe('MemoryTelemetryStore', () => {
   let fixedNow: Date
-  let store: MemoryJournalStore
+  let store: MemoryTelemetryStore
 
   beforeEach(() => {
     fixedNow = new Date('2024-01-01T00:00:00.000Z')
-    store = new MemoryJournalStore({ now: () => fixedNow, ttlDays: 30 })
+    store = new MemoryTelemetryStore({ now: () => fixedNow, ttlDays: 30 })
   })
 
   describe('appendEntry', () => {
@@ -29,7 +29,7 @@ describe('MemoryJournalStore', () => {
     })
 
     it('uses a real clock when now is not provided', async () => {
-      const defaultStore = new MemoryJournalStore()
+      const defaultStore = new MemoryTelemetryStore()
       const entry = await defaultStore.appendEntry({
         credId: 'c',
         sessionId: 's',
@@ -40,7 +40,7 @@ describe('MemoryJournalStore', () => {
     })
 
     it('uses the default ttl of 90 days when not provided', async () => {
-      const defaultStore = new MemoryJournalStore({ now: () => fixedNow })
+      const defaultStore = new MemoryTelemetryStore({ now: () => fixedNow })
       const entry = await defaultStore.appendEntry({
         credId: 'c',
         sessionId: 's',

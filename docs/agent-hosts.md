@@ -1,6 +1,6 @@
 # Agent hosts: Claude Code & Codex
 
-`agent-journal` ships as a plugin for both Claude Code and Codex. The two hosts share a lot of
+`atel` ships as a plugin for both Claude Code and Codex. The two hosts share a lot of
 surface area (MCP registration, a `SessionStart` hook with an identical payload shape) but diverge
 in real, tested ways. This is the practical reference for maintaining dual-host support — what's
 shared, what differs, the gotchas hit while building this, and recommendations. For the underlying
@@ -12,14 +12,14 @@ see [`mcp.md`](mcp.md).
 
 ### Shared: MCP server + `SessionStart` hook
 
-- Both hosts run `agent-journal mcp` (stdio), configured by `plugins/agent-journal/.mcp.json`,
-  reading `AGENT_JOURNAL_URL`/`AGENT_JOURNAL_TOKEN` from the environment.
+- Both hosts run `atel mcp` (stdio), configured by `plugins/atel/.mcp.json`,
+  reading `ATEL_URL`/`ATEL_TOKEN` from the environment.
 - Both hosts support a `SessionStart` hook with matchers `startup|clear|resume|compact`, and send
   `session_id`/`cwd` on stdin using the same field names — so **one script**,
-  `plugins/agent-journal/hooks/session-start.mjs`, covers both. It writes
-  `.agent-journal/session.json` in the working directory.
+  `plugins/atel/hooks/session-start.mjs`, covers both. It writes
+  `.atel/session.json` in the working directory.
 - The published package's `resolveSessionId()`
-  (`packages/agent-journal/src/session.mts`) is host-agnostic: explicit id passed by the caller →
+  (`packages/atel/src/session.mts`) is host-agnostic: explicit id passed by the caller →
   the hook's state file (found by walking up from `cwd` to the nearest ancestor containing `.git`)
   → `CLAUDE_CODE_SESSION_ID` → `CODEX_THREAD_ID` → a generated id memoized for the process's
   lifetime. The file is re-read fresh on every call (never cached), so a long-lived MCP server
@@ -30,24 +30,24 @@ see [`mcp.md`](mcp.md).
 - Manifest: `.claude-plugin/plugin.json` (repo root) + `.claude-plugin/marketplace.json`.
 - `${CLAUDE_PLUGIN_ROOT}` resolves to the **repo root** — so `hooks/hooks.json`'s command path is
   the full path from there:
-  `${CLAUDE_PLUGIN_ROOT}/plugins/agent-journal/hooks/session-start.mjs`.
+  `${CLAUDE_PLUGIN_ROOT}/plugins/atel/hooks/session-start.mjs`.
 - MCP-in-plugin registration is an `mcpServers` key in `.claude-plugin/plugin.json` pointing at a
   `.mcp.json` file (not an inline object) — confirmed working via `claude mcp list`.
 - Install for local testing: `claude plugin marketplace add <path>` then
-  `claude plugin install agent-journal@<marketplace-name>`. Non-interactive dispatch for testing:
+  `claude plugin install atel@<marketplace-name>`. Non-interactive dispatch for testing:
   `claude -p`.
 
 ### Codex specifics
 
-- Manifest: `plugins/agent-journal/.codex-plugin/plugin.json` +
+- Manifest: `plugins/atel/.codex-plugin/plugin.json` +
   `.agents/plugins/marketplace.json` (repo root).
-- `${PLUGIN_ROOT}` resolves to the **plugin subfolder** (`plugins/agent-journal/`), not the repo
+- `${PLUGIN_ROOT}` resolves to the **plugin subfolder** (`plugins/atel/`), not the repo
   root — a compat alias for the same kind of variable Claude Code has, but scoped differently. This
   is why there's a **separate** `.codex-plugin/hooks.json` with its own relative path
   (`${PLUGIN_ROOT}/hooks/session-start.mjs`) instead of reusing Claude Code's `hooks/hooks.json` —
   the same literal path string cannot work for both hosts.
 - Requires a one-time manual trust step: after installing, run `/hooks` in Codex and trust
-  `agent-journal`'s `SessionStart` hook, or it is silently skipped.
+  `atel`'s `SessionStart` hook, or it is silently skipped.
 - Non-interactive dispatch for testing: `codex exec` (spawns a fresh subprocess per invocation).
 
 ## Gotchas
@@ -80,7 +80,7 @@ hosts' docs.
    own calling shell — a test can end up talking to production instead of a sandbox. Confirmed
    harmless once (the client failed closed on a malformed URL before any network call went out),
    but don't assume that safety net every time: always check the dispatched agent's actual shell
-   profile for pre-existing `AGENT_JOURNAL_*` vars before trusting your own exported test values
+   profile for pre-existing `ATEL_*` vars before trusting your own exported test values
    reached it.
 5. **The `SessionStart` hook has never been confirmed to actually fire for Codex at all** — every
    session-boundary test that "passed" did so via per-process fallback isolation (see gotcha #6),
@@ -99,7 +99,7 @@ hosts' docs.
    `codex exec` subagent gets its **own independent** session id. A Claude Code Task-tool subagent
    **shares its parent's** session id. Neither is a bug; it's a real behavioral difference between
    the two hosts' subagent mechanisms. Anything that assumes one behavior (e.g. "a subagent's
-   journal entries land in their own session") will be wrong on the other host.
+   telemetry entries land in their own session") will be wrong on the other host.
 8. **`claude plugin details` can report "MCP servers (0)" even when the server is genuinely
    connected and working.** Confirmed via `claude mcp list` showing `✔ Connected` and the tools
    succeeding end-to-end in the same test run. Treat that one command's server count as an
@@ -119,7 +119,7 @@ hosts' docs.
   mechanism — don't extrapolate from one to the other (gotcha #7).
 - **Run `/hooks` and trust the hook after installing the Codex plugin, but don't assume that's
   sufficient** — it may not even be the actual gate (gotcha #5). Before relying on the hook for
-  Codex, confirm it fired for real by checking `.agent-journal/session.json`'s content directly, the
+  Codex, confirm it fired for real by checking `.atel/session.json`'s content directly, the
   same way it's been confirmed for Claude Code — don't infer it from a correct-looking session
   boundary, which fallback isolation can produce for the wrong reason.
 - **Use `claude mcp list`, not `claude plugin details`, to check whether the MCP server is actually

@@ -8,10 +8,14 @@
 // their bootstrap buckets) — and uploads the zip to a content-hash key so
 // re-deploying with unchanged code is a no-op diff for CloudFormation.
 //
-// Usage: pnpm --filter agent-journal-server run deploy
+// Usage: pnpm --filter atel-server run deploy
 // Env: AWS_REGION or AWS_DEFAULT_REGION (or `aws configure`'s default),
-//      ADMIN_CREDENTIALS (required), JOURNAL_TTL_DAYS (optional),
-//      STACK_NAME (optional, default "agent-journal").
+//      ATEL_ADMIN_CREDENTIALS (required), ATEL_TTL_DAYS (optional),
+//      STACK_NAME (optional, default "agent-journal" — this deploys to the
+//      already-existing stack; the CloudFormation stack/resource identity
+//      and the deploy-artifact bucket naming are intentionally NOT
+//      rebranded here, since renaming them would make CloudFormation
+//      replace already-deployed, real infrastructure on the next deploy).
 import { bundle } from './bundle.mjs'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
@@ -90,10 +94,10 @@ function stackOutputs(stackName, region) {
 }
 
 export async function deploy() {
-  const adminCredentials = process.env.ADMIN_CREDENTIALS
+  const adminCredentials = process.env.ATEL_ADMIN_CREDENTIALS
   if (!adminCredentials) {
     throw new Error(
-      'ADMIN_CREDENTIALS env var is required — base64 JSON [{"name","token"}]. See README.',
+      'ATEL_ADMIN_CREDENTIALS env var is required — base64 JSON [{"name","token"}]. See README.',
     )
   }
 
@@ -116,7 +120,7 @@ export async function deploy() {
     `LambdaCodeS3Key=${key}`,
     `AdminCredentials=${adminCredentials}`,
   ]
-  if (process.env.JOURNAL_TTL_DAYS) overrides.push(`JournalTtlDays=${process.env.JOURNAL_TTL_DAYS}`)
+  if (process.env.ATEL_TTL_DAYS) overrides.push(`JournalTtlDays=${process.env.ATEL_TTL_DAYS}`)
 
   aws(
     [
