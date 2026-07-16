@@ -63,7 +63,14 @@ hosts' docs.
    `codex mcp get` resolved** in testing — pointing them at a different file had no observed
    effect; Codex kept reading the default-location files regardless. This contradicts Codex's own
    plugin documentation, so treat it as a possible CLI-version bug, not a confirmed permanent
-   limitation — re-check after any `codex` CLI upgrade.
+   limitation — re-check after any `codex` CLI upgrade. A later run made "the default location" concrete
+   for hooks specifically: installing this plugin logged
+   `failed to read plugin hooks config <plugin-root>/hooks.json: No such file or directory` — a flat
+   `hooks.json` directly at the plugin root, which is neither this project's actual default
+   (`hooks/hooks.json`) nor its Codex-specific override target (`.codex-plugin/hooks.json`). `mcpServers`
+   has still round-tripped successfully in every test, most likely because `.mcp.json` already happens
+   to sit at the plugin root (Codex's presumed default location) regardless of the override — a lucky
+   coincidence of this project's file layout, not evidence the override itself works.
 3. **Codex's `env` field in `.mcp.json` doesn't template `${VAR}`** — it's passed through as a
    literal string, not substituted. The documented mechanism is `env_vars` (a whitelist array of
    names to pass through), not `env`. This was never cleanly isolated in testing (see gotcha #4
@@ -75,10 +82,14 @@ hosts' docs.
    but don't assume that safety net every time: always check the dispatched agent's actual shell
    profile for pre-existing `AGENT_JOURNAL_*` vars before trusting your own exported test values
    reached it.
-5. **Skipping Codex's `/hooks` trust step silently disables the hook** — it falls through to
-   per-process fallback session isolation instead, which happens to produce the same _observable_
-   outcome for a fresh session boundary, but for the wrong reason (see gotcha #6), not because the
-   hook fired.
+5. **The `SessionStart` hook has never been confirmed to actually fire for Codex at all** — every
+   session-boundary test that "passed" did so via per-process fallback isolation (see gotcha #6),
+   not a confirmed-working hook, and the missing-hooks-config error in gotcha #2 above means the
+   hook config likely never even loads, let alone reaches a trust decision. An earlier version of
+   this doc attributed that to Codex's manual `/hooks` trust step being skipped — that's still worth
+   doing after any install, but given gotcha #2, trust was probably never the actual gate here. Don't
+   claim the hook works for Codex until a run confirms the hook's own state-file write, the same way
+   it's been confirmed for Claude Code (see [`smoke-test.md`](smoke-test.md)).
 6. **`CODEX_THREAD_ID` is not reliably injected into local stdio MCP server processes**
    ([openai/codex#19937](https://github.com/openai/codex/issues/19937)), and even where it is
    present, nested Codex sessions have been observed inheriting a parent thread's stale id rather
@@ -106,8 +117,11 @@ hosts' docs.
 - **Don't assume subagent session behavior generalizes across hosts.** If a feature depends on it,
   test explicitly against both Claude Code's Task tool and Codex's `codex exec`/nested-exec
   mechanism — don't extrapolate from one to the other (gotcha #7).
-- **Always run `/hooks` and trust the hook after installing the Codex plugin** — there is currently
-  no way around this manual step (gotcha #5).
+- **Run `/hooks` and trust the hook after installing the Codex plugin, but don't assume that's
+  sufficient** — it may not even be the actual gate (gotcha #5). Before relying on the hook for
+  Codex, confirm it fired for real by checking `.agent-journal/session.json`'s content directly, the
+  same way it's been confirmed for Claude Code — don't infer it from a correct-looking session
+  boundary, which fallback isolation can produce for the wrong reason.
 - **Use `claude mcp list`, not `claude plugin details`, to check whether the MCP server is actually
   connected** (gotcha #8).
 - **Re-check gotchas #2 and #3 after any Codex CLI upgrade** — both were logged as possible

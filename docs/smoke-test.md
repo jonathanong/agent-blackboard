@@ -261,3 +261,43 @@ Also surfaced along the way: `claude plugin details` reported "MCP
 servers (0)" for the installed plugin even though `claude mcp list` showed
 it connected and the tool calls worked correctly end-to-end — an apparent
 display bug in that one command, not a functional gap.
+
+**2026-07-16, `claude` CLI (Claude Code) on macOS, local in-memory server,
+CLI interface** (`pnpm exec agent-journal`, every invocation inline-prefixed
+with literal `AGENT_JOURNAL_URL`/`AGENT_JOURNAL_TOKEN`), dispatched as two
+separate `claude -p` calls (phases 0–2, then a fresh call for phases 3–4,
+since `/clear` isn't meaningful within one non-interactive `-p` turn).
+Phase 0: `agent-journal get` returned `[]` against `localhost:4400` as
+expected. Phase 1: `agent-journal append` produced sessionId
+`f8e3d65d-9c55-45a6-b23e-2d51e9cbac97`, confirmed by reading
+`.agent-journal/session.json` directly (matched exactly — the hook fired
+for real, not just fallback isolation). Phase 2: `agent-journal patch`
+merged `{"pr": 9999}` onto the phase-1 entry without disturbing `marker`.
+Phase 3 (fresh `claude -p` call, new sessionId
+`61ac4a60-1d4f-4821-980e-ac56c51ac981`): `agent-journal get` showed only
+the phase-3 entry, no leakage from phase 1 — CLI session isolation matches
+the MCP variant's. Phase 4: a Task-tool subagent ran `agent-journal append`
+itself (own shell, own inline env prefix); its entry's `sessionId` matched
+the parent's exactly, confirming this run's stated hypothesis — CLI-based
+subagent journaling shares the parent's session, on this host — and is
+consistent with (not a divergence from) this same host's MCP-variant phase
+4 result recorded above, where the Task-tool subagent likewise shared its
+parent's session. The `codex exec` CLI variant was attempted the same day
+but never completed — see below.
+
+**2026-07-16, `codex-cli` (v0.144.4) on macOS, local in-memory server, CLI
+interface — attempted, blocked, not completed.** Installed cleanly (fresh
+local marketplace, `.mcp.json` pointed at the local built CLI), but the
+very first `codex exec` dispatch hit a real Codex account usage-limit error
+before running any test phase ("You've hit your usage limit... try again at
+Jul 21st, 2026") — an external constraint, not an `agent-journal` bug.
+Phases 0–4 were never executed for this host/interface combination; don't
+treat that as a pass or a fail, it's simply unrun. One genuine finding did
+surface before the limit hit, independent of running any phase: Codex
+logged `failed to read plugin hooks config
+<plugin-root>/hooks.json: No such file or directory` while loading the
+plugin — see gotcha #2 and #5 in
+[`agent-hosts.md`](agent-hosts.md#gotchas) for what this means (the
+`SessionStart` hook's config likely never loads for Codex at all, which
+revises the earlier "just needs `/hooks` trust" diagnosis). Retry once the
+usage limit resets.
