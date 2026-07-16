@@ -2,14 +2,26 @@
 
 A prompt to hand a real agent (Claude Code or Codex) so it exercises
 `agent-journal` end to end — not just the happy path, but specifically the
-two things automated tests can't observe: whether a real session-boundary
-event (`/clear`, or Codex's equivalent) actually starts a fresh journal
-stream, and whether a subagent's journal entries land in the same session as
-its parent or a different one. Both were open questions flagged in
+things automated tests can't observe: whether a real session-boundary event
+(`/clear`, or Codex's equivalent) actually starts a fresh journal stream,
+whether a subagent's journal entries land in the same session as its parent
+or a different one, and — via the CLI variant below — whether any of that
+changes when the agent shells out to `agent-journal` directly instead of
+going through the MCP server. All three were open questions flagged in
 [`architecture.md#session-lifecycle`](architecture.md#session-lifecycle);
-one real run (2026-07-15, `codex exec`) has since answered the subagent
-question empirically — see [Prior run log](#prior-run-log) — but treat that
-as one data point, not a universal guarantee across hosts/versions.
+real runs (see [Prior run log](#prior-run-log)) have since answered the
+session-boundary and MCP subagent questions empirically, but treat each as
+one data point per host/interface, not a universal guarantee — the CLI
+variant in particular has no real run on record yet for either host.
+
+This covers two genuinely different code paths, not one prompt run twice:
+the **MCP interface** (`journal_append`/`journal_get`/`journal_patch`, via
+whatever MCP server the plugin registered) and the **CLI interface**
+(`agent-journal append|get|patch`, a separate process invoked directly from
+the agent's own shell). They share the same session-resolution logic, but
+the CLI has no persistent server process and reads its env vars from
+whatever shell environment invokes it each time — run both variants, don't
+assume a pass on one implies a pass on the other.
 
 ## Before dispatching
 
@@ -43,8 +55,22 @@ exec` in particular spawns its subprocesses via a **login shell**
   Codex CLI version tested — if your dispatched agent's config doesn't
   match what you edited, that's a known, unexplained gap, not something
   you're doing wrong.
+- **Testing the CLI variant specifically**: the CLI reads
+  `AGENT_JOURNAL_URL`/`AGENT_JOURNAL_TOKEN` from whatever shell environment
+  the `agent-journal` process inherits at invocation time — unlike the MCP
+  server, which gets its env from `.mcp.json` regardless of the dispatched
+  agent's own shell. Have the agent prefix **every single CLI invocation**
+  with explicit inline values
+  (`AGENT_JOURNAL_URL=... AGENT_JOURNAL_TOKEN=... agent-journal append ...`)
+  rather than exporting them once and trusting they persist — an inline
+  per-command prefix always wins even if a login shell re-sources
+  `~/.zshrc` between commands (see the gotcha above), but a one-time
+  `export` doesn't reliably survive that. Before publishing, use the
+  locally built CLI: `pnpm exec agent-journal <args>` from the repo root
+  (see repo `CLAUDE.md`), or
+  `node packages/agent-journal/dist/cli/index.mjs <args>` directly.
 
-## The prompt
+## The prompt (MCP interface)
 
 Copy-paste this to the agent being tested:
 
@@ -99,6 +125,70 @@ Copy-paste this to the agent being tested:
 > anything that errored, required manual approval (e.g. a hook-trust
 > prompt), or otherwise surprised you.
 
+## The prompt (CLI interface)
+
+Same four phases, but shelling out to `agent-journal` directly instead of
+calling MCP tools — a genuinely different code path (its own env-var
+reading, a fresh process per invocation, no persistent server). Copy-paste
+this to the agent being tested; read [Before dispatching](#before-dispatching)'s
+CLI note first:
+
+> You're smoke-testing the `agent-journal` CLI (not its MCP server — run
+> every command below directly in your shell, prefixing each one with
+> explicit `AGENT_JOURNAL_URL=...` and `AGENT_JOURNAL_TOKEN=...` values
+> rather than relying on already-exported ones). Work through these phases
+> in order, and at the end report a structured summary — for every step,
+> state the exact command you ran and its raw output, especially any
+> `sessionId` values.
+>
+> **Phase 0 — sanity check.** Run `agent-journal get` once before doing
+> anything else and confirm it talks to the server you expect (check the
+> `AGENT_JOURNAL_URL` you're passing matches what you were told to expect).
+> If it doesn't, stop and report the mismatch — you may be pointed at a
+> real deployment instead of the intended test sandbox.
+>
+> **Phase 1 — basic round trip.** Run
+> `agent-journal append '{"marker": "smoke-test-cli-phase-1"}'`. Then run
+> `agent-journal get` and confirm the phase-1 entry comes back. Report the
+> `sessionId` on that entry.
+>
+> **Phase 2 — patch.** Run `agent-journal patch <id> --data '{"pr": 9999}'`
+> for the phase-1 entry's `id`, then `agent-journal get` again and confirm
+> `data.marker` is still `"smoke-test-cli-phase-1"` _and_ `data.pr` is now
+> `9999` on the same entry (a merge, not a replace).
+>
+> **Phase 3 — session boundary.** Reset your session context exactly as in
+> the MCP variant's phase 3 (`/clear` for Claude Code; a genuinely new
+> `codex exec` thread for Codex — not a resume). In the new session, run
+> `agent-journal append '{"marker": "smoke-test-cli-phase-3"}'`, then
+> `agent-journal get`. Report: does this show only phase-3, or also
+> phase-1/2? Report both entries' `sessionId` values. (Expected: only
+> phase-3, with a different `sessionId`.)
+>
+> **Phase 4 — subagent attribution.** From your current (phase-3) session,
+> dispatch a subagent (Task tool for Claude Code; a nested `codex exec` or
+> equivalent for Codex). Have the subagent run
+> `agent-journal append '{"marker": "smoke-test-cli-subagent"}'` **itself**,
+> via its own shell — not you, on its behalf — and report the `sessionId`
+> it got back. Then, from the parent, run `agent-journal get` again and
+> report whether the subagent's entry shares the parent's phase-3
+> `sessionId` or has a different one. Unlike the MCP variant (where this is
+> known to diverge by host — see [Prior run log](#prior-run-log)), the CLI
+> has no persistent server process for a subagent to reuse or reconnect
+> to — the working hypothesis is that CLI-based subagent journaling
+> **always** shares the parent's session, on both hosts, because session
+> resolution just reads the same `.agent-journal/session.json` file
+> regardless of which process invokes it. Confirm or refute this, don't
+> assume it.
+>
+> **Report.** Summarize: every `sessionId` observed across all four phases,
+> whether phase 3 correctly started a new session, whether the phase-4
+> subagent entry matched or diverged from its parent's session, and
+> anything that errored (especially an auth or URL error, which likely
+> means an inline env var prefix didn't actually take effect — see
+> [Interpreting the results](#interpreting-the-results)) or otherwise
+> surprised you.
+
 ## Interpreting the results
 
 - **Phase 0 failing (wrong server)** means the dispatch setup is wrong, not
@@ -116,6 +206,19 @@ Copy-paste this to the agent being tested:
 exec` run on record. Either outcome is informative; record whichever you
   observe (in a journal entry, fittingly) rather than assuming the prior
   result generalizes.
+- **CLI variant failing with an auth or URL error on phase 0/1** almost
+  always means an inline env var prefix didn't actually take effect —
+  before concluding it's a real bug, have the agent print exactly what
+  `AGENT_JOURNAL_URL`/`AGENT_JOURNAL_TOKEN` resolved to in that specific
+  command's shell invocation (not just what you told it to export).
+- **CLI variant's phase 4 NOT sharing the parent's session would be the
+  surprising outcome** — the opposite framing from the MCP variant. The
+  CLI has no persistent server process, so there's no known mechanism for
+  a subagent's separate `agent-journal` invocation to get a different
+  session than whatever `.agent-journal/session.json` already says. If it
+  does diverge, that's a real, unexplained finding worth digging into
+  (e.g. a subagent running from a different `cwd` that resolves a
+  different project root) rather than assuming the CLI works like MCP.
 
 ## Prior run log
 
