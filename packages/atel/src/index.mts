@@ -1,5 +1,5 @@
 /**
- * Public API of `@jongleberry/atel`: a thin `fetch`-based client for the
+ * Public API of `atel`: a thin `fetch`-based client for the
  * atel HTTP service.
  *
  * - `Telemetry` — append + read, bound to one session + agent.

@@ -17,7 +17,7 @@ _how_ telemetry entries are stored, retrieved, and archived.
 
 - **`packages/server`** — a Lambda + DynamoDB service (deployed via CloudFormation,
   not published to npm). Streams responses over a Lambda Function URL.
-- **`packages/atel`** (published as [`@jongleberry/atel`](https://www.npmjs.com/package/@jongleberry/atel))
+- **`packages/atel`** (published as [`atel`](https://www.npmjs.com/package/atel))
   — the client library, CLI (`atel`), and MCP server, all in one small,
   dependency-light package.
 - **`plugins/atel`** — a Claude Code + Codex plugin bundling the MCP
@@ -26,7 +26,7 @@ _how_ telemetry entries are stored, retrieved, and archived.
 ## Quick start
 
 ```sh
-npx @jongleberry/atel credentials create --name "my laptop"
+npx atel credentials create --name "my laptop"
 # -> { "id": "...", "token": "atl_sk_..." }
 
 export ATEL_URL=https://your-deployment.lambda-url.us-east-1.on.aws

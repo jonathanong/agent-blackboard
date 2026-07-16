@@ -18,7 +18,7 @@ exclude = [
   # The repo isn't pushed to GitHub yet — remove this line once it is.
   "^https?://github\\.com/jonathanong/atel",
   # The package hasn't had its first npm publish yet — remove this line once it has.
-  "^https?://www\\.npmjs\\.com/package/@jongleberry/atel",
+  "^https?://www\\.npmjs\\.com/package/atel",
   # Documentation placeholders, never meant to resolve.
   "^https?://your-deployment\\.lambda-url",
   "^https?://abc123xyz\\.lambda-url",

@@ -6,8 +6,8 @@ for the product description.
 ## Workspace
 
 - pnpm workspace, Node 24+, all source is `.mts` ESM.
-- `packages/atel` — **published** as `@jongleberry/atel` (client lib +
-  CLI + MCP server). Must never depend on `packages/server` or `@aws-sdk/*`
+- `packages/atel` — **published** as `atel` (unscoped — client lib + CLI +
+  MCP server). Must never depend on `packages/server` or `@aws-sdk/*`
   (enforced by `.dependency-cruiser.cjs`).
 - `packages/server` — **not published**, deployed only. Lambda + DynamoDB, CloudFormation
   in `packages/server/infra/`.
@@ -25,10 +25,12 @@ lychee`, or a GitHub release binary) to run this locally; CI installs it via `ly
 - `packages/server`: `pnpm run dev` (local server), `pnpm run deploy` (CloudFormation via AWS CLI).
 - Running the CLI locally, before it's ever published: `pnpm run build` then `pnpm exec
 atel <args>` from anywhere in the repo. This works because the root `package.json`
-  lists `@jongleberry/atel` as a `workspace:*` devDependency purely to get pnpm to
+  lists `atel` as a `workspace:*` devDependency purely to get pnpm to
   link its bin into root's `node_modules/.bin` (a workspace package's own `bin` field is never
   self-linked into its own `node_modules/.bin` otherwise — that only happens for actual
-  dependencies). Ignored in `knip.jsonc` since it's never imported, only linked for its bin.
+  dependencies). Ignored in `knip.jsonc` since it's never imported, only linked for its bin. The
+  root package itself is named `atel-workspace`, not `atel` — naming it `atel` too would collide
+  with `packages/atel`'s own name and break `pnpm --filter atel` (it would match both).
 
 ## Conventions
 

@@ -1,4 +1,4 @@
-# @jongleberry/atel
+# atel
 
 Client library, CLI, and MCP server for [atel](https://github.com/jonathanong/atel) (Agent
 Telemetry) — a telemetry stream for autonomous agents to record a stream of
@@ -8,13 +8,13 @@ learnings. This package is the piece you install; it talks to the
 code.
 
 ```sh
-npx @jongleberry/atel --help
+npx atel --help
 ```
 
 ## Install
 
 ```sh
-pnpm add @jongleberry/atel
+pnpm add atel
 ```
 
 Requires Node 24+.
@@ -71,7 +71,7 @@ Notes:
 ## Library
 
 ```ts
-import { Telemetries, Telemetry, Auth } from '@jongleberry/atel'
+import { Telemetries, Telemetry, Auth } from 'atel'
 
 // Telemetry — bound to one session + agent
 const telemetry = new Telemetry({ baseUrl, token, agent: 'claude-code' }) // sessionId auto-resolved
