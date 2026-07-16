@@ -56,10 +56,21 @@ agent-journal <args>` from anywhere in the repo. This works because the root `pa
 
 ## Dogfooding
 
-Agents working on this repo should journal real friction, decisions, and findings using
+Agents working on this repo should journal real friction, decisions, findings, and changes using
 `agent-journal` itself as they go (`journal_append` via MCP, or `agent-journal append` via the
 CLI against a local server — `JOURNAL_STORE=memory pnpm run dev`, no AWS account needed) —
-not placeholder text, actual findings from the session. This is the same practice
-`plugins/agent-journal/skills/agent-journal/SKILL.md` and
+not placeholder text, actual findings from the session. Journal changes as you make them, not
+just impressions after the fact: a non-trivial edit, a file added or removed, a bug fixed — the
+concrete "what changed" is what a later retrospective/distill pass needs, not a vague summary.
+This is the same practice `plugins/agent-journal/skills/agent-journal/SKILL.md` and
 [`docs/loop-engineering.md`](docs/loop-engineering.md) describe for downstream users; there's
 no reason this repo shouldn't use its own tool.
+
+Dogfood the full loop, not just the write side: run `/retrospective` at the end of a substantial
+session to synthesize what was journaled (and what wasn't, from your own memory of the session)
+into one durable entry, and periodically run `/retrospective-distill` across accumulated
+retrospectives to turn recurring themes into concrete follow-ups (a CLAUDE.md edit, a GitHub
+issue, a lint rule). See
+[`.claude/skills/retrospective/SKILL.md`](.claude/skills/retrospective/SKILL.md) and
+[`.claude/skills/retrospective-distill/SKILL.md`](.claude/skills/retrospective-distill/SKILL.md)
+— both are symlinked at `.agent/skills/` too, so Codex can discover them the same way.
