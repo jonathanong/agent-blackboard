@@ -4,6 +4,7 @@ import type { HandlerRequest } from '../types.mjs'
 import { handleSessionsRoute } from './sessions.mjs'
 
 const NOW = new Date('2026-01-01T00:00:00.000Z')
+const AGENT = { agent: 'claude-code', version: '1.0.13' }
 
 async function collect(iter: AsyncIterable<string | Uint8Array>): Promise<string> {
   let result = ''
@@ -42,13 +43,18 @@ describe('sessions route', () => {
 
   it('creates roots and children, then lists and gets them', async () => {
     const rootResponse = await handleSessionsRoute(
-      request({ method: 'POST', body: { id: 'root', parentSessionId: null } }),
+      request({ method: 'POST', body: { id: 'root', parentSessionId: null, ...AGENT } }),
       store,
     )
     expect(rootResponse.status).toBe(201)
-    expect(await body(rootResponse)).toMatchObject({ id: 'root', parentSessionId: null })
+    expect(await body(rootResponse)).toMatchObject({
+      id: 'root',
+      parentSessionId: null,
+      data: {},
+      ...AGENT,
+    })
     const childResponse = await handleSessionsRoute(
-      request({ method: 'POST', body: { id: 'child', parentSessionId: 'root' } }),
+      request({ method: 'POST', body: { id: 'child', parentSessionId: 'root', ...AGENT } }),
       store,
     )
     expect(childResponse.status).toBe(201)
@@ -61,26 +67,33 @@ describe('sessions route', () => {
   })
 
   it('validates create bodies and maps store conflicts', async () => {
-    for (const invalid of ['bad json', [], {}, { id: 'a/b', parentSessionId: null }]) {
+    for (const invalid of [
+      'bad json',
+      [],
+      {},
+      { id: 'a/b', parentSessionId: null, ...AGENT },
+      { id: 's', parentSessionId: null, agent: '', version: '1' },
+      { id: 's', parentSessionId: null, agent: 'test', version: '' },
+    ]) {
       const response = await handleSessionsRoute(request({ method: 'POST', body: invalid }), store)
       expect(response.status).toBe(400)
     }
     expect(
       (
         await handleSessionsRoute(
-          request({ method: 'POST', body: { id: 's', parentSessionId: 1 } }),
+          request({ method: 'POST', body: { id: 's', parentSessionId: 1, ...AGENT } }),
           store,
         )
       ).status,
     ).toBe(400)
     await handleSessionsRoute(
-      request({ method: 'POST', body: { id: 'root', parentSessionId: null } }),
+      request({ method: 'POST', body: { id: 'root', parentSessionId: null, ...AGENT } }),
       store,
     )
     expect(
       (
         await handleSessionsRoute(
-          request({ method: 'POST', body: { id: 'root', parentSessionId: null } }),
+          request({ method: 'POST', body: { id: 'root', parentSessionId: null, ...AGENT } }),
           store,
         )
       ).status,
@@ -88,22 +101,33 @@ describe('sessions route', () => {
     expect(
       (
         await handleSessionsRoute(
-          request({ method: 'POST', body: { id: 'child', parentSessionId: 'missing' } }),
+          request({ method: 'POST', body: { id: 'child', parentSessionId: 'missing', ...AGENT } }),
           store,
         )
       ).status,
     ).toBe(404)
   })
 
-  it('archives sessions and validates archive bodies', async () => {
+  it('patches and archives sessions, then filters archived lists', async () => {
     await store.createSession({
       credId: (await store.listCredentials())[0]!.id,
       id: 's',
       parentSessionId: null,
+      ...AGENT,
     })
     expect(
       (await handleSessionsRoute(request({ method: 'PATCH', body: 'bad' }), store, 's')).status,
     ).toBe(400)
+    expect(
+      (await handleSessionsRoute(request({ method: 'PATCH', body: { data: {} } }), store, 's'))
+        .status,
+    ).toBe(400)
+    const patched = await handleSessionsRoute(
+      request({ method: 'PATCH', body: { data: { branch: 'main' } } }),
+      store,
+      's',
+    )
+    expect(await body(patched)).toMatchObject({ data: { branch: 'main' } })
     expect(
       (
         await handleSessionsRoute(
@@ -119,6 +143,22 @@ describe('sessions route', () => {
       's',
     )
     expect(await body(archived)).toMatchObject({ archivedAt: NOW.toISOString() })
+    expect(await body(await handleSessionsRoute(request(), store))).toEqual([])
+    expect(
+      await body(await handleSessionsRoute(request({ query: { archived: 'true' } }), store)),
+    ).toHaveLength(1)
+    expect((await handleSessionsRoute(request({ query: { archived: 'all' } }), store)).status).toBe(
+      400,
+    )
+    expect(
+      (
+        await handleSessionsRoute(
+          request({ method: 'PATCH', body: { data: { late: true } } }),
+          store,
+          's',
+        )
+      ).status,
+    ).toBe(409)
     expect(
       (
         await handleSessionsRoute(
@@ -135,13 +175,21 @@ describe('sessions route', () => {
     vi.spyOn(store, 'createSession').mockRejectedValueOnce(boom)
     await expect(
       handleSessionsRoute(
-        request({ method: 'POST', body: { id: 's', parentSessionId: null } }),
+        request({ method: 'POST', body: { id: 's', parentSessionId: null, ...AGENT } }),
         store,
       ),
     ).rejects.toBe(boom)
     vi.spyOn(store, 'archiveSession').mockRejectedValueOnce(boom)
     await expect(
       handleSessionsRoute(request({ method: 'PATCH', body: { archived: true } }), store, 's'),
+    ).rejects.toBe(boom)
+    vi.spyOn(store, 'patchSession').mockRejectedValueOnce(boom)
+    await expect(
+      handleSessionsRoute(
+        request({ method: 'PATCH', body: { data: { branch: 'main' } } }),
+        store,
+        's',
+      ),
     ).rejects.toBe(boom)
   })
 })

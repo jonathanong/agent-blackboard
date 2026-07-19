@@ -19,7 +19,13 @@ describe('entries route', () => {
     const credential = await store.createCredential('test')
     token = credential.token
     credId = credential.record.id
-    await store.createSession({ credId, id: 's', parentSessionId: null })
+    await store.createSession({
+      credId,
+      id: 's',
+      parentSessionId: null,
+      agent: 'test-agent',
+      version: '1.0.0',
+    })
   })
 
   function request(overrides: Partial<HandlerRequest> = {}): HandlerRequest {
@@ -64,7 +70,7 @@ describe('entries route', () => {
       (await handleEntriesRoute(request({ method: 'POST', body: { data: {} } }), store, 's'))
         .status,
     ).toBe(409)
-    expect((await handleEntriesRoute(request(), store, 's')).status).toBe(409)
+    expect((await handleEntriesRoute(request(), store, 's')).status).toBe(200)
   })
 
   it('validates append, format, and patch inputs', async () => {

@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Retrospective'
+  short_description: 'Write the final, thorough session log'
+  default_prompt: 'Use $retrospective to write the final thorough log for this session.'

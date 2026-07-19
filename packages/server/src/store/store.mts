@@ -11,6 +11,13 @@ export interface NewSession {
   credId: string
   id: string
   parentSessionId: string | null
+  agent: string
+  version: string
+}
+
+export interface SessionPatch {
+  sessionId: string
+  data: Record<string, unknown>
 }
 
 /** Identifies one entry by its composite key and shallow-merges `data`. */
@@ -36,6 +43,7 @@ export interface BlackboardStore {
   createSession(session: NewSession): Promise<Session>
   getSession(credId: string, sessionId: string): Promise<Session | undefined>
   listSessions(credId: string): AsyncIterable<Session>
+  patchSession(credId: string, patch: SessionPatch): Promise<Session>
   archiveSession(credId: string, sessionId: string): Promise<Session>
 
   appendEntry(entry: NewSessionEntry): Promise<SessionEntry>

@@ -15,6 +15,8 @@ skill explains how to use it; project instructions decide what is worth recordin
   The service never infers or generates one.
 - **Subagents get their own sessions.** Create each subagent session with its direct parent's id in
   `parentSessionId`. Root sessions use `parentSessionId: null`.
+- **Agent identity is explicit.** Every session creation includes the actual agent name and version.
+- **Sessions can carry data.** Session patches shallow-merge a free-form `data` object.
 - **`data` is unstructured.** Every entry carries a free-form `data` object. Attach whatever is
   useful — a note, a branch name, a PR number, a decision and its rationale. There is no schema.
 - **Entries are append-only, with patching for enrichment.** An entry is identified by
@@ -25,8 +27,9 @@ skill explains how to use it; project instructions decide what is worth recordin
 If the `agent-blackboard` MCP server is connected, use its tools directly:
 
 - `session_create` — create a root or subagent session with explicit `sessionId` and
-  `parentSessionId` (use `null` for a root).
-- `session_archive` — archive a session; archived sessions reject reads and writes.
+  `parentSessionId` (use `null` for a root), plus `agent` and `version`.
+- `session_patch` — shallow-merge `data` into an active session.
+- `session_archive` — set `archivedAt`; archived data remains readable but immutable.
 - `entry_append` — append `data` to an existing active session.
 - `entry_get` — read entries from one explicit session.
 - `entry_patch` — shallow-merge `data` into one entry identified by `sessionId` and `createdAt`.
@@ -36,8 +39,10 @@ If the `agent-blackboard` MCP server is connected, use its tools directly:
 Without MCP, or from a shell/script, use the `agent-blackboard` CLI:
 
 ```bash
-agent-blackboard sessions create root-123
-agent-blackboard sessions create worker-456 --parent-session-id root-123
+agent-blackboard sessions create root-123 --agent claude-code --version 1.0.13
+agent-blackboard sessions create worker-456 --parent-session-id root-123 \
+  --agent claude-code --version 1.0.13
+agent-blackboard sessions patch worker-456 --data '{"branch":"fix/retry"}'
 agent-blackboard append --session-id worker-456 '{"note":"found the failing edge case"}'
 agent-blackboard get --session-id worker-456 --format markdown
 agent-blackboard patch --session-id worker-456 --created-at <timestamp> --data '{"pr":1234}'

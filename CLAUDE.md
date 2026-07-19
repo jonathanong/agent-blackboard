@@ -15,7 +15,7 @@ for the product description.
 
 ## Commands
 
-- `pnpm lint` — oxlint, oxfmt, ast-grep, knip, dependency-cruiser (chained).
+- `pnpm lint` — oxlint, oxfmt, knip, dependency-cruiser (chained).
 - `pnpm typecheck` — native `tsc --noEmit`.
 - `pnpm test:coverage` — vitest + v8 coverage; 100% required (project + patch, see `codecov.yml`).
 - `pnpm run actionlint` — lints `.github/workflows/*.yml`.
@@ -43,10 +43,12 @@ agent-blackboard <args>` from anywhere in the repo. This works because the root 
   timestamps only. Session ids use URL-safe letters, numbers, `.`, `_`, `:`, and `-`.
 - Sessions are first-class records. A root session has `parentSessionId: null`; every subagent
   creates its own session with its direct parent's id. Parent links are immutable, must reference
-  an existing session owned by the same credential, and entries require an existing active session.
+  an existing active session owned by the same credential. Every session requires caller-supplied
+  `agent` and `version`. Session `data` is unstructured JSON and patches shallow-merge it.
 - One DynamoDB table stores multiple item types, never nested entry arrays: session metadata is one
   item and each entry is its own item. An entry is identified by `(sessionId, createdAt)`; archival
-  belongs to the session metadata item, not individual entries.
+  belongs to the session metadata item as `archivedAt`, not individual entries. Archived sessions
+  and entries stay readable; all writes and creation of children under an archived parent fail.
 - `data` on an entry is intentionally unstructured JSON — don't impose a schema; let
   agents decide what to attach (branch names, PR numbers, etc.) and filter client-side.
 - Runtime-only modules that can't be exercised by vitest directly (e.g. `handler.mts`'s use of
@@ -66,20 +68,19 @@ agent-blackboard <args>` from anywhere in the repo. This works because the root 
 ## Dogfooding
 
 Agents working on this repo should record real friction, decisions, findings, and changes using
-`agent-blackboard` itself as they go (`entry_append` via MCP, or `agent-blackboard append` via the
-CLI against a local server — `AGENT_BLACKBOARD_STORE=memory pnpm run dev`, no AWS account needed) —
-not placeholder text, actual findings from the session. Log changes as you make them, not
-just impressions after the fact: a non-trivial edit, a file added or removed, a bug fixed — the
-concrete "what changed" is what a later retrospective/distill pass needs, not a vague summary.
+the [`blackboard`](.agent/skills/blackboard/SKILL.md) skill as they go (`entry_append` via MCP, or
+`agent-blackboard append` via the CLI against a local server —
+`AGENT_BLACKBOARD_STORE=memory pnpm run dev`, no AWS account needed). Log actual learnings,
+findings, and gotchas with concrete evidence, not placeholder text or vague progress narration.
 This is the same practice `plugins/agent-blackboard/skills/agent-blackboard/SKILL.md` and
 [`docs/loop-engineering.md`](docs/loop-engineering.md) describe for downstream users; there's
 no reason this repo shouldn't use its own tool.
 
 Dogfood the full loop, not just the write side: run `/retrospective` at the end of a substantial
-session to synthesize what was recorded (and what wasn't, from your own memory of the session)
-into one durable entry, and periodically run `/retrospective-distill` across accumulated
-retrospectives to turn recurring themes into concrete follow-ups (a CLAUDE.md edit, a GitHub
-issue, a lint rule). See
-[`.claude/skills/retrospective/SKILL.md`](.claude/skills/retrospective/SKILL.md) and
-[`.claude/skills/retrospective-distill/SKILL.md`](.claude/skills/retrospective-distill/SKILL.md)
-— both are symlinked at `.agent/skills/` too, so Codex can discover them the same way.
+session to make its last append a thorough synthesis, and periodically run
+`/retrospective-distill` across accumulated blackboard evidence to turn it into concrete follow-ups
+(a CLAUDE.md edit, a GitHub issue, a lint rule). See
+[`.agent/skills/blackboard/SKILL.md`](.agent/skills/blackboard/SKILL.md),
+[`.agent/skills/retrospective/SKILL.md`](.agent/skills/retrospective/SKILL.md) and
+[`.agent/skills/retrospective-distill/SKILL.md`](.agent/skills/retrospective-distill/SKILL.md).
+`.agent/skills/` is canonical; `.claude/skills` is a symlink to it for Claude Code discovery.

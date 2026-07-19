@@ -53,11 +53,6 @@ async function getEntries(
       new SessionStoreError('session_not_found', `session not found: ${sessionId}`),
     )!
   }
-  if (session.archivedAt !== null) {
-    return storeErrorResponse(
-      new SessionStoreError('session_archived', `session is archived: ${sessionId}`),
-    )!
-  }
   return streamResponse(
     200,
     FORMAT_CONTENT_TYPE[format],

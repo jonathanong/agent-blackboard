@@ -11,6 +11,7 @@ import type { BlackboardStore } from './store.mjs'
 
 const ENDPOINT = process.env.DYNAMODB_ENDPOINT
 const TABLE_NAME = 'AgentBlackboardIntegrationTest'
+const AGENT = { agent: 'test-agent', version: '1.0.0' }
 
 async function ensureTable(client: DynamoDBClient): Promise<void> {
   try {
@@ -62,9 +63,17 @@ describe.skipIf(!ENDPOINT)('DynamoDB Local session/entry integration', () => {
     const credId = randomUUID()
     const rootId = randomUUID()
     const childId = randomUUID()
-    await store.createSession({ credId, id: rootId, parentSessionId: null })
-    const child = await store.createSession({ credId, id: childId, parentSessionId: rootId })
+    await store.createSession({ credId, id: rootId, parentSessionId: null, ...AGENT })
+    const child = await store.createSession({
+      credId,
+      id: childId,
+      parentSessionId: rootId,
+      ...AGENT,
+    })
     expect(child.parentSessionId).toBe(rootId)
+    expect(
+      await store.patchSession(credId, { sessionId: childId, data: { branch: 'main' } }),
+    ).toMatchObject({ data: { branch: 'main' } })
     const first = await store.appendEntry({ credId, sessionId: childId, data: { a: 1 } })
     const second = await store.appendEntry({ credId, sessionId: childId, data: { b: 2 } })
     expect(first.createdAt).not.toBe(second.createdAt)
@@ -81,15 +90,17 @@ describe.skipIf(!ENDPOINT)('DynamoDB Local session/entry integration', () => {
   it('enforces parent existence and session archival', async () => {
     const credId = randomUUID()
     await expect(
-      store.createSession({ credId, id: 'child', parentSessionId: 'missing' }),
+      store.createSession({ credId, id: 'child', parentSessionId: 'missing', ...AGENT }),
     ).rejects.toMatchObject({ code: 'parent_not_found' })
-    await store.createSession({ credId, id: 'root', parentSessionId: null })
+    await store.createSession({ credId, id: 'root', parentSessionId: null, ...AGENT })
     await store.archiveSession(credId, 'root')
+    expect((await store.getSession(credId, 'root'))?.archivedAt).not.toBeNull()
+    await expect(collect(store.getEntries(credId, 'root'))).resolves.toEqual([])
     await expect(store.appendEntry({ credId, sessionId: 'root', data: {} })).rejects.toMatchObject({
       code: 'session_archived',
     })
     await expect(
-      store.createSession({ credId, id: 'child', parentSessionId: 'root' }),
+      store.createSession({ credId, id: 'child', parentSessionId: 'root', ...AGENT }),
     ).rejects.toMatchObject({ code: 'parent_archived' })
   })
 

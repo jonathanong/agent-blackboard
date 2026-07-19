@@ -10,17 +10,35 @@ All ids are explicit. The MCP server never infers a host session id and never ge
 Creates session metadata before any entries are written.
 
 ```json
-{ "sessionId": "root-123", "parentSessionId": null }
+{
+  "sessionId": "root-123",
+  "parentSessionId": null,
+  "agent": "claude-code",
+  "version": "1.0.13"
+}
 ```
 
 For a subagent, pass its direct parent's id:
 
 ```json
-{ "sessionId": "worker-456", "parentSessionId": "root-123" }
+{
+  "sessionId": "worker-456",
+  "parentSessionId": "root-123",
+  "agent": "claude-code",
+  "version": "1.0.13"
+}
 ```
 
 The parent must exist under the same client credential and must be active. Parent links are
 immutable.
+
+## `session_patch`
+
+```json
+{ "sessionId": "worker-456", "data": { "branch": "fix/retry" } }
+```
+
+The non-empty `data` object is shallow-merged into the active session.
 
 ## `session_archive`
 
@@ -28,8 +46,8 @@ immutable.
 { "sessionId": "worker-456" }
 ```
 
-Archival applies to the session. Archived sessions reject entry reads, appends, patches, and new
-children.
+The server stores the archive timestamp as `archivedAt`. Archived sessions and entries remain
+readable, but session/entry writes and new children are rejected.
 
 ## `entry_append`
 

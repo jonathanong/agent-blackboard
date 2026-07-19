@@ -68,6 +68,7 @@ function notImplementedStore(overrides: Partial<BlackboardStore> = {}): Blackboa
     createSession: notImplemented('createSession'),
     getSession: notImplemented('getSession'),
     listSessions: notImplemented('listSessions'),
+    patchSession: notImplemented('patchSession'),
     archiveSession: notImplemented('archiveSession'),
     appendEntry: notImplemented('appendEntry'),
     getEntries: notImplemented('getEntries'),
@@ -224,8 +225,11 @@ describe('respond (unit, fake req/res)', () => {
       getSession: async () => ({
         id: 's1',
         parentSessionId: null,
+        agent: 'test-agent',
+        version: '1.0.0',
         createdAt: new Date(0).toISOString(),
         archivedAt: null,
+        data: {},
       }),
       getEntries: async function* explode() {
         yield {
@@ -266,8 +270,11 @@ describe('respond (unit, fake req/res)', () => {
       getSession: async () => ({
         id: 's1',
         parentSessionId: null,
+        agent: 'test-agent',
+        version: '1.0.0',
         createdAt: new Date(0).toISOString(),
         archivedAt: null,
+        data: {},
       }),
       // Not a generator function (which would need a `yield` to satisfy
       // require-yield) — a plain async-iterable object still satisfies
@@ -342,7 +349,12 @@ describe('createServer (end-to-end over a real socket)', () => {
       const session = await fetch(`${baseUrl}/sessions`, {
         method: 'POST',
         headers: { authorization: `Bearer ${created.token}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ id: 's1', parentSessionId: null }),
+        body: JSON.stringify({
+          id: 's1',
+          parentSessionId: null,
+          agent: 'test-agent',
+          version: '1.0.0',
+        }),
       })
       expect(session.status).toBe(201)
 

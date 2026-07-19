@@ -17,8 +17,11 @@ export function itemToSession(item: Record<string, unknown>): Session {
   return {
     id: item.id as string,
     parentSessionId: (item.parentSessionId as string | null) ?? null,
+    agent: item.agent as string,
+    version: item.version as string,
     createdAt: item.createdAt as string,
     archivedAt: typeof item.archivedAt === 'string' ? item.archivedAt : null,
+    data: item.data as Record<string, unknown>,
   }
 }
 
@@ -73,8 +76,11 @@ export async function dynamoCreateSession(
   const session: Session = {
     id: input.id,
     parentSessionId: input.parentSessionId,
+    agent: input.agent,
+    version: input.version,
     createdAt: now().toISOString(),
     archivedAt: null,
+    data: {},
   }
   const item = {
     PK: sessionsPk(input.credId),
@@ -82,7 +88,10 @@ export async function dynamoCreateSession(
     entityType: 'session',
     id: session.id,
     parentSessionId: session.parentSessionId,
+    agent: session.agent,
+    version: session.version,
     createdAt: session.createdAt,
+    data: session.data,
   }
   try {
     if (input.parentSessionId === null) {

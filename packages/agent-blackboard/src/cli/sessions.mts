@@ -13,11 +13,29 @@ export async function runSessions(argv: string[], ctx: CliContext): Promise<void
     const id = positional[0]
     if (!id) throw new CliError('sessions create requires <session-id>.')
     const parentSessionId = stringFlag(flags, 'parent-session-id') ?? null
-    writeLine(ctx.stdout, JSON.stringify(await sessions.create({ id, parentSessionId })))
+    const agent = stringFlag(flags, 'agent')
+    const version = stringFlag(flags, 'version')
+    if (!agent) throw new CliError('sessions create requires --agent <name>.')
+    if (!version) throw new CliError('sessions create requires --version <version>.')
+    writeLine(
+      ctx.stdout,
+      JSON.stringify(await sessions.create({ id, parentSessionId, agent, version })),
+    )
     return
   }
   if (subcommand === 'list') {
-    writeLine(ctx.stdout, JSON.stringify(await sessions.list()))
+    const archivedFlag = stringFlag(flags, 'archived')
+    if (archivedFlag !== undefined && archivedFlag !== 'true' && archivedFlag !== 'false') {
+      throw new CliError('sessions list --archived must be true or false.')
+    }
+    writeLine(
+      ctx.stdout,
+      JSON.stringify(
+        await sessions.list(
+          archivedFlag === undefined ? {} : { archived: archivedFlag === 'true' },
+        ),
+      ),
+    )
     return
   }
   const id = positional[0]
@@ -30,5 +48,30 @@ export async function runSessions(argv: string[], ctx: CliContext): Promise<void
     writeLine(ctx.stdout, JSON.stringify(await sessions.archive(id)))
     return
   }
-  throw new CliError('sessions requires one of: create, list, get, archive.')
+  if (subcommand === 'patch') {
+    const raw = stringFlag(flags, 'data')
+    if (!raw) throw new CliError('sessions patch requires --data <json>.')
+    let data: unknown
+    try {
+      data = JSON.parse(raw)
+    } catch {
+      throw new CliError('--data must be a JSON object.')
+    }
+    if (
+      typeof data !== 'object' ||
+      data === null ||
+      Array.isArray(data) ||
+      Object.keys(data).length === 0
+    ) {
+      throw new CliError('--data must be a non-empty JSON object.')
+    }
+    writeLine(
+      ctx.stdout,
+      JSON.stringify(
+        await sessions.patch({ sessionId: id, data: data as Record<string, unknown> }),
+      ),
+    )
+    return
+  }
+  throw new CliError('sessions requires one of: create, list, get, patch, archive.')
 }

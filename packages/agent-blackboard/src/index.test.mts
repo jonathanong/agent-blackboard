@@ -4,7 +4,15 @@ import { AgentBlackboardError, Auth, Entries, Sessions } from './index.mjs'
 
 describe('public API', () => {
   it('exports Sessions, Entries, Auth, and AgentBlackboardError', async () => {
-    const session = { id: 's', parentSessionId: null, createdAt: 'now', archivedAt: null }
+    const session = {
+      id: 's',
+      parentSessionId: null,
+      agent: 'test',
+      version: '1',
+      createdAt: 'now',
+      archivedAt: null,
+      data: {},
+    }
     const fixture = await startHttpFixture((req, res) => {
       if (req.url.startsWith('/credentials')) return sendJson(res, 401, { message: 'admin only' })
       sendJson(res, req.method === 'POST' ? 201 : 200, session)
@@ -14,6 +22,8 @@ describe('public API', () => {
         await new Sessions({ baseUrl: fixture.baseUrl, token: 't' }).create({
           id: 's',
           parentSessionId: null,
+          agent: 'test',
+          version: '1',
         }),
       ).toEqual(session)
       expect(new Entries({ baseUrl: fixture.baseUrl, token: 't' })).toBeInstanceOf(Entries)

@@ -4,8 +4,9 @@ A session-scoped entry stream for autonomous agents — not a knowledge base.
 
 Agents create explicit sessions, append unstructured JSON entries while they work, and read those
 entries back later. Root sessions have `parentSessionId: null`; every subagent creates a separate
-session whose `parentSessionId` is its direct parent. The service generates timestamps only: callers
-always provide session ids, and an entry is identified by `(sessionId, createdAt)`.
+session whose `parentSessionId` is its direct parent. Callers also provide the agent name and
+version. The service generates timestamps only, and an entry is identified by
+`(sessionId, createdAt)`.
 
 ## Improvement loop
 
@@ -32,8 +33,8 @@ flowchart LR
 - `plugins/agent-blackboard` — Claude Code and Codex plugin with MCP registration and usage skill.
 
 DynamoDB uses one table with multiple items: one metadata item per session and one item per entry.
-Entries are never stored in a nested array. Archival is session-level and blocks further reads and
-writes.
+Entries are never stored in a nested array. Archival is stored as `archivedAt`: archived data stays
+readable, while further writes are blocked.
 
 ## Quick start
 
@@ -41,8 +42,9 @@ writes.
 export AGENT_BLACKBOARD_URL=https://your-deployment.lambda-url.us-east-1.on.aws
 export AGENT_BLACKBOARD_TOKEN=abb_sk_...
 
-agent-blackboard sessions create root-123
-agent-blackboard sessions create worker-456 --parent-session-id root-123
+agent-blackboard sessions create root-123 --agent claude-code --version 1.0.13
+agent-blackboard sessions create worker-456 --parent-session-id root-123 \
+  --agent claude-code --version 1.0.13
 agent-blackboard append --session-id worker-456 '{"note":"found a flaky retry"}'
 agent-blackboard get --session-id worker-456 --format markdown
 ```

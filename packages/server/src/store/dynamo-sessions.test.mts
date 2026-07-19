@@ -18,12 +18,15 @@ function client(handler: (command: Command) => unknown): DynamoDBDocumentClient 
 }
 
 const now = () => new Date('2026-01-01T00:00:00.000Z')
+const AGENT = { agent: 'test-agent', version: '1.0.0' }
 const item = (overrides: Record<string, unknown> = {}) => ({
   PK: 'SESSIONS#c',
   SK: 'SESSION#s',
   id: 's',
   parentSessionId: null,
+  ...AGENT,
   createdAt: now().toISOString(),
+  data: {},
   ...overrides,
 })
 
@@ -69,6 +72,7 @@ describe('DynamoDB sessions', () => {
         credId: 'c',
         id: 's',
         parentSessionId,
+        ...AGENT,
       })
       expect(session).toMatchObject({ id: 's', parentSessionId })
       expect(seen[0]!.constructor.name).toBe(
@@ -92,7 +96,12 @@ describe('DynamoDB sessions', () => {
         return value ? { Item: value } : {}
       })
       await expect(
-        dynamoCreateSession(doc, 'T', now, { credId: 'c', id: 's', parentSessionId: 'p' }),
+        dynamoCreateSession(doc, 'T', now, {
+          credId: 'c',
+          id: 's',
+          parentSessionId: 'p',
+          ...AGENT,
+        }),
       ).rejects.toMatchObject({ code: scenario.code })
     }
   })
@@ -103,7 +112,12 @@ describe('DynamoDB sessions', () => {
       return {}
     })
     await expect(
-      dynamoCreateSession(unexplained, 'T', now, { credId: 'c', id: 's', parentSessionId: null }),
+      dynamoCreateSession(unexplained, 'T', now, {
+        credId: 'c',
+        id: 's',
+        parentSessionId: null,
+        ...AGENT,
+      }),
     ).rejects.toThrow('session creation transaction failed')
     let gets = 0
     const activeParent = client((command) => {
@@ -116,13 +130,19 @@ describe('DynamoDB sessions', () => {
         credId: 'c',
         id: 's',
         parentSessionId: 'p',
+        ...AGENT,
       }),
     ).rejects.toThrow('session creation transaction failed')
     const boom = client(() => {
       throw new Error('boom')
     })
     await expect(
-      dynamoCreateSession(boom, 'T', now, { credId: 'c', id: 's', parentSessionId: null }),
+      dynamoCreateSession(boom, 'T', now, {
+        credId: 'c',
+        id: 's',
+        parentSessionId: null,
+        ...AGENT,
+      }),
     ).rejects.toThrow('boom')
   })
 

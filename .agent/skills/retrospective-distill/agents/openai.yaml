@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Retrospective Distill'
+  short_description: 'Turn blackboard evidence into action items'
+  default_prompt: 'Use $retrospective-distill to turn accumulated blackboard evidence into actionable improvements.'

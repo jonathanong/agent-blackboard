@@ -16,8 +16,19 @@ const config = { baseUrl, token }
 const sessions = new Sessions(config)
 const entries = new Entries(config)
 
-await sessions.create({ id: 'root-123', parentSessionId: null })
-await sessions.create({ id: 'worker-456', parentSessionId: 'root-123' })
+await sessions.create({
+  id: 'root-123',
+  parentSessionId: null,
+  agent: 'claude-code',
+  version: '1.0.13',
+})
+await sessions.create({
+  id: 'worker-456',
+  parentSessionId: 'root-123',
+  agent: 'claude-code',
+  version: '1.0.13',
+})
+await sessions.patch({ sessionId: 'worker-456', data: { branch: 'fix/retry' } })
 
 const entry = await entries.append({
   sessionId: 'worker-456',
@@ -40,19 +51,22 @@ const auth = new Auth({ baseUrl, adminToken })
 await auth.createCredentials({ name: 'ci-bot' })
 ```
 
-All session ids are caller-provided. `parentSessionId` is required and nullable. The service only
-generates `createdAt`/`archivedAt` timestamps. `Entries.get()` returns an
+All session ids, agent names, and versions are caller-provided. `parentSessionId` is required and
+nullable. The service only generates `createdAt`/`archivedAt` timestamps. `Entries.get()` returns an
 `AsyncIterable<SessionEntry>` and uses incremental JSONL by default. Non-2xx responses throw
 `AgentBlackboardError`.
 
 ## CLI
 
 ```sh
-agent-blackboard sessions create root-123
-agent-blackboard sessions create worker-456 --parent-session-id root-123
+agent-blackboard sessions create root-123 --agent claude-code --version 1.0.13
+agent-blackboard sessions create worker-456 --parent-session-id root-123 \
+  --agent claude-code --version 1.0.13
+agent-blackboard sessions patch worker-456 --data '{"branch":"fix/retry"}'
 agent-blackboard sessions list
 agent-blackboard sessions get worker-456
 agent-blackboard append --session-id worker-456 '{"note":"investigating"}'
+agent-blackboard append --session-id worker-456 --file findings.md
 agent-blackboard get --session-id worker-456 --format jsonl
 agent-blackboard patch --session-id worker-456 --created-at <timestamp> --data '{"pr":7777}'
 agent-blackboard sessions archive worker-456
@@ -61,9 +75,9 @@ agent-blackboard mcp
 
 ## MCP
 
-The stdio MCP server exposes `session_create`, `session_archive`, `entry_append`, `entry_get`, and
-`entry_patch`. Every session and entry operation requires an explicit session id. Credential
-management remains CLI/admin-only.
+The stdio MCP server exposes `session_create`, `session_patch`, `session_archive`, `entry_append`,
+`entry_get`, and `entry_patch`. Every session and entry operation requires an explicit session id.
+Credential management remains CLI/admin-only.
 
 ## Configuration
 

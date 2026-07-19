@@ -6,8 +6,11 @@ export interface ClientConfig {
 export interface Session {
   id: string
   parentSessionId: string | null
+  agent: string
+  version: string
   createdAt: string
   archivedAt: string | null
+  data: Record<string, unknown>
 }
 
 export interface SessionEntry {
@@ -19,6 +22,17 @@ export interface SessionEntry {
 export interface CreateSessionInput {
   id: string
   parentSessionId: string | null
+  agent: string
+  version: string
+}
+
+export interface PatchSessionInput {
+  sessionId: string
+  data: Record<string, unknown>
+}
+
+export interface ListSessionsQuery {
+  archived?: boolean
 }
 
 export interface AppendEntryInput {

@@ -12,7 +12,15 @@ function client(handler: (command: Command) => unknown): DynamoDBDocumentClient 
 }
 
 const NOW = new Date('2026-01-01T00:00:00.000Z')
-const session = { id: 's', parentSessionId: null, createdAt: NOW.toISOString() }
+const session = {
+  id: 's',
+  parentSessionId: null,
+  agent: 'test-agent',
+  version: '1.0.0',
+  createdAt: NOW.toISOString(),
+  archivedAt: null,
+  data: {},
+}
 const entry = { sessionId: 's', createdAt: NOW.toISOString(), data: {} }
 
 async function collect<T>(items: AsyncIterable<T>): Promise<T[]> {
@@ -46,10 +54,19 @@ describe('createDynamoStore wiring', () => {
     })
     const store = createDynamoStore({ client: doc, tableName: 'T', now: () => NOW })
     await expect(
-      store.createSession({ credId: 'c', id: 's', parentSessionId: null }),
+      store.createSession({
+        credId: 'c',
+        id: 's',
+        parentSessionId: null,
+        agent: 'test-agent',
+        version: '1.0.0',
+      }),
     ).resolves.toMatchObject({ id: 's' })
     await expect(store.getSession('c', 's')).resolves.toMatchObject({ id: 's' })
     await expect(collect(store.listSessions('c'))).resolves.toHaveLength(1)
+    await expect(
+      store.patchSession('c', { sessionId: 's', data: { branch: 'main' } }),
+    ).resolves.toMatchObject({ id: 's' })
     await expect(store.archiveSession('c', 's')).resolves.toMatchObject({ archivedAt: 'later' })
     await expect(store.appendEntry({ credId: 'c', sessionId: 's', data: {} })).resolves.toEqual(
       entry,

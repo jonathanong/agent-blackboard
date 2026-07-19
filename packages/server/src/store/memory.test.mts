@@ -3,6 +3,7 @@ import { SessionStoreError } from './errors.mjs'
 import { MemoryBlackboardStore } from './memory.mjs'
 
 const NOW = new Date('2026-01-01T00:00:00.000Z')
+const AGENT = { agent: 'test-agent', version: '1.0.0' }
 
 async function collect<T>(items: AsyncIterable<T>): Promise<T[]> {
   const result: T[] = []
@@ -17,13 +18,25 @@ function store(): MemoryBlackboardStore {
 describe('MemoryBlackboardStore sessions', () => {
   it('creates, gets, and lists root and child sessions', async () => {
     const subject = store()
-    const root = await subject.createSession({ credId: 'c', id: 'root', parentSessionId: null })
-    const child = await subject.createSession({ credId: 'c', id: 'child', parentSessionId: 'root' })
+    const root = await subject.createSession({
+      credId: 'c',
+      id: 'root',
+      parentSessionId: null,
+      ...AGENT,
+    })
+    const child = await subject.createSession({
+      credId: 'c',
+      id: 'child',
+      parentSessionId: 'root',
+      ...AGENT,
+    })
     expect(root).toEqual({
       id: 'root',
       parentSessionId: null,
+      ...AGENT,
       createdAt: NOW.toISOString(),
       archivedAt: null,
+      data: {},
     })
     expect(child.parentSessionId).toBe('root')
     expect(await subject.getSession('c', 'child')).toEqual(child)
@@ -34,26 +47,42 @@ describe('MemoryBlackboardStore sessions', () => {
 
   it('rejects duplicates, missing parents, and archived parents', async () => {
     const subject = store()
-    await subject.createSession({ credId: 'c', id: 'root', parentSessionId: null })
+    await subject.createSession({ credId: 'c', id: 'root', parentSessionId: null, ...AGENT })
     await expect(
-      subject.createSession({ credId: 'c', id: 'root', parentSessionId: null }),
+      subject.createSession({ credId: 'c', id: 'root', parentSessionId: null, ...AGENT }),
     ).rejects.toMatchObject({ code: 'session_exists' })
     await expect(
-      subject.createSession({ credId: 'c', id: 'child', parentSessionId: 'missing' }),
+      subject.createSession({ credId: 'c', id: 'child', parentSessionId: 'missing', ...AGENT }),
     ).rejects.toMatchObject({ code: 'parent_not_found' })
     await subject.archiveSession('c', 'root')
     await expect(
-      subject.createSession({ credId: 'c', id: 'child', parentSessionId: 'root' }),
+      subject.createSession({ credId: 'c', id: 'child', parentSessionId: 'root', ...AGENT }),
     ).rejects.toMatchObject({ code: 'parent_archived' })
   })
 
   it('archives once and rejects an unknown session', async () => {
     const subject = store()
     await expect(subject.archiveSession('c', 'missing')).rejects.toBeInstanceOf(SessionStoreError)
-    await subject.createSession({ credId: 'c', id: 'root', parentSessionId: null })
+    await subject.createSession({ credId: 'c', id: 'root', parentSessionId: null, ...AGENT })
     const archived = await subject.archiveSession('c', 'root')
     expect(archived.archivedAt).toBe(NOW.toISOString())
     expect(await subject.archiveSession('c', 'root')).toBe(archived)
+  })
+
+  it('shallow-merges data only while a session is active', async () => {
+    const subject = store()
+    await expect(
+      subject.patchSession('c', { sessionId: 'missing', data: { a: 1 } }),
+    ).rejects.toMatchObject({ code: 'session_not_found' })
+    await subject.createSession({ credId: 'c', id: 's', parentSessionId: null, ...AGENT })
+    await subject.patchSession('c', { sessionId: 's', data: { a: 1, keep: true } })
+    await expect(
+      subject.patchSession('c', { sessionId: 's', data: { a: 2 } }),
+    ).resolves.toMatchObject({ data: { a: 2, keep: true } })
+    await subject.archiveSession('c', 's')
+    await expect(
+      subject.patchSession('c', { sessionId: 's', data: { late: true } }),
+    ).rejects.toMatchObject({ code: 'session_archived' })
   })
 })
 
@@ -63,10 +92,13 @@ describe('MemoryBlackboardStore entries', () => {
     await expect(
       subject.appendEntry({ credId: 'c', sessionId: 'missing', data: {} }),
     ).rejects.toMatchObject({ code: 'session_not_found' })
-    await subject.createSession({ credId: 'c', id: 's', parentSessionId: null })
+    await expect(collect(subject.getEntries('c', 'missing'))).rejects.toMatchObject({
+      code: 'session_not_found',
+    })
+    await subject.createSession({ credId: 'c', id: 's', parentSessionId: null, ...AGENT })
     const first = await subject.appendEntry({ credId: 'c', sessionId: 's', data: { i: 1 } })
     const second = await subject.appendEntry({ credId: 'c', sessionId: 's', data: { i: 2 } })
-    await subject.createSession({ credId: 'other', id: 's', parentSessionId: null })
+    await subject.createSession({ credId: 'other', id: 's', parentSessionId: null, ...AGENT })
     await subject.appendEntry({ credId: 'other', sessionId: 's', data: { i: 3 } })
     expect(first.createdAt).toBe('2026-01-01T00:00:00.000Z')
     expect(second.createdAt).toBe('2026-01-01T00:00:00.001Z')
@@ -75,7 +107,7 @@ describe('MemoryBlackboardStore entries', () => {
 
   it('patches by sessionId+createdAt and rejects missing or archived entries', async () => {
     const subject = store()
-    await subject.createSession({ credId: 'c', id: 's', parentSessionId: null })
+    await subject.createSession({ credId: 'c', id: 's', parentSessionId: null, ...AGENT })
     const entry = await subject.appendEntry({ credId: 'c', sessionId: 's', data: { a: 1 } })
     expect(
       await subject.patchEntry('c', {
@@ -88,9 +120,9 @@ describe('MemoryBlackboardStore entries', () => {
       subject.patchEntry('c', { sessionId: 's', createdAt: 'missing', data: {} }),
     ).rejects.toMatchObject({ code: 'entry_not_found' })
     await subject.archiveSession('c', 's')
-    await expect(collect(subject.getEntries('c', 's'))).rejects.toMatchObject({
-      code: 'session_archived',
-    })
+    await expect(collect(subject.getEntries('c', 's'))).resolves.toMatchObject([
+      { data: { a: 1, b: 2 } },
+    ])
     await expect(
       subject.patchEntry('c', { sessionId: 's', createdAt: entry.createdAt, data: {} }),
     ).rejects.toMatchObject({ code: 'session_archived' })

@@ -112,7 +112,7 @@ needed for managing credentials, never for recording entries.
 ```sh
 export AGENT_BLACKBOARD_TOKEN=abb_sk_...   # from step 5
 
-agent-blackboard sessions create deploy-check
+agent-blackboard sessions create deploy-check --agent smoke-test --version 1.0.0
 agent-blackboard append --session-id deploy-check '{"note":"first deploy works"}'
 agent-blackboard get --session-id deploy-check --format markdown
 ```

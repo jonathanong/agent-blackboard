@@ -17,8 +17,22 @@ export const ENTRY_TOOLS: Tool[] = [
           type: ['string', 'null'],
           description: 'Null for a root session; the direct parent session id for a subagent.',
         },
+        agent: { type: 'string', description: 'Agent name, for example claude-code.' },
+        version: { type: 'string', description: 'Agent version, for example 1.0.13.' },
       },
-      required: ['sessionId', 'parentSessionId'],
+      required: ['sessionId', 'parentSessionId', 'agent', 'version'],
+    },
+  },
+  {
+    name: 'session_patch',
+    description: 'Shallow-merges arbitrary data into one active session.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionId: SESSION_ID,
+        data: { type: 'object', description: 'Non-empty session data to shallow-merge.' },
+      },
+      required: ['sessionId', 'data'],
     },
   },
   {

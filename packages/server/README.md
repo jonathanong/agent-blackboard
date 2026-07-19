@@ -25,7 +25,7 @@ The server listens on `PORT` (default `3000`). With the memory store, no AWS acc
 ```sh
 curl -X POST http://localhost:3000/sessions \
   -H 'authorization: Bearer abb_sk_...' -H 'content-type: application/json' \
-  -d '{"id":"root-123","parentSessionId":null}'
+  -d '{"id":"root-123","parentSessionId":null,"agent":"claude-code","version":"1.0.13"}'
 
 curl -X POST http://localhost:3000/sessions/root-123/entries \
   -H 'authorization: Bearer abb_sk_...' -H 'content-type: application/json' \
@@ -62,7 +62,7 @@ default `agent-blackboard` stack name.
 ## Storage
 
 The table contains separate session, entry, and credential items. A session item owns
-`parentSessionId` and `archivedAt`; every entry has its own item and composite public identity
+`parentSessionId`, `agent`, `version`, `data`, and `archivedAt`; every entry has its own item and composite public identity
 `(sessionId, createdAt)`. DynamoDB transactions enforce active-session conditions while creating
 children and writing entries.
 

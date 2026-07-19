@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Blackboard'
+  short_description: 'Log findings and gotchas as work unfolds'
+  default_prompt: 'Use $blackboard to record an important finding from the current work session.'

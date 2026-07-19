@@ -8,6 +8,7 @@ import type {
   NewSession,
   NewSessionEntry,
   BlackboardStore,
+  SessionPatch,
 } from './store.mjs'
 
 export interface MemoryStoreOptions {
@@ -48,8 +49,11 @@ export class MemoryBlackboardStore implements BlackboardStore {
     const session: Session = {
       id: input.id,
       parentSessionId: input.parentSessionId,
+      agent: input.agent,
+      version: input.version,
       createdAt: this.#now().toISOString(),
       archivedAt: null,
+      data: {},
     }
     this.#sessions.set(key, session)
     return session
@@ -64,6 +68,14 @@ export class MemoryBlackboardStore implements BlackboardStore {
     for (const [key, session] of this.#sessions) {
       if (key.startsWith(prefix)) yield session
     }
+  }
+
+  async patchSession(credId: string, patch: SessionPatch): Promise<Session> {
+    const key = this.#sessionKey(credId, patch.sessionId)
+    const session = this.#requireActiveSession(credId, patch.sessionId)
+    const updated = { ...session, data: { ...session.data, ...patch.data } }
+    this.#sessions.set(key, updated)
+    return updated
   }
 
   async archiveSession(credId: string, sessionId: string): Promise<Session> {
@@ -93,7 +105,9 @@ export class MemoryBlackboardStore implements BlackboardStore {
   }
 
   async *getEntries(credId: string, sessionId: string): AsyncIterable<SessionEntry> {
-    this.#requireActiveSession(credId, sessionId)
+    if (!this.#sessions.has(this.#sessionKey(credId, sessionId))) {
+      throw new SessionStoreError('session_not_found', `session not found: ${sessionId}`)
+    }
     const prefix = `${credId} ${sessionId} `
     for (const [key, entry] of this.#entries) {
       if (key.startsWith(prefix)) yield entry

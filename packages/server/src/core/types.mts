@@ -52,8 +52,11 @@ export interface HandlerResponse {
 export interface Session {
   id: string
   parentSessionId: string | null
+  agent: string
+  version: string
   createdAt: string
   archivedAt: string | null
+  data: Record<string, unknown>
 }
 
 /** One timestamp-addressed entry belonging to a session. */

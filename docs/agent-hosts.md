@@ -7,7 +7,15 @@ cross-host contract, and the service must never infer ids.
 At the start of work, the root agent chooses an id and calls:
 
 ```json
-{ "name": "session_create", "arguments": { "sessionId": "root-123", "parentSessionId": null } }
+{
+  "name": "session_create",
+  "arguments": {
+    "sessionId": "root-123",
+    "parentSessionId": null,
+    "agent": "claude-code",
+    "version": "1.0.13"
+  }
+}
 ```
 
 Before delegating, the root tells the subagent both ids. The subagent creates its own session:
@@ -15,7 +23,12 @@ Before delegating, the root tells the subagent both ids. The subagent creates it
 ```json
 {
   "name": "session_create",
-  "arguments": { "sessionId": "worker-456", "parentSessionId": "root-123" }
+  "arguments": {
+    "sessionId": "worker-456",
+    "parentSessionId": "root-123",
+    "agent": "claude-code",
+    "version": "1.0.13"
+  }
 }
 ```
 

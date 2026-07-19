@@ -30,6 +30,17 @@ async function requireActiveSession(
   }
 }
 
+async function requireSession(
+  doc: DynamoDBDocumentClient,
+  tableName: string,
+  credId: string,
+  sessionId: string,
+): Promise<void> {
+  if (!(await dynamoGetSession(doc, tableName, credId, sessionId))) {
+    throw new SessionStoreError('session_not_found', `session not found: ${sessionId}`)
+  }
+}
+
 export async function dynamoAppendEntry(
   doc: DynamoDBDocumentClient,
   tableName: string,
@@ -83,7 +94,7 @@ export async function* dynamoGetEntries(
   credId: string,
   sessionId: string,
 ): AsyncGenerator<SessionEntry> {
-  await requireActiveSession(doc, tableName, credId, sessionId)
+  await requireSession(doc, tableName, credId, sessionId)
   let exclusiveStartKey: Record<string, unknown> | undefined
   do {
     const page = await doc.send(

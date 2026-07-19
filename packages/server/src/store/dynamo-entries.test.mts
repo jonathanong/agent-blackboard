@@ -109,22 +109,17 @@ describe('DynamoDB entries', () => {
     ).rejects.toThrow('unique timestamp')
   })
 
-  it('requires an active session and paginates reads', async () => {
-    for (const [itemValue, code] of [
-      [undefined, 'session_not_found'],
-      [session('later'), 'session_archived'],
-    ] as const) {
-      await expect(
-        collect(
-          dynamoGetEntries(
-            client(() => (itemValue ? { Item: itemValue } : {})),
-            'T',
-            'c',
-            's',
-          ),
+  it('requires an existing session, allows archived reads, and paginates', async () => {
+    await expect(
+      collect(
+        dynamoGetEntries(
+          client(() => ({})),
+          'T',
+          'c',
+          's',
         ),
-      ).rejects.toMatchObject({ code })
-    }
+      ),
+    ).rejects.toMatchObject({ code: 'session_not_found' })
     let query = 0
     const doc = client((command) => {
       if (command.constructor.name === 'GetCommand') return { Item: session() }
@@ -133,6 +128,18 @@ describe('DynamoDB entries', () => {
     })
     expect(await collect(dynamoGetEntries(doc, 'T', 'c', 's'))).toHaveLength(1)
     expect(query).toBe(2)
+    expect(
+      await collect(
+        dynamoGetEntries(
+          client((command) =>
+            command.constructor.name === 'GetCommand' ? { Item: session('later') } : {},
+          ),
+          'T',
+          'c',
+          's',
+        ),
+      ),
+    ).toEqual([])
   })
 
   it('patches with a session condition and rejects missing entries', async () => {

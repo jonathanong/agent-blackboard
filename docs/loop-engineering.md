@@ -3,18 +3,20 @@
 `agent-blackboard` provides storage mechanics for an agent improvement loop. It intentionally does
 not decide what an agent should record.
 
-During work, create an explicit root session, then append concrete findings and changes as they
-happen. Each subagent creates a separate child session and writes to it. `data` stays unstructured so
-project-specific skills can attach decisions, file names, branch names, PRs, or error details.
+During work, use the internal [`blackboard`](../.agent/skills/blackboard/SKILL.md) skill to append
+concrete learnings, findings, and gotchas as they happen. Each subagent creates a separate child
+session and writes to it. `data` stays unstructured so entries can attach evidence, decisions, file
+names, branches, PRs, or error details.
 
 At the end of a session:
 
-1. Call `entry_get` with that exact session id.
+1. Use [`retrospective`](../.agent/skills/retrospective/SKILL.md) to read that exact session.
 2. Combine the recorded entries with important context still in memory.
-3. Append one retrospective entry to the same active session.
+3. Append one thorough retrospective as the session's final entry.
 4. Archive the session only when no more entries need to be written.
 
-For periodic distillation, list sessions, select the relevant session ids, and read each explicitly.
-Turn recurring observations into concrete follow-ups such as documentation, lint rules, tests, or
-issues. There is no cross-session entry query and no per-entry archival; callers do this fan-out
-client-side, then archive whole sessions when appropriate.
+For periodic distillation, use
+[`retrospective-distill`](../.agent/skills/retrospective-distill/SKILL.md) to read relevant sessions
+explicitly and turn blackboard evidence into concrete tickets, documentation, lint rules, tests, or
+workflow improvements. There is no cross-session entry query and no per-entry archival; callers do
+this fan-out client-side, then archive whole sessions when appropriate.

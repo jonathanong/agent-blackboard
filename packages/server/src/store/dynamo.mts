@@ -8,6 +8,7 @@ import {
   dynamoListCredentials,
 } from './dynamo-credentials.mjs'
 import { dynamoAppendEntry, dynamoGetEntries, dynamoPatchEntry } from './dynamo-entries.mjs'
+import { dynamoPatchSession } from './dynamo-session-patch.mjs'
 import {
   dynamoArchiveSession,
   dynamoCreateSession,
@@ -20,6 +21,7 @@ import type {
   EntryPatch,
   NewSession,
   NewSessionEntry,
+  SessionPatch,
 } from './store.mjs'
 
 export type { DynamoStoreOptions } from './dynamo-client.mjs'
@@ -36,6 +38,9 @@ export function createDynamoStore(options: DynamoStoreOptions = {}): BlackboardS
     },
     listSessions(credId: string): AsyncIterable<Session> {
       return dynamoListSessions(doc, tableName, credId)
+    },
+    patchSession(credId: string, patch: SessionPatch): Promise<Session> {
+      return dynamoPatchSession(doc, tableName, credId, patch)
     },
     archiveSession(credId: string, sessionId: string): Promise<Session> {
       return dynamoArchiveSession(doc, tableName, now, credId, sessionId)

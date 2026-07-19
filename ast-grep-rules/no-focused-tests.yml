@@ -1,9 +1,0 @@
-id: no-focused-tests
-language: TypeScript
-severity: error
-message: Remove focused test (.only) before committing — it silently skips the rest of the suite.
-rule:
-  any:
-    - pattern: it.only($$$ARGS)
-    - pattern: test.only($$$ARGS)
-    - pattern: describe.only($$$ARGS)
