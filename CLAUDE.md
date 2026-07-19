@@ -6,7 +6,7 @@ for the product description.
 ## Workspace
 
 - pnpm workspace, Node 24+, all source is `.mts` ESM.
-- `packages/agent-blackboard` — **published** as `@jongleberry/agent-blackboard` (client lib +
+- `packages/agent-blackboard` — **published** as `agent-blackboard` (client lib +
   CLI + MCP server). Must never depend on `packages/server` or `@aws-sdk/*`
   (enforced by `.dependency-cruiser.cjs`).
 - `packages/server` — **not published**, deployed only. Lambda + DynamoDB, CloudFormation
@@ -25,7 +25,7 @@ lychee`, or a GitHub release binary) to run this locally; CI installs it via `ly
 - `packages/server`: `pnpm run dev` (local server), `pnpm run deploy` (CloudFormation via AWS CLI).
 - Running the CLI locally, before it's ever published: `pnpm run build` then `pnpm exec
 agent-blackboard <args>` from anywhere in the repo. This works because the root `package.json`
-  lists `@jongleberry/agent-blackboard` as a `workspace:*` devDependency purely to get pnpm to
+  lists `agent-blackboard` as a `workspace:*` devDependency purely to get pnpm to
   link its bin into root's `node_modules/.bin` (a workspace package's own `bin` field is never
   self-linked into its own `node_modules/.bin` otherwise — that only happens for actual
   dependencies). Ignored in `knip.jsonc` since it's never imported, only linked for its bin.

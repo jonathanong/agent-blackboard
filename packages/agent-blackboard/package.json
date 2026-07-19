@@ -1,5 +1,5 @@
 {
-  "name": "@jongleberry/agent-blackboard",
+  "name": "agent-blackboard",
   "version": "0.0.0",
   "description": "Client library, CLI, and MCP server for Agent Blackboard session entries.",
   "homepage": "https://github.com/jonathanong/agent-blackboard#readme",
@@ -9,11 +9,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/jonathanong/agent-blackboard",
+    "url": "git+https://github.com/jonathanong/agent-blackboard.git",
     "directory": "packages/agent-blackboard"
   },
   "bin": {
-    "agent-blackboard": "./dist/cli/index.mjs"
+    "agent-blackboard": "dist/cli/index.mjs"
   },
   "files": [
     "dist",
@@ -33,7 +33,8 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc --project tsconfig.build.json",
+    "build": "node scripts/build.mjs",
+    "prepack": "pnpm run build",
     "typecheck": "tsc --noEmit --project tsconfig.json"
   },
   "dependencies": {

@@ -11,15 +11,15 @@ importers:
       '@ast-grep/cli':
         specifier: ^0.44.1
         version: 0.44.1
-      '@jongleberry/agent-blackboard':
-        specifier: workspace:*
-        version: link:packages/agent-blackboard
       '@types/node':
         specifier: ^26.1.1
         version: 26.1.1
       '@vitest/coverage-v8':
         specifier: ^4.1.10
         version: 4.1.10(vitest@4.1.10)
+      agent-blackboard:
+        specifier: workspace:*
+        version: link:packages/agent-blackboard
       dependency-cruiser:
         specifier: ^18.1.0
         version: 18.1.0

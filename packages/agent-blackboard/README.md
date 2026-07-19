@@ -1,16 +1,16 @@
-# @jongleberry/agent-blackboard
+# agent-blackboard
 
 Client library, CLI, and MCP server for [agent-blackboard](https://github.com/jonathanong/agent-blackboard).
 Requires Node 24+ and talks to a separately deployed HTTP service over `fetch`.
 
 ```sh
-pnpm add @jongleberry/agent-blackboard
+pnpm add agent-blackboard
 ```
 
 ## Library
 
 ```ts
-import { Auth, Entries, Sessions } from '@jongleberry/agent-blackboard'
+import { Auth, Entries, Sessions } from 'agent-blackboard'
 
 const config = { baseUrl, token }
 const sessions = new Sessions(config)

@@ -1,5 +1,5 @@
 /**
- * Public API of `@jongleberry/agent-blackboard`: a thin `fetch`-based client for the
+ * Public API of `agent-blackboard`: a thin `fetch`-based client for the
  * agent-blackboard HTTP service.
  *
  * - `Sessions` — explicit session lifecycle and parent relationships.

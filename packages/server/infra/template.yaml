@@ -76,6 +76,7 @@ Resources:
                   - dynamodb:Query
                   - dynamodb:UpdateItem
                   - dynamodb:DeleteItem
+                  - dynamodb:ConditionCheckItem
                   - dynamodb:TransactWriteItems
                 Resource: !GetAtt AgentBlackboardTable.Arn
         - PolicyName: AgentBlackboardFunctionLogs

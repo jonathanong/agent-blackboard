@@ -10,7 +10,7 @@ always provide session ids, and an entry is identified by `(sessionId, createdAt
 ## Architecture
 
 - `packages/server` — Lambda + DynamoDB service deployed with CloudFormation.
-- `packages/agent-blackboard` — published as `@jongleberry/agent-blackboard`; client library, CLI,
+- `packages/agent-blackboard` — published as `agent-blackboard`; client library, CLI,
   and MCP server.
 - `plugins/agent-blackboard` — Claude Code and Codex plugin with MCP registration and usage skill.
 

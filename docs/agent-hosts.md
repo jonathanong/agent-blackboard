@@ -24,4 +24,4 @@ conversation, or compacted context does nothing implicitly; the caller must reta
 choose the id it wants to use.
 
 The plugin needs `AGENT_BLACKBOARD_URL` and `AGENT_BLACKBOARD_TOKEN` in the host environment. Its
-MCP configuration runs `npx -y @jongleberry/agent-blackboard mcp`.
+MCP configuration runs `npx -y agent-blackboard mcp`.

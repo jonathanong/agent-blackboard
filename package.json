@@ -1,5 +1,6 @@
 {
-  "name": "agent-blackboard",
+  "name": "agent-blackboard-workspace",
+  "version": "0.0.0",
   "private": true,
   "description": "Agent Blackboard: session-scoped entries for autonomous agents.",
   "homepage": "https://github.com/jonathanong/agent-blackboard#readme",
@@ -10,7 +11,7 @@
   "author": "",
   "repository": {
     "type": "git",
-    "url": "https://github.com/jonathanong/agent-blackboard"
+    "url": "git+https://github.com/jonathanong/agent-blackboard.git"
   },
   "type": "module",
   "scripts": {
@@ -31,9 +32,9 @@
   },
   "devDependencies": {
     "@ast-grep/cli": "^0.44.1",
-    "@jongleberry/agent-blackboard": "workspace:*",
     "@types/node": "^26.1.1",
     "@vitest/coverage-v8": "^4.1.10",
+    "agent-blackboard": "workspace:*",
     "dependency-cruiser": "^18.1.0",
     "github-actionlint": "^1.7.12",
     "knip": "^6.26.0",

@@ -66,5 +66,5 @@ The table contains separate session, entry, and credential items. A session item
 `(sessionId, createdAt)`. DynamoDB transactions enforce active-session conditions while creating
 children and writing entries.
 
-The Lambda IAM role needs `GetItem`, `PutItem`, `Query`, `UpdateItem`, `DeleteItem`, and
-`TransactWriteItems` on this table.
+The Lambda IAM role needs `GetItem`, `PutItem`, `Query`, `UpdateItem`, `DeleteItem`,
+`ConditionCheckItem`, and `TransactWriteItems` on this table.
