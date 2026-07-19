@@ -8,14 +8,10 @@
 // their bootstrap buckets) — and uploads the zip to a content-hash key so
 // re-deploying with unchanged code is a no-op diff for CloudFormation.
 //
-// Usage: pnpm --filter atel-server run deploy
+// Usage: pnpm --filter agent-blackboard-server run deploy
 // Env: AWS_REGION or AWS_DEFAULT_REGION (or `aws configure`'s default),
-//      ATEL_ADMIN_CREDENTIALS (required), ATEL_TTL_DAYS (optional),
-//      STACK_NAME (optional, default "agent-journal" — this deploys to the
-//      already-existing stack; the CloudFormation stack/resource identity
-//      and the deploy-artifact bucket naming are intentionally NOT
-//      rebranded here, since renaming them would make CloudFormation
-//      replace already-deployed, real infrastructure on the next deploy).
+//      AGENT_BLACKBOARD_ADMIN_CREDENTIALS (required), AGENT_BLACKBOARD_TTL_DAYS (optional),
+//      STACK_NAME (optional, default "agent-blackboard").
 import { bundle } from './bundle.mjs'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
@@ -94,17 +90,17 @@ function stackOutputs(stackName, region) {
 }
 
 export async function deploy() {
-  const adminCredentials = process.env.ATEL_ADMIN_CREDENTIALS
+  const adminCredentials = process.env.AGENT_BLACKBOARD_ADMIN_CREDENTIALS
   if (!adminCredentials) {
     throw new Error(
-      'ATEL_ADMIN_CREDENTIALS env var is required — base64 JSON [{"name","token"}]. See README.',
+      'AGENT_BLACKBOARD_ADMIN_CREDENTIALS env var is required — base64 JSON [{"name","token"}]. See README.',
     )
   }
 
   const region = resolveRegion()
   const accountId = JSON.parse(aws(['sts', 'get-caller-identity'])).Account
-  const bucket = `agent-journal-deploy-${accountId}-${region}`
-  const stackName = process.env.STACK_NAME || 'agent-journal'
+  const bucket = `agent-blackboard-deploy-${accountId}-${region}`
+  const stackName = process.env.STACK_NAME || 'agent-blackboard'
 
   const { zipPath } = await bundle()
   const hash = createHash('sha256')
@@ -120,7 +116,8 @@ export async function deploy() {
     `LambdaCodeS3Key=${key}`,
     `AdminCredentials=${adminCredentials}`,
   ]
-  if (process.env.ATEL_TTL_DAYS) overrides.push(`JournalTtlDays=${process.env.ATEL_TTL_DAYS}`)
+  if (process.env.AGENT_BLACKBOARD_TTL_DAYS)
+    overrides.push(`AgentBlackboardTtlDays=${process.env.AGENT_BLACKBOARD_TTL_DAYS}`)
 
   aws(
     [

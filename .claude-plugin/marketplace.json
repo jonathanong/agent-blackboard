@@ -8,11 +8,11 @@
   },
   "plugins": [
     {
-      "name": "atel",
-      "description": "Telemetry for autonomous agents to record findings for later self-review and distillation",
+      "name": "agent-blackboard",
+      "description": "Session-scoped entries for autonomous agents to record and review work",
       "source": "./",
       "category": "productivity",
-      "homepage": "https://github.com/jonathanong/atel"
+      "homepage": "https://github.com/jonathanong/agent-blackboard"
     }
   ]
 }

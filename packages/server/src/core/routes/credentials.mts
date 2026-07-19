@@ -1,6 +1,6 @@
 import { resolveAdminCredential } from '../../auth/admin.mjs'
 import type { AdminEnv } from '../../auth/admin.mjs'
-import type { TelemetryStore } from '../../store/store.mjs'
+import type { BlackboardStore } from '../../store/store.mjs'
 import { readJsonBody } from '../body.mjs'
 import {
   errorResponse,
@@ -16,7 +16,7 @@ function isNonEmptyString(value: unknown): value is string {
 
 async function createCredentialRoute(
   request: HandlerRequest,
-  store: TelemetryStore,
+  store: BlackboardStore,
 ): Promise<HandlerResponse> {
   const parsed = await readJsonBody(request.body)
   if (!parsed.ok) return errorResponse(400, 'body must be JSON')
@@ -29,7 +29,7 @@ async function createCredentialRoute(
   return jsonResponse(201, { id: record.id, name: record.name, token, createdAt: record.createdAt })
 }
 
-async function listCredentialsRoute(store: TelemetryStore): Promise<HandlerResponse> {
+async function listCredentialsRoute(store: BlackboardStore): Promise<HandlerResponse> {
   const records = await store.listCredentials()
   return jsonResponse(
     200,
@@ -39,7 +39,7 @@ async function listCredentialsRoute(store: TelemetryStore): Promise<HandlerRespo
 
 async function deleteCredentialRoute(
   request: HandlerRequest,
-  store: TelemetryStore,
+  store: BlackboardStore,
 ): Promise<HandlerResponse> {
   const { id, name } = request.query
   if (!id && !name) return errorResponse(400, 'id or name query parameter is required')
@@ -52,14 +52,14 @@ async function deleteCredentialRoute(
 }
 
 /**
- * `/credentials*` — admin auth ONLY. A telemetry token is rejected outright
+ * `/credentials*` — admin auth ONLY. A client token is rejected outright
  * (admin resolution never touches the store either way) — see
  * `resolveAdminCredential`. Never returns token hashes or raw tokens except
  * the one-time `POST /credentials` response.
  */
 export async function handleCredentialsRoute(
   request: HandlerRequest,
-  store: TelemetryStore,
+  store: BlackboardStore,
   env: AdminEnv,
 ): Promise<HandlerResponse> {
   const adminName = resolveAdminCredential(request.headers.authorization, env)

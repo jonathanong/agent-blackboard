@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { formatEntries, FORMAT_CONTENT_TYPE, resolveFormat } from './format.mjs'
-import type { TelemetryEntry } from './types.mjs'
+import type { SessionEntry } from './types.mjs'
 
-async function* entries(list: TelemetryEntry[]): AsyncGenerator<TelemetryEntry> {
+async function* entries(list: SessionEntry[]): AsyncGenerator<SessionEntry> {
   for (const entry of list) yield entry
 }
 
@@ -12,15 +12,10 @@ async function collect(iter: AsyncIterable<string>): Promise<string> {
   return out
 }
 
-const ENTRY: TelemetryEntry = {
-  id: 's1#01',
-  credId: 'cred1',
+const ENTRY: SessionEntry = {
   sessionId: 's1',
-  agent: 'claude',
   createdAt: '2024-01-01T00:00:00.000Z',
-  archived: false,
   data: { note: 'hello' },
-  ttl: 123,
 }
 
 describe('resolveFormat', () => {
@@ -66,7 +61,7 @@ describe('formatEntries', () => {
 
   it('markdown: a heading and fenced JSON block per entry', async () => {
     const text = await collect(formatEntries('markdown', entries([ENTRY])))
-    expect(text).toContain('## 2024-01-01T00:00:00.000Z — session s1 (claude)')
+    expect(text).toContain('## 2024-01-01T00:00:00.000Z — session s1')
     expect(text).toContain('```json')
     expect(text).toContain('"note": "hello"')
   })

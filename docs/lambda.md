@@ -2,7 +2,7 @@
 
 Commands for `packages/server` — the Lambda + DynamoDB storage service.
 Run from the repo root or from `packages/server/` (`pnpm --filter
-atel-server run <script>` vs. `pnpm run <script>` inside the
+agent-blackboard-server run <script>` vs. `pnpm run <script>` inside the
 package directory). This package is **deployed, never published to npm**.
 
 ## `pnpm run dev`
@@ -12,12 +12,12 @@ Runs `tsx src/local-server.mts` directly — no build step. Starts a
 requests into the same `handleRequest` core the Lambda handler uses.
 
 ```sh
-ATEL_STORE=memory \
-ATEL_ADMIN_CREDENTIALS=$(node -e "console.log(Buffer.from(JSON.stringify([{name:'local-admin',token:'atl_admin_local_dev'}])).toString('base64'))") \
+AGENT_BLACKBOARD_STORE=memory \
+AGENT_BLACKBOARD_ADMIN_CREDENTIALS=$(node -e "console.log(Buffer.from(JSON.stringify([{name:'local-admin',token:'abb_admin_local_dev'}])).toString('base64'))") \
   pnpm run dev
 ```
 
-With `ATEL_STORE=memory`, it uses an in-memory store — no AWS account or
+With `AGENT_BLACKBOARD_STORE=memory`, it uses an in-memory store — no AWS account or
 DynamoDB needed at all. Omit it (or set it to anything else) to run against
 a real DynamoDB table, including [DynamoDB
 Local](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.html)
@@ -48,7 +48,7 @@ Runs `infra/deploy.mjs`, which:
 
 1. Runs the build step above.
 2. Ensures a deploy-artifact S3 bucket exists
-   (`agent-journal-deploy-<account-id>-<region>`), created idempotently.
+   (`agent-blackboard-deploy-<account-id>-<region>`), created idempotently.
    S3 is required because `AWS::Lambda::Function.Code.ZipFile` (inline code)
    is capped at ~4KB — nowhere near enough for a bundled dependency graph.
 3. Uploads `dist/lambda.zip` under a **content-hash key**
@@ -63,13 +63,13 @@ Runs `infra/deploy.mjs`, which:
    `aws cloudformation describe-stacks`.
 
 ```sh
-ATEL_ADMIN_CREDENTIALS=$(node -e "console.log(Buffer.from(JSON.stringify([{name:'prod-admin',token:'atl_admin_prod_<random>'}])).toString('base64'))") \
+AGENT_BLACKBOARD_ADMIN_CREDENTIALS=$(node -e "console.log(Buffer.from(JSON.stringify([{name:'prod-admin',token:'abb_admin_prod_<random>'}])).toString('base64'))") \
   pnpm run deploy
 ```
 
-`ATEL_ADMIN_CREDENTIALS` is required — there's no default, since an empty admin
+`AGENT_BLACKBOARD_ADMIN_CREDENTIALS` is required — there's no default, since an empty admin
 list would just make `/credentials*` permanently 401 on a fresh deploy.
-Override `ATEL_TTL_DAYS`/`STACK_NAME` via env vars.
+Override `AGENT_BLACKBOARD_TTL_DAYS`/`STACK_NAME` via env vars.
 
 **Prerequisites**: an AWS account and the AWS CLI (`aws`), configured with
 credentials that can manage CloudFormation, Lambda, IAM roles, DynamoDB, and
@@ -83,17 +83,17 @@ S3.
 
 A single CloudFormation stack:
 
-- **`JournalTable`** (`AWS::DynamoDB::Table`) — `PK`/`SK` string keys,
+- **`AgentBlackboardTable`** (`AWS::DynamoDB::Table`) — `PK`/`SK` string keys,
   `PAY_PER_REQUEST` billing, TTL enabled on `ttl`.
-- **`JournalFunction`** (`AWS::Lambda::Function`) — runtime `nodejs24.x`,
+- **`AgentBlackboardFunction`** (`AWS::Lambda::Function`) — runtime `nodejs24.x`,
   `MemorySize: 256`, `Timeout: 60`, `ReservedConcurrentExecutions: 20` (a DoS
   backstop for the public endpoint — raise it if you expect more concurrent
   traffic; on a fresh/restricted AWS account with little unreserved
   concurrency, deploy can fail here specifically).
-- **`JournalFunctionRole`** (`AWS::IAM::Role`) — scoped to exactly
+- **`AgentBlackboardFunctionRole`** (`AWS::IAM::Role`) — scoped to exactly
   `GetItem`/`PutItem`/`Query`/`UpdateItem`/`DeleteItem` on the one table ARN,
   plus `CloudWatch Logs` write access to its own log group. Nothing broader.
-- **`JournalFunctionUrl`** (`AWS::Lambda::Url`) — `AuthType: NONE`,
+- **`AgentBlackboardFunctionUrl`** (`AWS::Lambda::Url`) — `AuthType: NONE`,
   `InvokeMode: RESPONSE_STREAM`. Publicly reachable by design; the handler
   itself validates the bearer token on every request. `AWS_IAM` auth was
   rejected because it'd require every caller to sign requests with AWS
@@ -102,14 +102,14 @@ A single CloudFormation stack:
 
 ## Configuration
 
-| Var                      | Used by                                 | Meaning                                                                                                        |
-| ------------------------ | --------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `ATEL_TABLE`             | handler, local-server                   | DynamoDB table name. Default `Atel`; on the deployed Lambda, always set from the CloudFormation-managed table. |
-| `ATEL_TTL_DAYS`          | handler, local-server                   | Entry retention in days. Default `90`.                                                                         |
-| `ATEL_ADMIN_CREDENTIALS` | handler, local-server                   | Base64 JSON `[{ "name", "token" }]`. Never written to DynamoDB. Unset = `/credentials*` always 401s.           |
-| `ATEL_STORE`             | local-server only                       | Set to `memory` to use the in-memory store instead of DynamoDB.                                                |
-| `PORT`                   | local-server only                       | Listen port for `pnpm run dev`. Default `3000`.                                                                |
-| `AWS_REGION`             | handler, local-server (via the AWS SDK) | Region for the DynamoDB client — read automatically by `@aws-sdk/client-dynamodb`'s default provider chain.    |
+| Var                                  | Used by                                 | Meaning                                                                                                                   |
+| ------------------------------------ | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `AGENT_BLACKBOARD_TABLE`             | handler, local-server                   | DynamoDB table name. Default `AgentBlackboard`; on the deployed Lambda, always set from the CloudFormation-managed table. |
+| `AGENT_BLACKBOARD_TTL_DAYS`          | handler, local-server                   | Entry retention in days. Default `90`.                                                                                    |
+| `AGENT_BLACKBOARD_ADMIN_CREDENTIALS` | handler, local-server                   | Base64 JSON `[{ "name", "token" }]`. Never written to DynamoDB. Unset = `/credentials*` always 401s.                      |
+| `AGENT_BLACKBOARD_STORE`             | local-server only                       | Set to `memory` to use the in-memory store instead of DynamoDB.                                                           |
+| `PORT`                               | local-server only                       | Listen port for `pnpm run dev`. Default `3000`.                                                                           |
+| `AWS_REGION`                         | handler, local-server (via the AWS SDK) | Region for the DynamoDB client — read automatically by `@aws-sdk/client-dynamodb`'s default provider chain.               |
 
 ## Testing
 

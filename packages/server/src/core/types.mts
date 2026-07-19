@@ -30,7 +30,7 @@ export type RequestBody = unknown
 export interface HandlerRequest {
   /** Already upper-cased, e.g. "GET" — matches `node:http` and Lambda Function URL events. */
   method: string
-  /** URL path only, no query string, e.g. "/telemetry". */
+  /** URL path only, no query string, e.g. "/sessions/s1/entries". */
   path: string
   query: QueryMap
   headers: HeaderMap
@@ -48,16 +48,19 @@ export interface HandlerResponse {
   body: AsyncIterable<BodyChunk>
 }
 
-/** A single telemetry entry, as stored and returned by the API. */
-export interface TelemetryEntry {
+/** Session metadata. Semantic ids and parent relationships always come from callers. */
+export interface Session {
   id: string
-  credId: string
-  sessionId: string
-  agent: string
+  parentSessionId: string | null
   createdAt: string
-  archived: boolean
+  archivedAt: string | null
+}
+
+/** One timestamp-addressed entry belonging to a session. */
+export interface SessionEntry {
+  sessionId: string
+  createdAt: string
   data: Record<string, unknown>
-  ttl: number
 }
 
 /** A stored API credential. The raw token is never persisted or returned after creation. */
@@ -66,11 +69,4 @@ export interface CredentialRecord {
   name: string
   tokenHash: string
   createdAt: string
-}
-
-/** Body accepted for one entry in `POST /telemetry`, before `credId` is attached from auth. */
-export interface TelemetryEntryInput {
-  sessionId: string
-  agent: string
-  data?: Record<string, unknown>
 }

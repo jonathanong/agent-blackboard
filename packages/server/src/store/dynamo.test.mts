@@ -2,503 +2,141 @@ import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createDynamoStore } from './dynamo.mjs'
 
-// Minimal command shape our fake `send()` needs to inspect. The real SDK
-// commands expose `.input` with the params we passed to the constructor.
-interface FakeCommand {
+interface Command {
   constructor: { name: string }
   input: Record<string, unknown>
 }
 
-function fakeDocClient(handle: (command: FakeCommand) => unknown): DynamoDBDocumentClient {
-  return {
-    send: vi.fn((command: unknown) => Promise.resolve(handle(command as FakeCommand))),
-  } as unknown as DynamoDBDocumentClient
+function client(handler: (command: Command) => unknown): DynamoDBDocumentClient {
+  return { send: vi.fn((command) => Promise.resolve(handler(command as Command))) } as never
 }
 
-const FIXED_NOW = new Date('2024-06-01T00:00:00.000Z')
+const NOW = new Date('2026-01-01T00:00:00.000Z')
+const session = { id: 's', parentSessionId: null, createdAt: NOW.toISOString() }
+const entry = { sessionId: 's', createdAt: NOW.toISOString(), data: {} }
 
-describe('createDynamoStore', () => {
-  describe('appendEntry', () => {
-    it('PUTs an item with computed id/createdAt/ttl and returns a clean TelemetryEntry', async () => {
-      let putInput: Record<string, unknown> | undefined
-      const client = fakeDocClient((command) => {
-        if (command.constructor.name === 'PutCommand') {
-          putInput = command.input
-          return {}
-        }
-        throw new Error(`unexpected command ${command.constructor.name}`)
-      })
-      const store = createDynamoStore({ client, tableName: 'T', ttlDays: 10, now: () => FIXED_NOW })
-      const entry = await store.appendEntry({
-        credId: 'cred1',
-        sessionId: 'sess1',
-        agent: 'claude',
-        data: { a: 1 },
-      })
-      expect(entry.id.startsWith('sess1#')).toBe(true)
-      expect(entry.credId).toBe('cred1')
-      expect(entry.ttl).toBe(Math.floor(FIXED_NOW.getTime() / 1000) + 10 * 86400)
-      expect(putInput?.TableName).toBe('T')
-      expect(putInput?.Item).toMatchObject({ PK: 'cred1', SK: entry.id, ...entry })
-    })
-  })
+async function collect<T>(items: AsyncIterable<T>): Promise<T[]> {
+  const result: T[] = []
+  for await (const item of items) result.push(item)
+  return result
+}
 
-  describe('appendEntries', () => {
-    it('writes every entry in one TransactWriteCommand, sharing one timestamp', async () => {
-      let transactInput: Record<string, unknown> | undefined
-      const client = fakeDocClient((command) => {
-        if (command.constructor.name === 'TransactWriteCommand') {
-          transactInput = command.input
-          return {}
-        }
-        throw new Error(`unexpected command ${command.constructor.name}`)
-      })
-      const store = createDynamoStore({ client, tableName: 'T', ttlDays: 10, now: () => FIXED_NOW })
-      const results = await store.appendEntries([
-        { credId: 'cred1', sessionId: 'sess1', agent: 'claude', data: { a: 1 } },
-        { credId: 'cred1', sessionId: 'sess1', agent: 'claude', data: { a: 2 } },
-      ])
-      expect(results).toHaveLength(2)
-      expect(results[0]!.id).not.toBe(results[1]!.id)
-      expect(results[0]!.createdAt).toBe(results[1]!.createdAt)
-      const items = transactInput?.TransactItems as Array<{
-        Put: { Item: Record<string, unknown> }
-      }>
-      expect(items).toHaveLength(2)
-      expect(items[0]!.Put.Item).toMatchObject({ PK: 'cred1', SK: results[0]!.id })
-      expect(items[1]!.Put.Item).toMatchObject({ PK: 'cred1', SK: results[1]!.id })
-    })
-
-    it('returns [] without calling the client for an empty batch', async () => {
-      const send = vi.fn()
-      const client = { send } as unknown as DynamoDBDocumentClient
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      await expect(store.appendEntries([])).resolves.toEqual([])
-      expect(send).not.toHaveBeenCalled()
-    })
-
-    it('throws instead of calling the client for a batch over MAX_APPEND_BATCH_SIZE', async () => {
-      const send = vi.fn()
-      const client = { send } as unknown as DynamoDBDocumentClient
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      const entries = Array.from({ length: 101 }, () => ({
-        credId: 'cred1',
-        sessionId: 's',
-        agent: 'a',
-        data: {},
-      }))
-      await expect(store.appendEntries(entries)).rejects.toThrow('101')
-      expect(send).not.toHaveBeenCalled()
-    })
-  })
-
-  describe('getEntries', () => {
-    function rawItem(overrides: Partial<Record<string, unknown>> = {}): Record<string, unknown> {
-      return {
-        PK: 'cred1',
-        SK: 'sess1#01',
-        id: 'sess1#01',
-        credId: 'cred1',
-        sessionId: 'sess1',
-        agent: 'claude',
-        createdAt: '2024-01-01T00:00:00.000Z',
-        archived: false,
-        data: { a: 1 },
-        ttl: 123,
-        ...overrides,
+describe('createDynamoStore wiring', () => {
+  it('delegates every session and entry operation', async () => {
+    let getCount = 0
+    const doc = client((command) => {
+      if (command.constructor.name === 'PutCommand') return {}
+      if (command.constructor.name === 'UpdateCommand')
+        return { Attributes: { ...session, archivedAt: 'later' } }
+      if (command.constructor.name === 'TransactWriteCommand') return {}
+      if (command.constructor.name === 'GetCommand') {
+        getCount += 1
+        const key = command.input.Key as { PK: string }
+        if (key.PK.startsWith('ENTRIES'))
+          return { Item: { ...entry, PK: key.PK, SK: `ENTRY#${entry.createdAt}` } }
+        return { Item: session }
       }
-    }
-
-    it('strips PK/SK from yielded entries', async () => {
-      const client = fakeDocClient((command) => {
-        expect(command.constructor.name).toBe('QueryCommand')
-        return { Items: [rawItem()] }
-      })
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      const results = []
-      for await (const entry of store.getEntries('cred1', {})) results.push(entry)
-      expect(results).toEqual([
-        {
-          id: 'sess1#01',
-          credId: 'cred1',
-          sessionId: 'sess1',
-          agent: 'claude',
-          createdAt: '2024-01-01T00:00:00.000Z',
-          archived: false,
-          data: { a: 1 },
-          ttl: 123,
-        },
-      ])
+      if (command.constructor.name === 'QueryCommand') {
+        const values = command.input.ExpressionAttributeValues as Record<string, string>
+        return values[':pk']?.startsWith('SESSIONS')
+          ? { Items: [session] }
+          : { Items: [{ ...entry, PK: values[':pk'], SK: `ENTRY#${entry.createdAt}` }] }
+      }
+      throw new Error(`unexpected ${command.constructor.name}`)
     })
+    const store = createDynamoStore({ client: doc, tableName: 'T', now: () => NOW })
+    await expect(
+      store.createSession({ credId: 'c', id: 's', parentSessionId: null }),
+    ).resolves.toMatchObject({ id: 's' })
+    await expect(store.getSession('c', 's')).resolves.toMatchObject({ id: 's' })
+    await expect(collect(store.listSessions('c'))).resolves.toHaveLength(1)
+    await expect(store.archiveSession('c', 's')).resolves.toMatchObject({ archivedAt: 'later' })
+    await expect(store.appendEntry({ credId: 'c', sessionId: 's', data: {} })).resolves.toEqual(
+      entry,
+    )
+    await expect(collect(store.getEntries('c', 's'))).resolves.toEqual([entry])
+    await expect(
+      store.patchEntry('c', { sessionId: 's', createdAt: entry.createdAt, data: {} }),
+    ).resolves.toEqual(entry)
+    expect(getCount).toBeGreaterThan(0)
+  })
+})
 
-    it('queries with begins_with(SK, ...) when sessionId is given', async () => {
-      const client = fakeDocClient((command) => {
-        expect(command.input.KeyConditionExpression).toBe('PK = :pk AND begins_with(SK, :skPrefix)')
-        expect(
-          (command.input.ExpressionAttributeValues as Record<string, unknown>)[':skPrefix'],
-        ).toBe('sess1#')
-        return { Items: [] }
-      })
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      const results = []
-      for await (const entry of store.getEntries('cred1', { sessionId: 'sess1' }))
-        results.push(entry)
-      expect(results).toEqual([])
+describe('DynamoDB credentials', () => {
+  it('creates, gets, lists, and deletes credentials', async () => {
+    let query = 0
+    const raw = { id: 'a', name: 'target', tokenHash: 'hash', createdAt: 'now' }
+    const doc = client((command) => {
+      if (command.constructor.name === 'PutCommand') return {}
+      if (command.constructor.name === 'GetCommand') return { Item: raw }
+      if (command.constructor.name === 'QueryCommand') {
+        query += 1
+        return query === 1
+          ? { Items: [raw], LastEvaluatedKey: { PK: 'CRED', SK: 'a' } }
+          : { Items: [] }
+      }
+      if (command.constructor.name === 'DeleteCommand') return { Attributes: raw }
+      throw new Error('unexpected command')
     })
-
-    it('queries without begins_with when sessionId is not given', async () => {
-      const client = fakeDocClient((command) => {
-        expect(command.input.KeyConditionExpression).toBe('PK = :pk')
-        return { Items: [] }
-      })
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      for await (const _ of store.getEntries('cred1', {})) void _
-    })
-
-    it('builds a FilterExpression for agent and archived', async () => {
-      const client = fakeDocClient((command) => {
-        expect(command.input.FilterExpression).toBe('#agent = :agent AND #archived = :archived')
-        expect(command.input.ExpressionAttributeNames).toEqual({
-          '#agent': 'agent',
-          '#archived': 'archived',
-        })
-        expect(command.input.ExpressionAttributeValues).toMatchObject({
-          ':agent': 'claude',
-          ':archived': true,
-        })
-        return { Items: [] }
-      })
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      for await (const _ of store.getEntries('cred1', { agent: 'claude', archived: true })) void _
-    })
-
-    it('has no FilterExpression when no agent/archived filter is given', async () => {
-      const client = fakeDocClient((command) => {
-        expect(command.input.FilterExpression).toBeUndefined()
-        expect(command.input.ExpressionAttributeNames).toBeUndefined()
-        return { Items: [] }
-      })
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      for await (const _ of store.getEntries('cred1', {})) void _
-    })
-
-    it('paginates via ExclusiveStartKey/LastEvaluatedKey', async () => {
-      let calls = 0
-      const client = fakeDocClient((command) => {
-        calls += 1
-        if (calls === 1) {
-          expect(command.input.ExclusiveStartKey).toBeUndefined()
-          return {
-            Items: [rawItem({ SK: 'sess1#01', id: 'sess1#01' })],
-            LastEvaluatedKey: { PK: 'cred1', SK: 'sess1#01' },
-          }
-        }
-        expect(command.input.ExclusiveStartKey).toEqual({ PK: 'cred1', SK: 'sess1#01' })
-        return { Items: [rawItem({ SK: 'sess1#02', id: 'sess1#02' })] }
-      })
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      const ids: string[] = []
-      for await (const entry of store.getEntries('cred1', {})) ids.push(entry.id)
-      expect(ids).toEqual(['sess1#01', 'sess1#02'])
-      expect(calls).toBe(2)
-    })
-
-    it('treats a missing Items array as empty', async () => {
-      const client = fakeDocClient(() => ({}))
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      const results = []
-      for await (const entry of store.getEntries('cred1', {})) results.push(entry)
-      expect(results).toEqual([])
-    })
+    const store = createDynamoStore({ client: doc, tableName: 'T', now: () => NOW })
+    expect((await store.createCredential('target')).token).toMatch(/^abb_sk_/)
+    expect(await store.getCredentialById('a')).toEqual(raw)
+    expect(await store.listCredentials()).toEqual([raw])
+    expect(await store.deleteCredential({ id: 'a' })).toBe(true)
   })
 
-  describe('patchEntries', () => {
-    it('merges data via per-key nested SET and returns a clean entry', async () => {
-      const client = fakeDocClient((command) => {
-        expect(command.constructor.name).toBe('UpdateCommand')
-        expect(command.input.UpdateExpression).toBe('SET #data.#dk0 = :dv0')
-        expect(command.input.ExpressionAttributeNames).toEqual({ '#data': 'data', '#dk0': 'pr' })
-        expect(command.input.ExpressionAttributeValues).toEqual({ ':dv0': 7777 })
-        expect(command.input.ConditionExpression).toBe('attribute_exists(PK)')
-        return {
-          Attributes: {
-            PK: 'cred1',
-            SK: 'sess1#01',
-            id: 'sess1#01',
-            credId: 'cred1',
-            sessionId: 'sess1',
-            agent: 'claude',
-            createdAt: '2024-01-01T00:00:00.000Z',
-            archived: false,
-            data: { pr: 7777 },
-            ttl: 123,
-          },
-        }
-      })
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      const [updated] = await store.patchEntries('cred1', [{ id: 'sess1#01', data: { pr: 7777 } }])
-      expect(updated).toEqual({
-        id: 'sess1#01',
-        credId: 'cred1',
-        sessionId: 'sess1',
-        agent: 'claude',
-        createdAt: '2024-01-01T00:00:00.000Z',
-        archived: false,
-        data: { pr: 7777 },
-        ttl: 123,
-      })
-    })
+  it('handles missing credentials and name deletion branches', async () => {
+    const missing = createDynamoStore({ client: client(() => ({})), tableName: 'T' })
+    expect(await missing.getCredentialById('x')).toBeUndefined()
+    expect(await missing.listCredentials()).toEqual([])
+    expect(await missing.deleteCredential({ id: 'x' })).toBe(false)
+    expect(await missing.deleteCredential({ name: 'x' })).toBe(false)
+    expect(await missing.deleteCredential({})).toBe(false)
 
-    it('sets archived via a plain SET clause', async () => {
-      const client = fakeDocClient((command) => {
-        expect(command.input.UpdateExpression).toBe('SET #archived = :archived')
-        expect(command.input.ExpressionAttributeValues).toEqual({ ':archived': true })
-        return { Attributes: undefined }
-      })
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      const results = await store.patchEntries('cred1', [{ id: 'sess1#01', archived: true }])
-      expect(results).toEqual([])
+    const raw = { id: 'a', name: 'target', tokenHash: 'h', createdAt: 'now' }
+    const byName = createDynamoStore({
+      client: client((command) =>
+        command.constructor.name === 'QueryCommand'
+          ? { Items: [raw, { ...raw, id: 'b' }, { ...raw, id: 'c', name: 'other' }] }
+          : { Attributes: raw },
+      ),
+      tableName: 'T',
     })
+    expect(await byName.deleteCredential({ name: 'target' })).toBe(true)
+  })
+})
 
-    it('combines archived and multi-key data in one UpdateExpression', async () => {
-      const client = fakeDocClient((command) => {
-        expect(command.input.UpdateExpression).toBe(
-          'SET #archived = :archived, #data.#dk0 = :dv0, #data.#dk1 = :dv1',
-        )
-        return { Attributes: undefined }
-      })
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      await store.patchEntries('cred1', [{ id: 'sess1#01', archived: true, data: { a: 1, b: 2 } }])
-    })
+describe('Dynamo config', () => {
+  const originalTable = process.env.AGENT_BLACKBOARD_TABLE
+  const originalTtl = process.env.AGENT_BLACKBOARD_TTL_DAYS
 
-    it('swallows ConditionalCheckFailedException as a skipped patch', async () => {
-      const client = fakeDocClient(() => {
-        const error = new Error('missing') as Error & { name: string }
-        error.name = 'ConditionalCheckFailedException'
-        throw error
-      })
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      const results = await store.patchEntries('cred1', [{ id: 'missing', archived: true }])
-      expect(results).toEqual([])
-    })
-
-    it('rethrows any other error', async () => {
-      const client = fakeDocClient(() => {
-        throw new Error('boom')
-      })
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      await expect(store.patchEntries('cred1', [{ id: 'x', archived: true }])).rejects.toThrow(
-        'boom',
-      )
-    })
-
-    it('applies patches in bounded-concurrency batches, preserving result order', async () => {
-      const seen: string[] = []
-      const client = fakeDocClient((command) => {
-        const id = (command.input.Key as { SK: string }).SK
-        seen.push(id)
-        return {
-          Attributes: {
-            PK: 'cred1',
-            SK: id,
-            id,
-            credId: 'cred1',
-            sessionId: 's',
-            agent: 'a',
-            createdAt: 'now',
-            archived: true,
-            data: {},
-            ttl: 1,
-          },
-        }
-      })
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      const patches = Array.from({ length: 23 }, (_, i) => ({ id: `id${i}`, archived: true }))
-      const results = await store.patchEntries('cred1', patches)
-      expect(results.map((r) => r.id)).toEqual(patches.map((p) => p.id))
-      expect(seen.length).toBe(23)
-    })
+  beforeEach(() => {
+    delete process.env.AGENT_BLACKBOARD_TABLE
+    delete process.env.AGENT_BLACKBOARD_TTL_DAYS
   })
 
-  describe('credentials', () => {
-    it('creates a credential via PutCommand and returns the raw token once', async () => {
-      let putInput: Record<string, unknown> | undefined
-      const client = fakeDocClient((command) => {
-        putInput = command.input
+  afterEach(() => {
+    if (originalTable === undefined) delete process.env.AGENT_BLACKBOARD_TABLE
+    else process.env.AGENT_BLACKBOARD_TABLE = originalTable
+    if (originalTtl === undefined) delete process.env.AGENT_BLACKBOARD_TTL_DAYS
+    else process.env.AGENT_BLACKBOARD_TTL_DAYS = originalTtl
+  })
+
+  it('constructs defaults and reads table/ttl environment values', async () => {
+    const defaults = createDynamoStore({ client: client(() => ({})) })
+    await defaults.createCredential('uses-default-clock')
+    process.env.AGENT_BLACKBOARD_TABLE = 'FromEnv'
+    process.env.AGENT_BLACKBOARD_TTL_DAYS = '45'
+    let seen: Record<string, unknown> | undefined
+    const store = createDynamoStore({
+      client: client((command) => {
+        seen = command.input
         return {}
-      })
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      const { record, token } = await store.createCredential('agent-1')
-      expect(record.name).toBe('agent-1')
-      expect(token.startsWith('atl_sk_')).toBe(true)
-      expect(putInput?.Item).toMatchObject({ PK: 'CRED', SK: record.id, name: 'agent-1' })
+      }),
+      now: () => NOW,
     })
-
-    it('lists credentials, paginating and stripping PK/SK', async () => {
-      let calls = 0
-      const client = fakeDocClient(() => {
-        calls += 1
-        if (calls === 1) {
-          return {
-            Items: [
-              { PK: 'CRED', SK: 'a', id: 'a', name: 'alpha', tokenHash: 'h1', createdAt: 'now' },
-            ],
-            LastEvaluatedKey: { PK: 'CRED', SK: 'a' },
-          }
-        }
-        return {
-          Items: [
-            { PK: 'CRED', SK: 'b', id: 'b', name: 'beta', tokenHash: 'h2', createdAt: 'now' },
-          ],
-        }
-      })
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      const records = await store.listCredentials()
-      expect(records).toEqual([
-        { id: 'a', name: 'alpha', tokenHash: 'h1', createdAt: 'now' },
-        { id: 'b', name: 'beta', tokenHash: 'h2', createdAt: 'now' },
-      ])
-      expect(calls).toBe(2)
-    })
-
-    it('gets a credential by id, stripping PK/SK', async () => {
-      const client = fakeDocClient(() => ({
-        Item: { PK: 'CRED', SK: 'a', id: 'a', name: 'alpha', tokenHash: 'h1', createdAt: 'now' },
-      }))
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      expect(await store.getCredentialById('a')).toEqual({
-        id: 'a',
-        name: 'alpha',
-        tokenHash: 'h1',
-        createdAt: 'now',
-      })
-    })
-
-    it('returns undefined getting an unknown credential id', async () => {
-      const client = fakeDocClient(() => ({}))
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      expect(await store.getCredentialById('nope')).toBeUndefined()
-    })
-
-    it('deletes a credential by id', async () => {
-      const client = fakeDocClient((command) => {
-        expect(command.constructor.name).toBe('DeleteCommand')
-        expect(command.input.Key).toEqual({ PK: 'CRED', SK: 'a' })
-        return { Attributes: { id: 'a' } }
-      })
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      expect(await store.deleteCredential({ id: 'a' })).toBe(true)
-    })
-
-    it('returns false deleting an unknown id', async () => {
-      const client = fakeDocClient(() => ({ Attributes: undefined }))
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      expect(await store.deleteCredential({ id: 'nope' })).toBe(false)
-    })
-
-    it('deletes a credential by name via list-then-delete', async () => {
-      const calls: string[] = []
-      const client = fakeDocClient((command) => {
-        calls.push(command.constructor.name)
-        if (command.constructor.name === 'QueryCommand') {
-          return {
-            Items: [
-              { PK: 'CRED', SK: 'a', id: 'a', name: 'target', tokenHash: 'h', createdAt: 'now' },
-            ],
-          }
-        }
-        return { Attributes: { id: 'a' } }
-      })
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      expect(await store.deleteCredential({ name: 'target' })).toBe(true)
-      expect(calls).toEqual(['QueryCommand', 'DeleteCommand'])
-    })
-
-    it('deletes ALL credentials matching name, not just the first', async () => {
-      const calls: string[] = []
-      const deletedSks: string[] = []
-      const client = fakeDocClient((command) => {
-        calls.push(command.constructor.name)
-        if (command.constructor.name === 'QueryCommand') {
-          return {
-            Items: [
-              { PK: 'CRED', SK: 'a', id: 'a', name: 'target', tokenHash: 'h1', createdAt: 'now' },
-              { PK: 'CRED', SK: 'b', id: 'b', name: 'target', tokenHash: 'h2', createdAt: 'now' },
-              { PK: 'CRED', SK: 'c', id: 'c', name: 'other', tokenHash: 'h3', createdAt: 'now' },
-            ],
-          }
-        }
-        const sk = (command.input.Key as { SK: string }).SK
-        deletedSks.push(sk)
-        return { Attributes: { id: sk } }
-      })
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      expect(await store.deleteCredential({ name: 'target' })).toBe(true)
-      expect(calls).toEqual(['QueryCommand', 'DeleteCommand', 'DeleteCommand'])
-      expect(deletedSks.sort()).toEqual(['a', 'b'])
-    })
-
-    it('returns false deleting an unknown name', async () => {
-      const client = fakeDocClient(() => ({ Items: [] }))
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      expect(await store.deleteCredential({ name: 'nope' })).toBe(false)
-    })
-
-    it('treats a missing Items array as empty when listing credentials', async () => {
-      const client = fakeDocClient(() => ({}))
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      expect(await store.listCredentials()).toEqual([])
-    })
-
-    it('returns false when neither id nor name is given', async () => {
-      const client = fakeDocClient(() => {
-        throw new Error('should not call send')
-      })
-      const store = createDynamoStore({ client, tableName: 'T', now: () => FIXED_NOW })
-      expect(await store.deleteCredential({})).toBe(false)
-    })
-  })
-
-  describe('resolveDynamoConfig defaults', () => {
-    const originalTable = process.env.ATEL_TABLE
-    const originalTtl = process.env.ATEL_TTL_DAYS
-
-    beforeEach(() => {
-      delete process.env.ATEL_TABLE
-      delete process.env.ATEL_TTL_DAYS
-    })
-
-    afterEach(() => {
-      if (originalTable === undefined) delete process.env.ATEL_TABLE
-      else process.env.ATEL_TABLE = originalTable
-      if (originalTtl === undefined) delete process.env.ATEL_TTL_DAYS
-      else process.env.ATEL_TTL_DAYS = originalTtl
-    })
-
-    it('builds a real client and default config when no options are given', () => {
-      expect(() => createDynamoStore()).not.toThrow()
-    })
-
-    it('uses a real clock when now is not provided', async () => {
-      const client = fakeDocClient(() => ({}))
-      const store = createDynamoStore({ client })
-      const before = Date.now()
-      const entry = await store.appendEntry({ credId: 'c', sessionId: 's', agent: 'a', data: {} })
-      expect(new Date(entry.createdAt).getTime()).toBeGreaterThanOrEqual(before)
-    })
-
-    it('reads ATEL_TABLE and ATEL_TTL_DAYS from the environment', async () => {
-      process.env.ATEL_TABLE = 'FromEnv'
-      process.env.ATEL_TTL_DAYS = '45'
-      let putInput: Record<string, unknown> | undefined
-      const client = fakeDocClient((command) => {
-        putInput = command.input
-        return {}
-      })
-      const store = createDynamoStore({ client, now: () => FIXED_NOW })
-      const entry = await store.appendEntry({ credId: 'c', sessionId: 's', agent: 'a', data: {} })
-      expect(putInput?.TableName).toBe('FromEnv')
-      expect(entry.ttl).toBe(Math.floor(FIXED_NOW.getTime() / 1000) + 45 * 86400)
-    })
+    await store.appendEntry({ credId: 'c', sessionId: 's', data: {} })
+    const items = seen!.TransactItems as Array<{ ConditionCheck?: { TableName?: string } }>
+    expect(items[0]?.ConditionCheck?.TableName).toBe('FromEnv')
   })
 })

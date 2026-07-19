@@ -5,6 +5,5 @@ coverage/
 .env
 .env.local
 .DS_Store
-.atel/
 .claude/*
 !.claude/skills/

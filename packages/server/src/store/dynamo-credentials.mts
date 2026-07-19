@@ -1,7 +1,7 @@
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
 import { DeleteCommand, GetCommand, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
 import { hashToken } from '../auth/hash.mjs'
-import { generateTelemetryToken } from '../auth/tokens.mjs'
+import { generateClientToken } from '../auth/tokens.mjs'
 import type { CredentialRecord } from '../core/types.mjs'
 import type { CredentialIdOrName } from './store.mjs'
 
@@ -22,7 +22,7 @@ export async function dynamoCreateCredential(
   now: () => Date,
   name: string,
 ): Promise<{ record: CredentialRecord; token: string }> {
-  const { credId, token } = generateTelemetryToken()
+  const { credId, token } = generateClientToken()
   const record: CredentialRecord = {
     id: credId,
     name,

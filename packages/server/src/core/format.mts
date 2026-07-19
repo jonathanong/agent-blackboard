@@ -1,7 +1,7 @@
 import { formatJson } from './format-json.mjs'
 import { formatJsonl } from './format-jsonl.mjs'
 import { formatMarkdown } from './format-markdown.mjs'
-import type { HeaderMap, TelemetryEntry, QueryMap } from './types.mjs'
+import type { HeaderMap, QueryMap, SessionEntry } from './types.mjs'
 
 export type EntryFormat = 'json' | 'jsonl' | 'markdown'
 
@@ -14,7 +14,7 @@ export const FORMAT_CONTENT_TYPE: Record<EntryFormat, string> = {
 const VALID_FORMATS: EntryFormat[] = ['json', 'jsonl', 'markdown']
 
 /**
- * Resolves the output format for `GET /telemetry`: `?format=` wins if present
+ * Resolves the output format for an entry read: `?format=` wins if present
  * (returns `undefined` if it's not one of `json|jsonl|markdown` — callers
  * should respond 400); otherwise falls back to a simple `Accept` substring
  * check (`application/x-ndjson` -> jsonl, `text/markdown` -> markdown, else
@@ -33,7 +33,7 @@ export function resolveFormat(query: QueryMap, headers: HeaderMap): EntryFormat 
 
 export function formatEntries(
   format: EntryFormat,
-  entries: AsyncIterable<TelemetryEntry>,
+  entries: AsyncIterable<SessionEntry>,
 ): AsyncIterable<string> {
   if (format === 'jsonl') return formatJsonl(entries)
   if (format === 'markdown') return formatMarkdown(entries)

@@ -5,10 +5,10 @@
   },
   "plugins": [
     {
-      "name": "atel",
+      "name": "agent-blackboard",
       "source": {
         "source": "local",
-        "path": "./plugins/atel"
+        "path": "./plugins/agent-blackboard"
       },
       "policy": {
         "installation": "AVAILABLE",

@@ -1,0 +1,34 @@
+{
+  "name": "agent-blackboard",
+  "version": "0.0.0",
+  "description": "A session-scoped entry stream for autonomous agents working unmonitored, for Codex.",
+  "author": {
+    "name": "Jonathan Ong",
+    "email": "jonathanrichardong@gmail.com",
+    "url": "https://github.com/jonathanong"
+  },
+  "homepage": "https://github.com/jonathanong/agent-blackboard",
+  "repository": "https://github.com/jonathanong/agent-blackboard",
+  "license": "MIT",
+  "keywords": ["entries", "agent", "mcp", "retrospective", "codex"],
+  "skills": "../skills/",
+  "mcpServers": "../.mcp.json",
+  "interface": {
+    "displayName": "agent-blackboard",
+    "shortDescription": "Session entries for autonomous agents",
+    "longDescription": "Use agent-blackboard from Codex to create explicit root and subagent sessions, record entries while working, and review them later.",
+    "developerName": "Jonathan Ong",
+    "category": "Coding",
+    "capabilities": ["Interactive", "Write"],
+    "websiteURL": "https://github.com/jonathanong/agent-blackboard",
+    "privacyPolicyURL": "https://github.com/jonathanong/agent-blackboard",
+    "termsOfServiceURL": "https://github.com/jonathanong/agent-blackboard",
+    "defaultPrompt": [
+      "Record a note about what I just did",
+      "Get my entries for this session",
+      "Patch my entries with the PR number"
+    ],
+    "brandColor": "#2563EB",
+    "screenshots": []
+  }
+}

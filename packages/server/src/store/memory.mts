@@ -1,90 +1,123 @@
 import { hashToken } from '../auth/hash.mjs'
-import { generateTelemetryToken } from '../auth/tokens.mjs'
-import type { CredentialRecord, TelemetryEntry } from '../core/types.mjs'
-import { generateEntryId } from './ids.mjs'
+import { generateClientToken } from '../auth/tokens.mjs'
+import type { CredentialRecord, Session, SessionEntry } from '../core/types.mjs'
+import { SessionStoreError } from './errors.mjs'
 import type {
   CredentialIdOrName,
-  EntryFilter,
   EntryPatch,
-  TelemetryStore,
-  NewTelemetryEntry,
+  NewSession,
+  NewSessionEntry,
+  BlackboardStore,
 } from './store.mjs'
 
-const DEFAULT_TTL_DAYS = 90
-
 export interface MemoryStoreOptions {
-  ttlDays?: number
   now?: () => Date
 }
 
-/** In-memory `TelemetryStore` for unit tests and local dev — not durable, not shared across processes. */
-export class MemoryTelemetryStore implements TelemetryStore {
-  readonly #entries = new Map<string, TelemetryEntry>()
+/** In-memory `BlackboardStore` for unit tests and local dev. */
+export class MemoryBlackboardStore implements BlackboardStore {
+  readonly #sessions = new Map<string, Session>()
+  readonly #entries = new Map<string, SessionEntry>()
   readonly #credentials = new Map<string, CredentialRecord>()
-  readonly #ttlDays: number
   readonly #now: () => Date
 
   constructor(options: MemoryStoreOptions = {}) {
-    this.#ttlDays = options.ttlDays ?? DEFAULT_TTL_DAYS
     this.#now = options.now ?? ((): Date => new Date())
   }
 
-  async appendEntry(entry: NewTelemetryEntry): Promise<TelemetryEntry> {
-    const now = this.#now()
-    const id = `${entry.sessionId}#${generateEntryId(now)}`
-    const record: TelemetryEntry = {
-      id,
-      credId: entry.credId,
-      sessionId: entry.sessionId,
-      agent: entry.agent,
-      createdAt: now.toISOString(),
-      archived: false,
-      data: entry.data,
-      ttl: Math.floor(now.getTime() / 1000) + this.#ttlDays * 86400,
+  async createSession(input: NewSession): Promise<Session> {
+    const key = this.#sessionKey(input.credId, input.id)
+    if (this.#sessions.has(key)) {
+      throw new SessionStoreError('session_exists', `session already exists: ${input.id}`)
     }
-    this.#entries.set(this.#key(entry.credId, id), record)
-    return record
-  }
-
-  // Synchronous under the hood (a plain Map, no I/O), so nothing can
-  // interleave or partially fail between entries — inherently atomic,
-  // unlike the DynamoDB store where this needs a real transaction.
-  async appendEntries(entries: NewTelemetryEntry[]): Promise<TelemetryEntry[]> {
-    const results: TelemetryEntry[] = []
-    for (const entry of entries) results.push(await this.appendEntry(entry))
-    return results
-  }
-
-  async *getEntries(credId: string, filter: EntryFilter): AsyncIterable<TelemetryEntry> {
-    for (const record of this.#entries.values()) {
-      if (record.credId !== credId) continue
-      if (filter.sessionId !== undefined && record.sessionId !== filter.sessionId) continue
-      if (filter.agent !== undefined && record.agent !== filter.agent) continue
-      if (filter.archived !== undefined && record.archived !== filter.archived) continue
-      yield record
-    }
-  }
-
-  async patchEntries(credId: string, patches: EntryPatch[]): Promise<TelemetryEntry[]> {
-    const results: TelemetryEntry[] = []
-    for (const patch of patches) {
-      const key = this.#key(credId, patch.id)
-      const existing = this.#entries.get(key)
-      if (!existing) continue
-      const updated: TelemetryEntry = {
-        ...existing,
-        archived: patch.archived ?? existing.archived,
-        data: patch.data ? { ...existing.data, ...patch.data } : existing.data,
+    if (input.parentSessionId !== null) {
+      const parent = this.#sessions.get(this.#sessionKey(input.credId, input.parentSessionId))
+      if (!parent) {
+        throw new SessionStoreError(
+          'parent_not_found',
+          `parent session not found: ${input.parentSessionId}`,
+        )
       }
-      this.#entries.set(key, updated)
-      results.push(updated)
+      if (parent.archivedAt !== null) {
+        throw new SessionStoreError(
+          'parent_archived',
+          `parent session is archived: ${input.parentSessionId}`,
+        )
+      }
     }
-    return results
+    const session: Session = {
+      id: input.id,
+      parentSessionId: input.parentSessionId,
+      createdAt: this.#now().toISOString(),
+      archivedAt: null,
+    }
+    this.#sessions.set(key, session)
+    return session
+  }
+
+  async getSession(credId: string, sessionId: string): Promise<Session | undefined> {
+    return this.#sessions.get(this.#sessionKey(credId, sessionId))
+  }
+
+  async *listSessions(credId: string): AsyncIterable<Session> {
+    const prefix = `${credId} `
+    for (const [key, session] of this.#sessions) {
+      if (key.startsWith(prefix)) yield session
+    }
+  }
+
+  async archiveSession(credId: string, sessionId: string): Promise<Session> {
+    const key = this.#sessionKey(credId, sessionId)
+    const session = this.#sessions.get(key)
+    if (!session) {
+      throw new SessionStoreError('session_not_found', `session not found: ${sessionId}`)
+    }
+    if (session.archivedAt !== null) return session
+    const archived = { ...session, archivedAt: this.#now().toISOString() }
+    this.#sessions.set(key, archived)
+    return archived
+  }
+
+  async appendEntry(input: NewSessionEntry): Promise<SessionEntry> {
+    this.#requireActiveSession(input.credId, input.sessionId)
+    let timestamp = this.#now().getTime()
+    while (this.#entries.has(this.#entryKey(input.credId, input.sessionId, timestamp)))
+      timestamp += 1
+    const entry: SessionEntry = {
+      sessionId: input.sessionId,
+      createdAt: new Date(timestamp).toISOString(),
+      data: input.data,
+    }
+    this.#entries.set(this.#entryKey(input.credId, input.sessionId, timestamp), entry)
+    return entry
+  }
+
+  async *getEntries(credId: string, sessionId: string): AsyncIterable<SessionEntry> {
+    this.#requireActiveSession(credId, sessionId)
+    const prefix = `${credId} ${sessionId} `
+    for (const [key, entry] of this.#entries) {
+      if (key.startsWith(prefix)) yield entry
+    }
+  }
+
+  async patchEntry(credId: string, patch: EntryPatch): Promise<SessionEntry> {
+    this.#requireActiveSession(credId, patch.sessionId)
+    const key = `${credId} ${patch.sessionId} ${patch.createdAt}`
+    const entry = this.#entries.get(key)
+    if (!entry) {
+      throw new SessionStoreError(
+        'entry_not_found',
+        `entry not found: ${patch.sessionId} at ${patch.createdAt}`,
+      )
+    }
+    const updated = { ...entry, data: { ...entry.data, ...patch.data } }
+    this.#entries.set(key, updated)
+    return updated
   }
 
   async createCredential(name: string): Promise<{ record: CredentialRecord; token: string }> {
-    const { credId, token } = generateTelemetryToken()
-    const record: CredentialRecord = {
+    const { credId, token } = generateClientToken()
+    const record = {
       id: credId,
       name,
       tokenHash: hashToken(token),
@@ -104,17 +137,30 @@ export class MemoryTelemetryStore implements TelemetryStore {
 
   async deleteCredential(idOrName: CredentialIdOrName): Promise<boolean> {
     if (idOrName.id) return this.#credentials.delete(idOrName.id)
-    if (idOrName.name) {
-      const matchingIds = [...this.#credentials.entries()]
-        .filter(([, record]) => record.name === idOrName.name)
-        .map(([id]) => id)
-      for (const id of matchingIds) this.#credentials.delete(id)
-      return matchingIds.length > 0
-    }
-    return false
+    if (!idOrName.name) return false
+    const matchingIds = [...this.#credentials.entries()]
+      .filter(([, record]) => record.name === idOrName.name)
+      .map(([id]) => id)
+    for (const id of matchingIds) this.#credentials.delete(id)
+    return matchingIds.length > 0
   }
 
-  #key(credId: string, id: string): string {
-    return `${credId} ${id}`
+  #requireActiveSession(credId: string, sessionId: string): Session {
+    const session = this.#sessions.get(this.#sessionKey(credId, sessionId))
+    if (!session) {
+      throw new SessionStoreError('session_not_found', `session not found: ${sessionId}`)
+    }
+    if (session.archivedAt !== null) {
+      throw new SessionStoreError('session_archived', `session is archived: ${sessionId}`)
+    }
+    return session
+  }
+
+  #sessionKey(credId: string, sessionId: string): string {
+    return `${credId} ${sessionId}`
+  }
+
+  #entryKey(credId: string, sessionId: string, timestamp: number): string {
+    return `${credId} ${sessionId} ${new Date(timestamp).toISOString()}`
   }
 }

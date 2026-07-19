@@ -1,106 +1,61 @@
-# MCP commands
+# MCP tools
 
-`atel` ships a stdio MCP server exposing exactly three tools.
-Credential management is deliberately **not** here — creating, listing, and
-deleting credentials is CLI/admin-only (see [`cli.md`](cli.md)), never
-exposed to a model over MCP.
+Start the stdio server with `agent-blackboard mcp`. It reads `AGENT_BLACKBOARD_URL` and
+`AGENT_BLACKBOARD_TOKEN`. Credential management is intentionally CLI/admin-only.
 
-## Starting the server
+All ids are explicit. The MCP server never infers a host session id and never generates one.
 
-```sh
-atel mcp
+## `session_create`
+
+Creates session metadata before any entries are written.
+
+```json
+{ "sessionId": "root-123", "parentSessionId": null }
 ```
 
-Reads `ATEL_URL` and `ATEL_TOKEN` from the environment
-(the same telemetry credential the CLI uses — never an admin token).
+For a subagent, pass its direct parent's id:
 
-### Registering it with a plugin host
+```json
+{ "sessionId": "worker-456", "parentSessionId": "root-123" }
+```
 
-`plugins/atel/.mcp.json` registers this for both Claude Code and
-Codex plugin installs:
+The parent must exist under the same client credential and must be active. Parent links are
+immutable.
+
+## `session_archive`
+
+```json
+{ "sessionId": "worker-456" }
+```
+
+Archival applies to the session. Archived sessions reject entry reads, appends, patches, and new
+children.
+
+## `entry_append`
+
+```json
+{ "sessionId": "worker-456", "data": { "note": "found the edge case" } }
+```
+
+Returns the created `SessionEntry`. The server supplies `createdAt`; the caller supplies everything
+else.
+
+## `entry_get`
+
+```json
+{ "sessionId": "worker-456", "format": "jsonl" }
+```
+
+`format` is optional and may be `json` or `jsonl`. Returns `{ "entries": SessionEntry[] }`.
+
+## `entry_patch`
 
 ```json
 {
-  "mcpServers": {
-    "atel": {
-      "command": "npx",
-      "args": ["-y", "@jongleberry/atel", "mcp"],
-      "env": {
-        "ATEL_URL": "${ATEL_URL}",
-        "ATEL_TOKEN": "${ATEL_TOKEN}"
-      }
-    }
-  }
+  "sessionId": "worker-456",
+  "createdAt": "2026-07-19T20:00:00.000Z",
+  "data": { "pr": 7777 }
 }
 ```
 
-Installing the plugin (see the repo README) wires this up automatically —
-you only need `ATEL_URL`/`ATEL_TOKEN` set in your
-environment.
-
-## Tools
-
-### `telemetry_append`
-
-Append an entry to the telemetry stream for the current (or given) session.
-`data` is unstructured JSON — attach whatever's useful: notes, branch names,
-PR numbers, decisions made. This is a stream-of-consciousness log, not a
-knowledge base.
-
-| Arg         | Type   | Required | Notes                                                                                          |
-| ----------- | ------ | -------- | ---------------------------------------------------------------------------------------------- |
-| `data`      | object | yes      | Arbitrary JSON payload for this entry.                                                         |
-| `sessionId` | string | no       | Defaults to the current session (see [Session resolution](architecture.md#session-lifecycle)). |
-| `agent`     | string | no       | Defaults to `'claude-code'`.                                                                   |
-
-Returns the created entry.
-
-### `telemetry_get`
-
-Reads back telemetry entries for the current (or given) session, optionally
-filtered.
-
-| Arg         | Type                | Required | Notes                                                                                  |
-| ----------- | ------------------- | -------- | -------------------------------------------------------------------------------------- |
-| `sessionId` | string              | no       | Defaults to the current session — "read back what I just recorded" needs no arguments. |
-| `agent`     | string              | no       | Filter by agent identifier.                                                            |
-| `archived`  | boolean             | no       | Filter by archived status.                                                             |
-| `format`    | `'json' \| 'jsonl'` | no       | Internal wire format. Defaults to `jsonl`.                                             |
-
-Returns `{ entries: TelemetryEntry[] }`. Reads reuse the same
-genuinely-incremental client internally, then collect into the tool
-response — MCP tool results aren't naturally streaming to the model.
-
-### `telemetry_patch`
-
-Batch-patches entries by id: archive them and/or shallow-merge new data
-into their existing `data` blob (e.g. attach a PR number once it exists).
-
-| Arg       | Type                                                       | Required | Notes                           |
-| --------- | ---------------------------------------------------------- | -------- | ------------------------------- |
-| `patches` | `Array<{ id: string, archived?: boolean, data?: object }>` | yes      | `data` is merged, not replaced. |
-
-Returns `{ patched: TelemetryEntry[] }`.
-
-## Example tool calls
-
-```json
-{
-  "name": "telemetry_append",
-  "arguments": { "data": { "note": "the retry logic in worker.mts silently swallows 429s" } }
-}
-```
-
-```json
-{ "name": "telemetry_get", "arguments": { "archived": false } }
-```
-
-```json
-{
-  "name": "telemetry_patch",
-  "arguments": { "patches": [{ "id": "abc123#01H...", "archived": true, "data": { "pr": 7777 } }] }
-}
-```
-
-See [`loop-engineering.md`](loop-engineering.md) for how a skill typically
-sequences these calls to build a self-improvement loop.
+The composite key `(sessionId, createdAt)` selects exactly one entry. `data` is shallow-merged.

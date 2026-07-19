@@ -1,236 +1,122 @@
-import { beforeEach, describe, expect, it } from 'vitest'
-import { MemoryTelemetryStore } from './memory.mjs'
+import { describe, expect, it } from 'vitest'
+import { SessionStoreError } from './errors.mjs'
+import { MemoryBlackboardStore } from './memory.mjs'
 
-describe('MemoryTelemetryStore', () => {
-  let fixedNow: Date
-  let store: MemoryTelemetryStore
+const NOW = new Date('2026-01-01T00:00:00.000Z')
 
-  beforeEach(() => {
-    fixedNow = new Date('2024-01-01T00:00:00.000Z')
-    store = new MemoryTelemetryStore({ now: () => fixedNow, ttlDays: 30 })
+async function collect<T>(items: AsyncIterable<T>): Promise<T[]> {
+  const result: T[] = []
+  for await (const item of items) result.push(item)
+  return result
+}
+
+function store(): MemoryBlackboardStore {
+  return new MemoryBlackboardStore({ now: () => NOW })
+}
+
+describe('MemoryBlackboardStore sessions', () => {
+  it('creates, gets, and lists root and child sessions', async () => {
+    const subject = store()
+    const root = await subject.createSession({ credId: 'c', id: 'root', parentSessionId: null })
+    const child = await subject.createSession({ credId: 'c', id: 'child', parentSessionId: 'root' })
+    expect(root).toEqual({
+      id: 'root',
+      parentSessionId: null,
+      createdAt: NOW.toISOString(),
+      archivedAt: null,
+    })
+    expect(child.parentSessionId).toBe('root')
+    expect(await subject.getSession('c', 'child')).toEqual(child)
+    expect(await subject.getSession('other', 'child')).toBeUndefined()
+    expect(await collect(subject.listSessions('c'))).toEqual([root, child])
+    expect(await collect(subject.listSessions('other'))).toEqual([])
   })
 
-  describe('appendEntry', () => {
-    it('creates an entry with derived id, createdAt, archived=false, and ttl', async () => {
-      const entry = await store.appendEntry({
-        credId: 'cred1',
-        sessionId: 'sess1',
-        agent: 'claude',
-        data: { a: 1 },
-      })
-      expect(entry.id.startsWith('sess1#')).toBe(true)
-      expect(entry.credId).toBe('cred1')
-      expect(entry.sessionId).toBe('sess1')
-      expect(entry.agent).toBe('claude')
-      expect(entry.archived).toBe(false)
-      expect(entry.data).toEqual({ a: 1 })
-      expect(entry.createdAt).toBe(fixedNow.toISOString())
-      expect(entry.ttl).toBe(Math.floor(fixedNow.getTime() / 1000) + 30 * 86400)
-    })
-
-    it('uses a real clock when now is not provided', async () => {
-      const defaultStore = new MemoryTelemetryStore()
-      const entry = await defaultStore.appendEntry({
-        credId: 'c',
-        sessionId: 's',
-        agent: 'a',
-        data: {},
-      })
-      expect(new Date(entry.createdAt).getTime()).toBeGreaterThan(0)
-    })
-
-    it('uses the default ttl of 90 days when not provided', async () => {
-      const defaultStore = new MemoryTelemetryStore({ now: () => fixedNow })
-      const entry = await defaultStore.appendEntry({
-        credId: 'c',
-        sessionId: 's',
-        agent: 'a',
-        data: {},
-      })
-      expect(entry.ttl).toBe(Math.floor(fixedNow.getTime() / 1000) + 90 * 86400)
-    })
+  it('rejects duplicates, missing parents, and archived parents', async () => {
+    const subject = store()
+    await subject.createSession({ credId: 'c', id: 'root', parentSessionId: null })
+    await expect(
+      subject.createSession({ credId: 'c', id: 'root', parentSessionId: null }),
+    ).rejects.toMatchObject({ code: 'session_exists' })
+    await expect(
+      subject.createSession({ credId: 'c', id: 'child', parentSessionId: 'missing' }),
+    ).rejects.toMatchObject({ code: 'parent_not_found' })
+    await subject.archiveSession('c', 'root')
+    await expect(
+      subject.createSession({ credId: 'c', id: 'child', parentSessionId: 'root' }),
+    ).rejects.toMatchObject({ code: 'parent_archived' })
   })
 
-  describe('getEntries', () => {
-    async function collect(iter: AsyncIterable<{ id: string }>): Promise<string[]> {
-      const ids: string[] = []
-      for await (const entry of iter) ids.push(entry.id)
-      return ids
-    }
+  it('archives once and rejects an unknown session', async () => {
+    const subject = store()
+    await expect(subject.archiveSession('c', 'missing')).rejects.toBeInstanceOf(SessionStoreError)
+    await subject.createSession({ credId: 'c', id: 'root', parentSessionId: null })
+    const archived = await subject.archiveSession('c', 'root')
+    expect(archived.archivedAt).toBe(NOW.toISOString())
+    expect(await subject.archiveSession('c', 'root')).toBe(archived)
+  })
+})
 
-    it('only returns entries for the given credId', async () => {
-      await store.appendEntry({ credId: 'cred1', sessionId: 's', agent: 'a', data: {} })
-      await store.appendEntry({ credId: 'cred2', sessionId: 's', agent: 'a', data: {} })
-      const ids = await collect(store.getEntries('cred1', {}))
-      expect(ids.length).toBe(1)
-    })
-
-    it('filters by sessionId', async () => {
-      await store.appendEntry({ credId: 'cred1', sessionId: 's1', agent: 'a', data: {} })
-      await store.appendEntry({ credId: 'cred1', sessionId: 's2', agent: 'a', data: {} })
-      const ids = await collect(store.getEntries('cred1', { sessionId: 's1' }))
-      expect(ids.every((id) => id.startsWith('s1#'))).toBe(true)
-      expect(ids.length).toBe(1)
-    })
-
-    it('filters by agent', async () => {
-      await store.appendEntry({ credId: 'cred1', sessionId: 's', agent: 'claude', data: {} })
-      await store.appendEntry({ credId: 'cred1', sessionId: 's', agent: 'codex', data: {} })
-      const ids = await collect(store.getEntries('cred1', { agent: 'codex' }))
-      expect(ids.length).toBe(1)
-    })
-
-    it('filters by archived', async () => {
-      const entry = await store.appendEntry({
-        credId: 'cred1',
-        sessionId: 's',
-        agent: 'a',
-        data: {},
-      })
-      await store.appendEntry({ credId: 'cred1', sessionId: 's', agent: 'a', data: {} })
-      await store.patchEntries('cred1', [{ id: entry.id, archived: true }])
-      const archived = await collect(store.getEntries('cred1', { archived: true }))
-      const active = await collect(store.getEntries('cred1', { archived: false }))
-      expect(archived).toEqual([entry.id])
-      expect(active.length).toBe(1)
-    })
-
-    it('returns nothing for an unknown credId', async () => {
-      const ids = await collect(store.getEntries('nobody', {}))
-      expect(ids).toEqual([])
-    })
+describe('MemoryBlackboardStore entries', () => {
+  it('requires an active session and creates collision-safe timestamps', async () => {
+    const subject = store()
+    await expect(
+      subject.appendEntry({ credId: 'c', sessionId: 'missing', data: {} }),
+    ).rejects.toMatchObject({ code: 'session_not_found' })
+    await subject.createSession({ credId: 'c', id: 's', parentSessionId: null })
+    const first = await subject.appendEntry({ credId: 'c', sessionId: 's', data: { i: 1 } })
+    const second = await subject.appendEntry({ credId: 'c', sessionId: 's', data: { i: 2 } })
+    await subject.createSession({ credId: 'other', id: 's', parentSessionId: null })
+    await subject.appendEntry({ credId: 'other', sessionId: 's', data: { i: 3 } })
+    expect(first.createdAt).toBe('2026-01-01T00:00:00.000Z')
+    expect(second.createdAt).toBe('2026-01-01T00:00:00.001Z')
+    expect(await collect(subject.getEntries('c', 's'))).toEqual([first, second])
   })
 
-  describe('patchEntries', () => {
-    it('sets archived', async () => {
-      const entry = await store.appendEntry({
-        credId: 'cred1',
+  it('patches by sessionId+createdAt and rejects missing or archived entries', async () => {
+    const subject = store()
+    await subject.createSession({ credId: 'c', id: 's', parentSessionId: null })
+    const entry = await subject.appendEntry({ credId: 'c', sessionId: 's', data: { a: 1 } })
+    expect(
+      await subject.patchEntry('c', {
         sessionId: 's',
-        agent: 'a',
-        data: {},
-      })
-      const [updated] = await store.patchEntries('cred1', [{ id: entry.id, archived: true }])
-      expect(updated?.archived).toBe(true)
-      expect(updated?.data).toEqual({})
+        createdAt: entry.createdAt,
+        data: { b: 2 },
+      }),
+    ).toMatchObject({ data: { a: 1, b: 2 } })
+    await expect(
+      subject.patchEntry('c', { sessionId: 's', createdAt: 'missing', data: {} }),
+    ).rejects.toMatchObject({ code: 'entry_not_found' })
+    await subject.archiveSession('c', 's')
+    await expect(collect(subject.getEntries('c', 's'))).rejects.toMatchObject({
+      code: 'session_archived',
     })
+    await expect(
+      subject.patchEntry('c', { sessionId: 's', createdAt: entry.createdAt, data: {} }),
+    ).rejects.toMatchObject({ code: 'session_archived' })
+    await expect(
+      subject.appendEntry({ credId: 'c', sessionId: 's', data: {} }),
+    ).rejects.toMatchObject({ code: 'session_archived' })
+  })
+})
 
-    it('shallow-merges data into the existing blob', async () => {
-      const entry = await store.appendEntry({
-        credId: 'cred1',
-        sessionId: 's',
-        agent: 'a',
-        data: { a: 1 },
-      })
-      const [updated] = await store.patchEntries('cred1', [{ id: entry.id, data: { b: 2 } }])
-      expect(updated?.data).toEqual({ a: 1, b: 2 })
-      expect(updated?.archived).toBe(false)
-    })
-
-    it('overwrites existing top-level keys on merge', async () => {
-      const entry = await store.appendEntry({
-        credId: 'cred1',
-        sessionId: 's',
-        agent: 'a',
-        data: { a: 1 },
-      })
-      const [updated] = await store.patchEntries('cred1', [{ id: entry.id, data: { a: 2 } }])
-      expect(updated?.data).toEqual({ a: 2 })
-    })
-
-    it('applies both archived and data in one patch', async () => {
-      const entry = await store.appendEntry({
-        credId: 'cred1',
-        sessionId: 's',
-        agent: 'a',
-        data: {},
-      })
-      const [updated] = await store.patchEntries('cred1', [
-        { id: entry.id, archived: true, data: { a: 1 } },
-      ])
-      expect(updated).toEqual({ ...entry, archived: true, data: { a: 1 } })
-    })
-
-    it('silently skips patches for unknown ids', async () => {
-      const results = await store.patchEntries('cred1', [{ id: 'does-not-exist', archived: true }])
-      expect(results).toEqual([])
-    })
-
-    it('does not patch entries belonging to a different credId', async () => {
-      const entry = await store.appendEntry({
-        credId: 'cred1',
-        sessionId: 's',
-        agent: 'a',
-        data: {},
-      })
-      const results = await store.patchEntries('cred2', [{ id: entry.id, archived: true }])
-      expect(results).toEqual([])
-    })
-
-    it('applies multiple patches in one call', async () => {
-      const a = await store.appendEntry({ credId: 'cred1', sessionId: 's', agent: 'a', data: {} })
-      const b = await store.appendEntry({ credId: 'cred1', sessionId: 's', agent: 'a', data: {} })
-      const results = await store.patchEntries('cred1', [
-        { id: a.id, archived: true },
-        { id: b.id, archived: true },
-      ])
-      expect(results.length).toBe(2)
-    })
+describe('MemoryBlackboardStore credentials', () => {
+  it('creates, lists, looks up, and deletes credentials by id or name', async () => {
+    const subject = store()
+    const first = await subject.createCredential('same')
+    await subject.createCredential('same')
+    expect(first.token).toMatch(/^abb_sk_/)
+    expect(await subject.getCredentialById(first.record.id)).toEqual(first.record)
+    expect(await subject.listCredentials()).toHaveLength(2)
+    expect(await subject.deleteCredential({ id: first.record.id })).toBe(true)
+    expect(await subject.deleteCredential({ id: 'missing' })).toBe(false)
+    expect(await subject.deleteCredential({ name: 'same' })).toBe(true)
+    expect(await subject.deleteCredential({ name: 'missing' })).toBe(false)
+    expect(await subject.deleteCredential({})).toBe(false)
   })
 
-  describe('credentials', () => {
-    it('creates a credential with a hashed token, never storing the raw token', async () => {
-      const { record, token } = await store.createCredential('agent-1')
-      expect(record.name).toBe('agent-1')
-      expect(record.tokenHash).not.toBe(token)
-      expect(record.createdAt).toBe(fixedNow.toISOString())
-      const fetched = await store.getCredentialById(record.id)
-      expect(fetched).toEqual(record)
-    })
-
-    it('lists all created credentials', async () => {
-      await store.createCredential('a')
-      await store.createCredential('b')
-      const records = await store.listCredentials()
-      expect(records.map((r) => r.name).sort()).toEqual(['a', 'b'])
-    })
-
-    it('returns undefined for an unknown credential id', async () => {
-      expect(await store.getCredentialById('nope')).toBeUndefined()
-    })
-
-    it('deletes a credential by id', async () => {
-      const { record } = await store.createCredential('a')
-      expect(await store.deleteCredential({ id: record.id })).toBe(true)
-      expect(await store.getCredentialById(record.id)).toBeUndefined()
-    })
-
-    it('returns false deleting an unknown id', async () => {
-      expect(await store.deleteCredential({ id: 'nope' })).toBe(false)
-    })
-
-    it('deletes a credential by name', async () => {
-      const { record } = await store.createCredential('by-name')
-      expect(await store.deleteCredential({ name: 'by-name' })).toBe(true)
-      expect(await store.getCredentialById(record.id)).toBeUndefined()
-    })
-
-    it('deletes ALL credentials matching name, leaving others untouched', async () => {
-      const { record: a } = await store.createCredential('dup')
-      const { record: b } = await store.createCredential('dup')
-      const { record: other } = await store.createCredential('other')
-      expect(await store.deleteCredential({ name: 'dup' })).toBe(true)
-      expect(await store.getCredentialById(a.id)).toBeUndefined()
-      expect(await store.getCredentialById(b.id)).toBeUndefined()
-      expect(await store.getCredentialById(other.id)).toEqual(other)
-    })
-
-    it('returns false deleting an unknown name (skipping past a non-matching credential)', async () => {
-      await store.createCredential('other')
-      expect(await store.deleteCredential({ name: 'nope' })).toBe(false)
-    })
-
-    it('returns false when neither id nor name is given', async () => {
-      expect(await store.deleteCredential({})).toBe(false)
-    })
+  it('uses the default clock when none is injected', async () => {
+    const created = await new MemoryBlackboardStore().createCredential('clock')
+    expect(Number.isNaN(Date.parse(created.record.createdAt))).toBe(false)
   })
 })

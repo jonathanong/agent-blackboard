@@ -1,14 +1,15 @@
 {
-  "name": "atel-server",
+  "name": "agent-blackboard-server",
   "version": "0.0.0",
   "private": true,
-  "description": "Lambda + DynamoDB server for atel (Agent Telemetry). Deployed via CloudFormation, never published.",
+  "description": "Lambda + DynamoDB server for Agent Blackboard. Deployed via CloudFormation, never published.",
   "type": "module",
   "scripts": {
     "build": "node infra/bundle.mjs",
     "typecheck": "tsc --noEmit --project tsconfig.json",
     "dev": "tsx src/local-server.mts",
-    "deploy": "node infra/deploy.mjs"
+    "deploy": "node infra/deploy.mjs",
+    "teardown": "node infra/teardown.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1087.0",

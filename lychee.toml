@@ -16,9 +16,9 @@ user_agent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Ge
 
 exclude = [
   # The repo isn't pushed to GitHub yet — remove this line once it is.
-  "^https?://github\\.com/jonathanong/atel",
+  "^https?://github\\.com/jonathanong/agent-blackboard",
   # The package hasn't had its first npm publish yet — remove this line once it has.
-  "^https?://www\\.npmjs\\.com/package/@jongleberry/atel",
+  "^https?://www\\.npmjs\\.com/package/@jongleberry/agent-blackboard",
   # Documentation placeholders, never meant to resolve.
   "^https?://your-deployment\\.lambda-url",
   "^https?://abc123xyz\\.lambda-url",

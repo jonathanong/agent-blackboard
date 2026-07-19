@@ -1,12 +1,12 @@
 /**
- * Framework-agnostic HTTP core for atel. `handleRequest` is the one
+ * Framework-agnostic HTTP core for agent-blackboard. `handleRequest` is the one
  * entrypoint every adapter (Lambda `streamifyResponse` handler, `node:http`
  * `local-server.mts`) calls — it contains all routing/auth/business logic
  * and has zero knowledge of Lambda or Node's HTTP module.
  *
  * REQUEST — `HandlerRequest` (see `core/types.mts`):
  *   - `method`: already upper-cased, e.g. "GET".
- *   - `path`: URL path only, no query string, e.g. "/telemetry".
+ *   - `path`: URL path only, no query string, e.g. "/sessions/s1/entries".
  *   - `query`: parsed query params, `Record<string, string | undefined>`.
  *     Repeated keys: last value wins (adapter's responsibility).
  *   - `headers`: `Record<string, string>`, keys already lower-cased by the
@@ -26,31 +26,32 @@
  *     produced here yields `string` chunks only.
  *
  * DEPS:
- *   - `store`: a `TelemetryStore` (see `store/store.mts`) — in-memory for
+ *   - `store`: a `BlackboardStore` (see `store/store.mts`) — in-memory for
  *     tests/local dev, DynamoDB-backed in production.
  *   - `now`: `() => Date`. Accepted for contract stability with the rest of
  *     the server (and so adapters have one clock-injection point to reach
  *     for), but NOT currently read by any routing logic here — entry
  *     timestamps are the store's responsibility (it owns its own `now`).
- *   - `env`: `{ ATEL_ADMIN_CREDENTIALS?: string }` — passed through to
+ *   - `env`: `{ AGENT_BLACKBOARD_ADMIN_CREDENTIALS?: string }` — passed through to
  *     `resolveAdminCredential` for `/credentials*` routes.
  *
  * ROUTING: unknown paths -> 404. A method not implemented on a known path
  * is also 404 (not 405) — kept simple and documented per-route. Missing or
  * invalid auth -> 401. A credential of the wrong type for the route (e.g. a
- * telemetry token on `/credentials`) is ALSO 401, not 403 — chosen for
+ * client token on `/credentials`) is ALSO 401, not 403 — chosen for
  * consistency (one auth-failure status across this API) rather than to hide
  * route existence, since route existence isn't secret here.
  */
 import type { AdminEnv } from '../auth/admin.mjs'
-import type { TelemetryStore } from '../store/store.mjs'
+import type { BlackboardStore } from '../store/store.mjs'
 import { notFoundResponse } from './response.mjs'
 import { handleCredentialsRoute } from './routes/credentials.mjs'
-import { handleTelemetryRoute } from './routes/telemetry.mjs'
+import { handleEntriesRoute } from './routes/entries.mjs'
+import { handleSessionsRoute } from './routes/sessions.mjs'
 import type { HandlerRequest, HandlerResponse } from './types.mjs'
 
 export interface HandleRequestDeps {
-  store: TelemetryStore
+  store: BlackboardStore
   now: () => Date
   env: AdminEnv
 }
@@ -65,7 +66,11 @@ export async function handleRequest(
   deps: HandleRequestDeps,
 ): Promise<HandlerResponse> {
   const path = normalizePath(request.path)
-  if (path === '/telemetry') return handleTelemetryRoute(request, deps.store)
   if (path === '/credentials') return handleCredentialsRoute(request, deps.store, deps.env)
+  if (path === '/sessions') return handleSessionsRoute(request, deps.store)
+  const sessionMatch = /^\/sessions\/([^/]+)$/.exec(path)
+  if (sessionMatch) return handleSessionsRoute(request, deps.store, sessionMatch[1]!)
+  const entriesMatch = /^\/sessions\/([^/]+)\/entries$/.exec(path)
+  if (entriesMatch) return handleEntriesRoute(request, deps.store, entriesMatch[1]!)
   return notFoundResponse()
 }

@@ -1,17 +1,17 @@
-# atel
+# agent-blackboard
 
-A telemetry stream for autonomous agents — not a knowledge base. See [README.md](README.md)
+A session-scoped entry stream for autonomous agents — not a knowledge base. See [README.md](README.md)
 for the product description.
 
 ## Workspace
 
 - pnpm workspace, Node 24+, all source is `.mts` ESM.
-- `packages/atel` — **published** as `@jongleberry/atel` (client lib +
+- `packages/agent-blackboard` — **published** as `@jongleberry/agent-blackboard` (client lib +
   CLI + MCP server). Must never depend on `packages/server` or `@aws-sdk/*`
   (enforced by `.dependency-cruiser.cjs`).
 - `packages/server` — **not published**, deployed only. Lambda + DynamoDB, CloudFormation
   in `packages/server/infra/`.
-- `plugins/atel` — Claude Code + Codex plugin (skill + MCP registration).
+- `plugins/agent-blackboard` — Claude Code + Codex plugin (skill + MCP registration).
 
 ## Commands
 
@@ -24,8 +24,8 @@ for the product description.
 lychee`, or a GitHub release binary) to run this locally; CI installs it via `lycheeverse/lychee-action`.
 - `packages/server`: `pnpm run dev` (local server), `pnpm run deploy` (CloudFormation via AWS CLI).
 - Running the CLI locally, before it's ever published: `pnpm run build` then `pnpm exec
-atel <args>` from anywhere in the repo. This works because the root `package.json`
-  lists `@jongleberry/atel` as a `workspace:*` devDependency purely to get pnpm to
+agent-blackboard <args>` from anywhere in the repo. This works because the root `package.json`
+  lists `@jongleberry/agent-blackboard` as a `workspace:*` devDependency purely to get pnpm to
   link its bin into root's `node_modules/.bin` (a workspace package's own `bin` field is never
   self-linked into its own `node_modules/.bin` otherwise — that only happens for actual
   dependencies). Ignored in `knip.jsonc` since it's never imported, only linked for its bin.
@@ -35,10 +35,19 @@ atel <args>` from anywhere in the repo. This works because the root `package.jso
 - Prefer `pnpm` over `npm`.
 - Max 200 lines per non-test source file (`.oxlintrc.json`).
 - Every dependency bump: check latest version (LTS if one exists) before adding.
-- Token formats: telemetry `atl_sk_<credId>_<secret>`; admin `atl_admin_<name>_<secret>` — never
-  confuse the two. Admin credentials live only in the `ATEL_ADMIN_CREDENTIALS` env var, never in
+- Token formats: client `abb_sk_<credId>_<secret>`; admin `abb_admin_<name>_<secret>` — never
+  confuse the two. Admin credentials live only in the `AGENT_BLACKBOARD_ADMIN_CREDENTIALS` env var, never in
   DynamoDB. Credential management (`/credentials*`) is CLI/admin-only, never exposed over MCP.
-- `data` on a telemetry entry is intentionally unstructured JSON — don't impose a schema; let
+- Session ids are always supplied by the caller. Never infer them from host environment variables,
+  state files, or process context, and never generate session or entry ids. The server may generate
+  timestamps only. Session ids use URL-safe letters, numbers, `.`, `_`, `:`, and `-`.
+- Sessions are first-class records. A root session has `parentSessionId: null`; every subagent
+  creates its own session with its direct parent's id. Parent links are immutable, must reference
+  an existing session owned by the same credential, and entries require an existing active session.
+- One DynamoDB table stores multiple item types, never nested entry arrays: session metadata is one
+  item and each entry is its own item. An entry is identified by `(sessionId, createdAt)`; archival
+  belongs to the session metadata item, not individual entries.
+- `data` on an entry is intentionally unstructured JSON — don't impose a schema; let
   agents decide what to attach (branch names, PR numbers, etc.) and filter client-side.
 - Runtime-only modules that can't be exercised by vitest directly (e.g. `handler.mts`'s use of
   the Lambda-only `awslambda.streamifyResponse` global) should stay a thin wrapper over tested
@@ -52,17 +61,17 @@ atel <args>` from anywhere in the repo. This works because the root `package.jso
 - [`docs/smoke-test.md`](docs/smoke-test.md) is a prompt for a real agent (not an automated
   test) that exercises session-lifecycle behavior automated tests can't observe — a real
   `/clear`-equivalent boundary and subagent session attribution. Dispatch it after any change
-  to session resolution, hooks, or the Codex/Claude Code plugin manifests.
+  to session contracts or the Codex/Claude Code plugin manifests.
 
 ## Dogfooding
 
 Agents working on this repo should record real friction, decisions, findings, and changes using
-`atel` itself as they go (`telemetry_append` via MCP, or `atel append` via the
-CLI against a local server — `ATEL_STORE=memory pnpm run dev`, no AWS account needed) —
+`agent-blackboard` itself as they go (`entry_append` via MCP, or `agent-blackboard append` via the
+CLI against a local server — `AGENT_BLACKBOARD_STORE=memory pnpm run dev`, no AWS account needed) —
 not placeholder text, actual findings from the session. Log changes as you make them, not
 just impressions after the fact: a non-trivial edit, a file added or removed, a bug fixed — the
 concrete "what changed" is what a later retrospective/distill pass needs, not a vague summary.
-This is the same practice `plugins/atel/skills/atel/SKILL.md` and
+This is the same practice `plugins/agent-blackboard/skills/agent-blackboard/SKILL.md` and
 [`docs/loop-engineering.md`](docs/loop-engineering.md) describe for downstream users; there's
 no reason this repo shouldn't use its own tool.
 

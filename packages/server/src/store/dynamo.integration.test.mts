@@ -7,15 +7,10 @@ import {
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { createDynamoStore } from './dynamo.mjs'
-import type { TelemetryStore } from './store.mjs'
+import type { BlackboardStore } from './store.mjs'
 
-// Real integration test against DynamoDB Local. Skips cleanly when no local
-// endpoint is configured (see CLAUDE.md / CI: DYNAMODB_ENDPOINT is set by a
-// `dynamodb-local` service container). Run locally with e.g.
-//   docker run -p 8000:8000 amazon/dynamodb-local -jar DynamoDBLocal.jar -inMemory -sharedDb
-//   DYNAMODB_ENDPOINT=http://localhost:8000 pnpm exec vitest run packages/server/src/store/dynamo.integration.test.mts
 const ENDPOINT = process.env.DYNAMODB_ENDPOINT
-const TABLE_NAME = 'AtelIntegrationTest'
+const TABLE_NAME = 'AgentBlackboardIntegrationTest'
 
 async function ensureTable(client: DynamoDBClient): Promise<void> {
   try {
@@ -38,116 +33,70 @@ async function ensureTable(client: DynamoDBClient): Promise<void> {
   }
 }
 
-describe.skipIf(!ENDPOINT)('createDynamoStore (DynamoDB Local integration)', () => {
-  let store: TelemetryStore
+async function collect<T>(items: AsyncIterable<T>): Promise<T[]> {
+  const result: T[] = []
+  for await (const item of items) result.push(item)
+  return result
+}
+
+describe.skipIf(!ENDPOINT)('DynamoDB Local session/entry integration', () => {
+  let store: BlackboardStore
 
   beforeAll(async () => {
-    // Guaranteed set: this whole describe block is skipped otherwise (see
-    // `describe.skipIf`) — the check just satisfies TypeScript's narrowing.
-    if (!ENDPOINT) throw new Error('DYNAMODB_ENDPOINT must be set to run this test')
+    if (!ENDPOINT) throw new Error('DYNAMODB_ENDPOINT must be set')
     const client = new DynamoDBClient({
       endpoint: ENDPOINT,
       region: 'us-east-1',
       credentials: { accessKeyId: 'local', secretAccessKey: 'local' },
     })
     await ensureTable(client)
-    const doc = DynamoDBDocumentClient.from(client, {
-      marshallOptions: { removeUndefinedValues: true },
+    store = createDynamoStore({
+      client: DynamoDBDocumentClient.from(client, {
+        marshallOptions: { removeUndefinedValues: true },
+      }),
+      tableName: TABLE_NAME,
     })
-    store = createDynamoStore({ client: doc, tableName: TABLE_NAME })
   })
 
-  it('round-trips append -> get -> patch (merging into empty data) -> get(archived)', async () => {
-    // A fresh credId per test isolates data within the shared table (the
-    // container is disposable/in-memory in CI, but this also makes the test
-    // safe to re-run against a persistent local instance).
+  it('round-trips root/child sessions and timestamp-keyed entries', async () => {
     const credId = randomUUID()
-    const sessionId = randomUUID()
-
-    const entry = await store.appendEntry({ credId, sessionId, agent: 'claude', data: {} })
-    expect(entry.archived).toBe(false)
-    expect(entry.data).toEqual({})
-
-    const bySession = []
-    for await (const e of store.getEntries(credId, { sessionId })) bySession.push(e)
-    expect(bySession).toEqual([entry])
-
-    const allSessions = []
-    for await (const e of store.getEntries(credId, {})) allSessions.push(e)
-    expect(allSessions).toEqual([entry])
-
-    // Merge into a previously-empty data blob — this specifically exercises
-    // the nested `SET #data.#dk0 = :dv0` UpdateExpression against a real
-    // DynamoDB, which a hand-rolled unit-test mock can't validate.
-    const [patched] = await store.patchEntries(credId, [
-      { id: entry.id, archived: true, data: { pr: 7777 } },
-    ])
-    expect(patched?.archived).toBe(true)
-    expect(patched?.data).toEqual({ pr: 7777 })
-
-    const [mergedAgain] = await store.patchEntries(credId, [{ id: entry.id, data: { note: 'hi' } }])
-    expect(mergedAgain?.data).toEqual({ pr: 7777, note: 'hi' })
-
-    const archived = []
-    for await (const e of store.getEntries(credId, { archived: true })) archived.push(e)
-    expect(archived).toHaveLength(1)
-
-    const active = []
-    for await (const e of store.getEntries(credId, { archived: false })) active.push(e)
-    expect(active).toHaveLength(0)
+    const rootId = randomUUID()
+    const childId = randomUUID()
+    await store.createSession({ credId, id: rootId, parentSessionId: null })
+    const child = await store.createSession({ credId, id: childId, parentSessionId: rootId })
+    expect(child.parentSessionId).toBe(rootId)
+    const first = await store.appendEntry({ credId, sessionId: childId, data: { a: 1 } })
+    const second = await store.appendEntry({ credId, sessionId: childId, data: { b: 2 } })
+    expect(first.createdAt).not.toBe(second.createdAt)
+    expect(await collect(store.getEntries(credId, childId))).toEqual([first, second])
+    const patched = await store.patchEntry(credId, {
+      sessionId: childId,
+      createdAt: first.createdAt,
+      data: { pr: 7 },
+    })
+    expect(patched.data).toEqual({ a: 1, pr: 7 })
+    expect(await collect(store.listSessions(credId))).toHaveLength(2)
   })
 
-  it('appendEntries writes a real batch via an actual DynamoDB transaction', async () => {
+  it('enforces parent existence and session archival', async () => {
     const credId = randomUUID()
-    const sessionId = randomUUID()
-
-    const created = await store.appendEntries([
-      { credId, sessionId, agent: 'claude', data: { i: 0 } },
-      { credId, sessionId, agent: 'claude', data: { i: 1 } },
-      { credId, sessionId, agent: 'claude', data: { i: 2 } },
-    ])
-    expect(created).toHaveLength(3)
-    expect(new Set(created.map((e) => e.id)).size).toBe(3) // all distinct ids
-
-    const found = []
-    for await (const e of store.getEntries(credId, { sessionId })) found.push(e)
-    expect(found).toHaveLength(3)
-    expect((found.map((e) => e.data.i) as number[]).sort((a, b) => a - b)).toEqual([0, 1, 2])
+    await expect(
+      store.createSession({ credId, id: 'child', parentSessionId: 'missing' }),
+    ).rejects.toMatchObject({ code: 'parent_not_found' })
+    await store.createSession({ credId, id: 'root', parentSessionId: null })
+    await store.archiveSession(credId, 'root')
+    await expect(store.appendEntry({ credId, sessionId: 'root', data: {} })).rejects.toMatchObject({
+      code: 'session_archived',
+    })
+    await expect(
+      store.createSession({ credId, id: 'child', parentSessionId: 'root' }),
+    ).rejects.toMatchObject({ code: 'parent_archived' })
   })
 
-  it('returns undefined for patching an id that does not exist (no upsert)', async () => {
-    const credId = randomUUID()
-    const results = await store.patchEntries(credId, [{ id: 'does-not-exist', archived: true }])
-    expect(results).toEqual([])
-    const entries = []
-    for await (const e of store.getEntries(credId, {})) entries.push(e)
-    expect(entries).toEqual([])
-  })
-
-  it('paginates across many entries in one session', async () => {
-    const credId = randomUUID()
-    const sessionId = randomUUID()
-    const count = 25
-    for (let i = 0; i < count; i++) {
-      await store.appendEntry({ credId, sessionId, agent: 'claude', data: { i } })
-    }
-    const entries = []
-    for await (const e of store.getEntries(credId, { sessionId })) entries.push(e)
-    expect(entries).toHaveLength(count)
-  })
-
-  it('round-trips credential creation, lookup, listing, and deletion', async () => {
-    const name = `test-${randomUUID()}`
-    const { record, token } = await store.createCredential(name)
-    expect(token.startsWith('atl_sk_')).toBe(true)
-
-    const fetched = await store.getCredentialById(record.id)
-    expect(fetched).toEqual(record)
-
-    const listed = await store.listCredentials()
-    expect(listed.some((c) => c.id === record.id)).toBe(true)
-
-    expect(await store.deleteCredential({ id: record.id })).toBe(true)
-    expect(await store.getCredentialById(record.id)).toBeUndefined()
+  it('round-trips credential management', async () => {
+    const created = await store.createCredential(`test-${randomUUID()}`)
+    expect(created.token).toMatch(/^abb_sk_/)
+    expect(await store.getCredentialById(created.record.id)).toEqual(created.record)
+    expect(await store.deleteCredential({ id: created.record.id })).toBe(true)
   })
 })

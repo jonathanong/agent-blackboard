@@ -1,82 +1,69 @@
-# atel
+# agent-blackboard
 
-A telemetry stream for autonomous agents — not a knowledge base.
+A session-scoped entry stream for autonomous agents — not a knowledge base.
 
-Agents that work unmonitored (no human watching) need somewhere to jot down what
-happened: friction, decisions, dead ends, useful context. `atel` gives
-them an append-only, per-session telemetry stream they can write to as a stream of
-consciousness, and pull back later — from the same session or a fresh one — to
-distill learnings and self-improve.
-
-This project does **not** decide _what_ an agent should record. That's up to
-you: write a skill for your own workflow (see [`plugins/atel/skills/atel`](plugins/atel/skills/atel/SKILL.md)
-for a minimal starting point, or bring your own). `atel` only handles
-_how_ telemetry entries are stored, retrieved, and archived.
+Agents create explicit sessions, append unstructured JSON entries while they work, and read those
+entries back later. Root sessions have `parentSessionId: null`; every subagent creates a separate
+session whose `parentSessionId` is its direct parent. The service generates timestamps only: callers
+always provide session ids, and an entry is identified by `(sessionId, createdAt)`.
 
 ## Architecture
 
-- **`packages/server`** — a Lambda + DynamoDB service (deployed via CloudFormation,
-  not published to npm). Streams responses over a Lambda Function URL.
-- **`packages/atel`** (published as [`@jongleberry/atel`](https://www.npmjs.com/package/@jongleberry/atel))
-  — the client library, CLI (`atel`), and MCP server, all in one small,
-  dependency-light package.
-- **`plugins/atel`** — a Claude Code + Codex plugin bundling the MCP
-  server and a basic usage skill.
+- `packages/server` — Lambda + DynamoDB service deployed with CloudFormation.
+- `packages/agent-blackboard` — published as `@jongleberry/agent-blackboard`; client library, CLI,
+  and MCP server.
+- `plugins/agent-blackboard` — Claude Code and Codex plugin with MCP registration and usage skill.
+
+DynamoDB uses one table with multiple items: one metadata item per session and one item per entry.
+Entries are never stored in a nested array. Archival is session-level and blocks further reads and
+writes.
 
 ## Quick start
 
 ```sh
-npx @jongleberry/atel credentials create --name "my laptop"
-# -> { "id": "...", "token": "atl_sk_..." }
+export AGENT_BLACKBOARD_URL=https://your-deployment.lambda-url.us-east-1.on.aws
+export AGENT_BLACKBOARD_TOKEN=abb_sk_...
 
-export ATEL_URL=https://your-deployment.lambda-url.us-east-1.on.aws
-export ATEL_TOKEN=atl_sk_...
-
-atel append '{"note": "found a flaky retry in the payments worker"}'
-# --all-sessions: from a plain shell, each invocation is a separate process
-# with no session to inherit, so append and get land in different
-# auto-generated sessions unless you pass --session-id yourself. Inside
-# Claude Code/Codex, session id is resolved automatically instead — see
-# docs/architecture.md#session-lifecycle.
-atel get --all-sessions --format markdown
+agent-blackboard sessions create root-123
+agent-blackboard sessions create worker-456 --parent-session-id root-123
+agent-blackboard append --session-id worker-456 '{"note":"found a flaky retry"}'
+agent-blackboard get --session-id worker-456 --format markdown
 ```
 
-## Deploying the server
+Create client credentials with an admin token:
 
 ```sh
-cd packages/server
-pnpm run deploy
+agent-blackboard credentials create --name "my laptop"
 ```
 
-Deploys a single CloudFormation stack: one Lambda (streaming Function URL),
-one DynamoDB table (TTL-enabled, on-demand billing), and the IAM role between
-them. See [`docs/cloudformation.md`](docs/cloudformation.md) for a full
-first-time walkthrough (prerequisites, generating admin credentials,
-verifying the deploy, tearing down), or
-[`packages/server/README.md`](packages/server/README.md) for package-level
-configuration.
+## Deploy and teardown
 
-## Docs
+```sh
+pnpm --dir packages/server run deploy
+pnpm --dir packages/server run teardown
+```
 
-- [`docs/architecture.md`](docs/architecture.md) — request flow, data model, auth model, session lifecycle
-- [`docs/cloudformation.md`](docs/cloudformation.md) — step-by-step deploy walkthrough
-- [`docs/lambda.md`](docs/lambda.md) — server commands (`dev`/`build`/`deploy`) and what gets deployed
-- [`docs/cli.md`](docs/cli.md) — every CLI command
-- [`docs/mcp.md`](docs/mcp.md) — every MCP tool
-- [`docs/agent-hosts.md`](docs/agent-hosts.md) — how the Claude Code and Codex plugins work, their gotchas, and recommendations
-- [`docs/smoke-test.md`](docs/smoke-test.md) — a prompt for dispatching a real agent to test the plugin end to end
-- [`docs/loop-engineering.md`](docs/loop-engineering.md) — how to build a self-improvement loop on top of this
+See [CloudFormation deployment](docs/cloudformation.md) for prerequisites and configuration.
+
+## Documentation
+
+- [Architecture](docs/architecture.md)
+- [CLI](docs/cli.md)
+- [MCP tools](docs/mcp.md)
+- [Agent hosts](docs/agent-hosts.md)
+- [End-to-end smoke test](docs/smoke-test.md)
+- [Loop engineering](docs/loop-engineering.md)
 
 ## Configuration
 
-| Env var                  | Where          | Meaning                                         |
-| ------------------------ | -------------- | ----------------------------------------------- |
-| `ATEL_TABLE`             | server         | DynamoDB table name                             |
-| `ATEL_TTL_DAYS`          | server         | entry retention, default 90                     |
-| `ATEL_ADMIN_CREDENTIALS` | server         | base64 JSON `[{ "name", "token" }]`, admin-only |
-| `ATEL_URL`               | client/CLI/MCP | server base URL                                 |
-| `ATEL_TOKEN`             | client/CLI/MCP | telemetry credential                            |
-| `ATEL_ADMIN_TOKEN`       | CLI            | admin credential, for `credentials` subcommands |
+| Variable                             | Used by        | Meaning                           |
+| ------------------------------------ | -------------- | --------------------------------- |
+| `AGENT_BLACKBOARD_TABLE`             | server         | DynamoDB table name               |
+| `AGENT_BLACKBOARD_TTL_DAYS`          | server         | Entry retention; default 90 days  |
+| `AGENT_BLACKBOARD_ADMIN_CREDENTIALS` | server         | Base64 JSON admin credential list |
+| `AGENT_BLACKBOARD_URL`               | client/CLI/MCP | Server base URL                   |
+| `AGENT_BLACKBOARD_TOKEN`             | client/CLI/MCP | Client credential                 |
+| `AGENT_BLACKBOARD_ADMIN_TOKEN`       | CLI            | Admin credential                  |
 
 ## License
 

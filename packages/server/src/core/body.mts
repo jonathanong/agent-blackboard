@@ -36,15 +36,3 @@ export async function readJsonBody(body: RequestBody): Promise<JsonBodyResult> {
     return { ok: false }
   }
 }
-
-/**
- * Buffers the body to raw text for callers (POST /telemetry) that need NDJSON
- * fallback parsing — which only makes sense for raw text/stream bodies.
- * Returns `undefined` if the body arrived already parsed (no raw text to
- * fall back to), and `''` for no body at all.
- */
-export async function readRawBodyText(body: RequestBody): Promise<string | undefined> {
-  if (body === undefined) return ''
-  if (!isRawBody(body)) return undefined
-  return bufferBody(body)
-}

@@ -1,303 +1,33 @@
-# Agent smoke test
+# Real-agent smoke test
 
-A prompt to hand a real agent (Claude Code or Codex) so it exercises
-`atel` end to end — not just the happy path, but specifically the
-things automated tests can't observe: whether a real session-boundary event
-(`/clear`, or Codex's equivalent) actually starts a fresh telemetry stream,
-whether a subagent's telemetry entries land in the same session as its parent
-or a different one, and — via the CLI variant below — whether any of that
-changes when the agent shells out to `atel` directly instead of
-going through the MCP server. All three were open questions flagged in
-[`architecture.md#session-lifecycle`](architecture.md#session-lifecycle);
-real runs (see [Prior run log](#prior-run-log)) have since answered the
-session-boundary and MCP subagent questions empirically, but treat each as
-one data point per host/interface, not a universal guarantee — the CLI
-variant in particular has no real run on record yet for either host.
+This is a prompt for a real agent, not an automated test. Run it after session contracts, MCP tools,
+or plugin manifests change. Use a fresh client credential against the deployed service or a local
+server started with `AGENT_BLACKBOARD_STORE=memory pnpm --dir packages/server run dev`.
 
-This covers two genuinely different code paths, not one prompt run twice:
-the **MCP interface** (`telemetry_append`/`telemetry_get`/`telemetry_patch`, via
-whatever MCP server the plugin registered) and the **CLI interface**
-(`atel append|get|patch`, a separate process invoked directly from
-the agent's own shell). They share the same session-resolution logic, but
-the CLI has no persistent server process and reads its env vars from
-whatever shell environment invokes it each time — run both variants, don't
-assume a pass on one implies a pass on the other.
+## Prompt
 
-## Before dispatching
-
-- The agent needs the `atel` plugin installed for its host, and a
-  **fresh client/telemetry credential** (`ATEL_TOKEN`, `atl_sk_...`)
-  set — never the admin token. Create one against a running server (local or
-  deployed) with `atel credentials create --name "smoke-test"`
-  using an **admin** token, then hand only the resulting `atl_sk_...` token
-  and `ATEL_URL` to the agent being tested.
-- **Check for a pre-existing `ATEL_URL`/`ATEL_TOKEN` in the
-  dispatched agent's actual runtime shell profile** (`~/.zshrc`, `~/.bashrc`,
-  etc.) before assuming your own exported test values will reach it. `codex
-exec` in particular spawns its subprocesses via a **login shell**
-  (`zsh -lc`), which re-sources the real shell profile — if a real
-  deployment's credentials already live there (yours might; check first),
-  they silently win over whatever you exported in your own calling shell,
-  and the test talks to production instead of your sandbox. The one
-  mechanism confirmed to sidestep this reliably: set the plugin's MCP
-  server config (`.mcp.json` / the Codex plugin's resolved config) to
-  **literal, hardcoded test values** rather than `${VAR}` templates or
-  relying on ambient inheritance, for the duration of the test only —
-  revert afterward.
-- **Codex specifically**: after installing the plugin, run `/hooks`, review
-  `atel`'s `SessionStart` hook, and trust it. If this step is
-  skipped, the hook never fires — expect phase 3 to fall back to
-  per-process session isolation instead (see [Prior run
-  log](#prior-run-log); this has so far produced the same observable
-  outcome, but for a different reason than the hook actually working).
-  Separately, `.codex-plugin/plugin.json`'s `mcpServers`/`hooks` override
-  keys were not observed to change what `codex mcp get` resolves in the
-  Codex CLI version tested — if your dispatched agent's config doesn't
-  match what you edited, that's a known, unexplained gap, not something
-  you're doing wrong.
-- **Testing the CLI variant specifically**: the CLI reads
-  `ATEL_URL`/`ATEL_TOKEN` from whatever shell environment
-  the `atel` process inherits at invocation time — unlike the MCP
-  server, which gets its env from `.mcp.json` regardless of the dispatched
-  agent's own shell. Have the agent prefix **every single CLI invocation**
-  with explicit inline values
-  (`ATEL_URL=... ATEL_TOKEN=... atel append ...`)
-  rather than exporting them once and trusting they persist — an inline
-  per-command prefix always wins even if a login shell re-sources
-  `~/.zshrc` between commands (see the gotcha above), but a one-time
-  `export` doesn't reliably survive that. Before publishing, use the
-  locally built CLI: `pnpm exec atel <args>` from the repo root
-  (see repo `CLAUDE.md`), or
-  `node packages/atel/dist/cli/index.mjs <args>` directly.
-
-## The prompt (MCP interface)
-
-Copy-paste this to the agent being tested:
-
-> You're smoke-testing an MCP tool called `atel`. Work through
-> these phases in order, and at the end report a structured summary — for
-> every step, state which tool you called, its arguments, and its raw
-> result (especially any `sessionId` values you observe). Don't summarize
-> away the session ids; they're the point of this test.
+> Test agent-blackboard only through its MCP tools. Do not use the CLI or HTTP API.
 >
-> **Phase 0 — sanity check.** Before doing anything else, confirm what
-> server you're actually configured to talk to (e.g. check the env var or
-> config your `atel` MCP server was given, if you can see it) and
-> report it. If it doesn't match the `ATEL_URL` you were told to
-> expect, stop and report the mismatch instead of proceeding — you may be
-> pointed at a real deployment instead of the intended test sandbox.
->
-> **Phase 1 — basic round trip.** Call `telemetry_append` with
-> `{"data": {"marker": "smoke-test-phase-1"}}`. Then call `telemetry_get` with
-> no arguments (session-scoped, no `archived` filter) and confirm the
-> phase-1 entry comes back. Report the `sessionId` on that entry.
->
-> **Phase 2 — patch.** Call `telemetry_patch` to set
-> `{"data": {"pr": 9999}}` merged onto the phase-1 entry (by its `id`), and
-> confirm via another `telemetry_get` that `data.marker` is still
-> `"smoke-test-phase-1"` _and_ `data.pr` is now `9999` on the same entry
-> (a merge, not a replace).
->
-> **Phase 3 — session boundary.** Now reset your session context: if you're
-> Claude Code, run `/clear`. If you're Codex, start a genuinely new
-> thread/session (not a resume of this one) — a fresh `codex exec`
-> invocation is the simplest way to guarantee this. In that new session,
-> call `telemetry_append` with `{"data": {"marker": "smoke-test-phase-3"}}`,
-> then `telemetry_get` with no arguments. Report: does this `telemetry_get` show
-> the phase-1/phase-2 entry, or only phase-3? Report both entries'
-> `sessionId` values. (Expected: only phase-3, with a different `sessionId`
-> than phase 1's.)
->
-> **Phase 4 — subagent attribution.** From your current (phase-3) session,
-> dispatch a subagent — in Claude Code, use the Task/Agent tool; in Codex,
-> use whatever subagent/nested-execution mechanism you have (a nested
-> `codex exec`, a Task tool, etc.). Have the subagent call `telemetry_append`
-> with `{"data": {"marker": "smoke-test-subagent"}}` itself (not you, on its
-> behalf) and report the `sessionId` it got back to you. Then, from the
-> parent, call `telemetry_get` again and report whether the subagent's entry
-> shares the parent's phase-3 `sessionId` or has a different one. (One prior
-> `codex exec` run saw the subagent get its own independent session id —
-> confirm whether that holds here too, don't assume it.)
->
-> **Report.** Summarize: every `sessionId` observed across all five phases,
-> whether phase 3 correctly started a new session, whether the phase-4
-> subagent entry matched or diverged from its parent's session, and
-> anything that errored, required manual approval (e.g. a hook-trust
-> prompt), or otherwise surprised you.
+> 1. Choose a unique root session id. Call `session_create` with that id and
+>    `parentSessionId: null`.
+> 2. Call `entry_append` for the root with `{"marker":"root-before"}`. Save the returned
+>    `createdAt`.
+> 3. Call `entry_get` for the root and verify exactly that entry is visible.
+> 4. Call `entry_patch` with the root id, saved `createdAt`, and `{"patched":true}`. Read again and
+>    verify the original marker remains and `patched` was shallow-merged.
+> 5. Spawn one real subagent. Give it the root id and a unique child id. Tell it to call
+>    `session_create` with its child id and the root as `parentSessionId`, append
+>    `{"marker":"child"}` to its own session, read its own entries, and report both returned
+>    objects verbatim.
+> 6. In the root, call `entry_get` for both ids. Verify the child entry is absent from the root and
+>    present in the child. Call the session-listing client or CLI only if needed to verify the
+>    child's `parentSessionId` equals the root id.
+> 7. Call `session_archive` for the child. Verify `entry_get`, `entry_append`, and `entry_patch` all
+>    reject the archived child. Also verify creating a grandchild under it is rejected.
+> 8. Verify omitted `sessionId`, omitted `parentSessionId`, and appending to a never-created session
+>    are rejected. Confirm no id was silently generated.
+> 9. Report every tool call, returned session/entry shape, status, and invariant failure. Do not
+>    modify repository files.
 
-## The prompt (CLI interface)
-
-Same four phases, but shelling out to `atel` directly instead of
-calling MCP tools — a genuinely different code path (its own env-var
-reading, a fresh process per invocation, no persistent server). Copy-paste
-this to the agent being tested; read [Before dispatching](#before-dispatching)'s
-CLI note first:
-
-> You're smoke-testing the `atel` CLI (not its MCP server — run
-> every command below directly in your shell, prefixing each one with
-> explicit `ATEL_URL=...` and `ATEL_TOKEN=...` values
-> rather than relying on already-exported ones). Work through these phases
-> in order, and at the end report a structured summary — for every step,
-> state the exact command you ran and its raw output, especially any
-> `sessionId` values.
->
-> **Phase 0 — sanity check.** Run `atel get` once before doing
-> anything else and confirm it talks to the server you expect (check the
-> `ATEL_URL` you're passing matches what you were told to expect).
-> If it doesn't, stop and report the mismatch — you may be pointed at a
-> real deployment instead of the intended test sandbox.
->
-> **Phase 1 — basic round trip.** Run
-> `atel append '{"marker": "smoke-test-cli-phase-1"}'`. Then run
-> `atel get` and confirm the phase-1 entry comes back. Report the
-> `sessionId` on that entry.
->
-> **Phase 2 — patch.** Run `atel patch <id> --data '{"pr": 9999}'`
-> for the phase-1 entry's `id`, then `atel get` again and confirm
-> `data.marker` is still `"smoke-test-cli-phase-1"` _and_ `data.pr` is now
-> `9999` on the same entry (a merge, not a replace).
->
-> **Phase 3 — session boundary.** Reset your session context exactly as in
-> the MCP variant's phase 3 (`/clear` for Claude Code; a genuinely new
-> `codex exec` thread for Codex — not a resume). In the new session, run
-> `atel append '{"marker": "smoke-test-cli-phase-3"}'`, then
-> `atel get`. Report: does this show only phase-3, or also
-> phase-1/2? Report both entries' `sessionId` values. (Expected: only
-> phase-3, with a different `sessionId`.)
->
-> **Phase 4 — subagent attribution.** From your current (phase-3) session,
-> dispatch a subagent (Task tool for Claude Code; a nested `codex exec` or
-> equivalent for Codex). Have the subagent run
-> `atel append '{"marker": "smoke-test-cli-subagent"}'` **itself**,
-> via its own shell — not you, on its behalf — and report the `sessionId`
-> it got back. Then, from the parent, run `atel get` again and
-> report whether the subagent's entry shares the parent's phase-3
-> `sessionId` or has a different one. Unlike the MCP variant (where this is
-> known to diverge by host — see [Prior run log](#prior-run-log)), the CLI
-> has no persistent server process for a subagent to reuse or reconnect
-> to — the working hypothesis is that a CLI-based subagent's telemetry
-> **always** shares the parent's session, on both hosts, because session
-> resolution just reads the same `.atel/session.json` file
-> regardless of which process invokes it. Confirm or refute this, don't
-> assume it.
->
-> **Report.** Summarize: every `sessionId` observed across all four phases,
-> whether phase 3 correctly started a new session, whether the phase-4
-> subagent entry matched or diverged from its parent's session, and
-> anything that errored (especially an auth or URL error, which likely
-> means an inline env var prefix didn't actually take effect — see
-> [Interpreting the results](#interpreting-the-results)) or otherwise
-> surprised you.
-
-## Interpreting the results
-
-- **Phase 0 failing (wrong server)** means the dispatch setup is wrong, not
-  the tool — fix the agent's env/config before drawing any conclusion from
-  the rest of the phases.
-- **Phases 1–2 failing** is a real regression — file it against this repo.
-- **Phase 3 showing the old entry** means neither the `SessionStart` hook
-  nor per-process fallback isolation kicked in — session resolution fell
-  through to a stale hook state file or a cached generated id. Check
-  hook-trust status first (Codex), or whether `/clear` genuinely started a
-  new process (Claude Code).
-- **Phase 4's outcome diverging from the one prior data point is itself
-  interesting** — it would mean this host/version/subagent-mechanism
-  combination attributes subagent work differently than the one `codex
-exec` run on record. Either outcome is informative; record whichever you
-  observe (append it to atel yourself, fittingly) rather than assuming the prior
-  result generalizes.
-- **CLI variant failing with an auth or URL error on phase 0/1** almost
-  always means an inline env var prefix didn't actually take effect —
-  before concluding it's a real bug, have the agent print exactly what
-  `ATEL_URL`/`ATEL_TOKEN` resolved to in that specific
-  command's shell invocation (not just what you told it to export).
-- **CLI variant's phase 4 NOT sharing the parent's session would be the
-  surprising outcome** — the opposite framing from the MCP variant. The
-  CLI has no persistent server process, so there's no known mechanism for
-  a subagent's separate `atel` invocation to get a different
-  session than whatever `.atel/session.json` already says. If it
-  does diverge, that's a real, unexplained finding worth digging into
-  (e.g. a subagent running from a different `cwd` that resolves a
-  different project root) rather than assuming the CLI works like MCP.
-
-## Prior run log
-
-**2026-07-15, `codex-cli` on macOS, local in-memory server, plugin installed
-as a local Codex marketplace source.** Phases 1–2 passed for real (append →
-get → patch-merge → get, one consistent `sessionId`). Phase 3 passed, but
-via per-process fallback isolation rather than a confirmed-working hook —
-each fresh `codex exec` is a fresh MCP server process with its own
-generated id, which produces the right observable outcome regardless of
-whether the hook itself fired. Phase 4: the dispatched subagent got its own
-independent session id, different from its parent's.
-
-Also surfaced along the way (not phase failures, but real integration
-gaps): the Codex plugin's `mcpServers`/`hooks` manifest override keys didn't
-appear to change what `codex mcp get` resolved, and `codex exec`'s
-login-shell subprocess spawning re-sourced a real, separately-deployed
-instance's credentials from `~/.zshrc` mid-test (confirmed harmless — the
-client fails closed with a synchronous "Invalid URL" before any network
-call, rather than silently writing anywhere). Full account in
-[`architecture.md#session-lifecycle`](architecture.md#session-lifecycle).
-
-**2026-07-15, `claude` CLI on macOS, local in-memory server, plugin
-installed as a local Claude Code marketplace source.** Phases 1–2 passed
-for real (append → get → patch-merge → get, one consistent `sessionId`
-throughout, dispatched via `claude -p --output-format json
---dangerously-skip-permissions`). Phase 3 passed with a genuinely fresh
-session id and no leakage from the phase-1/2 session — and this time the
-`SessionStart` hook was confirmed to have actually fired, not just
-inferred from a correct outcome: `.atel/session.json` was read
-directly after the dispatch and its content matched the new session id
-exactly. Phase 4 diverged from the Codex data point above: the dispatched
-Task-tool subagent's `telemetry_append` call shared its parent's session id
-rather than getting an independent one — the opposite of `codex exec`'s
-subagent behavior. This is the interesting divergence phase 4's own
-write-up anticipated; see
-[`architecture.md#session-lifecycle`](architecture.md#session-lifecycle)
-for the full account.
-
-Also surfaced along the way: `claude plugin details` reported "MCP
-servers (0)" for the installed plugin even though `claude mcp list` showed
-it connected and the tool calls worked correctly end-to-end — an apparent
-display bug in that one command, not a functional gap.
-
-**2026-07-16, `claude` CLI (Claude Code) on macOS, local in-memory server,
-CLI interface** (`pnpm exec atel`, every invocation inline-prefixed
-with literal `ATEL_URL`/`ATEL_TOKEN`), dispatched as two
-separate `claude -p` calls (phases 0–2, then a fresh call for phases 3–4,
-since `/clear` isn't meaningful within one non-interactive `-p` turn).
-Phase 0: `atel get` returned `[]` against `localhost:4400` as
-expected. Phase 1: `atel append` produced sessionId
-`f8e3d65d-9c55-45a6-b23e-2d51e9cbac97`, confirmed by reading
-`.atel/session.json` directly (matched exactly — the hook fired
-for real, not just fallback isolation). Phase 2: `atel patch`
-merged `{"pr": 9999}` onto the phase-1 entry without disturbing `marker`.
-Phase 3 (fresh `claude -p` call, new sessionId
-`61ac4a60-1d4f-4821-980e-ac56c51ac981`): `atel get` showed only
-the phase-3 entry, no leakage from phase 1 — CLI session isolation matches
-the MCP variant's. Phase 4: a Task-tool subagent ran `atel append`
-itself (own shell, own inline env prefix); its entry's `sessionId` matched
-the parent's exactly, confirming this run's stated hypothesis — CLI-based
-subagent recording shares the parent's session, on this host — and is
-consistent with (not a divergence from) this same host's MCP-variant phase
-4 result recorded above, where the Task-tool subagent likewise shared its
-parent's session. The `codex exec` CLI variant was attempted the same day
-but never completed — see below.
-
-**2026-07-16, `codex-cli` (v0.144.4) on macOS, local in-memory server, CLI
-interface — attempted, blocked, not completed.** Installed cleanly (fresh
-local marketplace, `.mcp.json` pointed at the local built CLI), but the
-very first `codex exec` dispatch hit a real Codex account usage-limit error
-before running any test phase ("You've hit your usage limit... try again at
-Jul 21st, 2026") — an external constraint, not an `atel` bug.
-Phases 0–4 were never executed for this host/interface combination; don't
-treat that as a pass or a fail, it's simply unrun. One genuine finding did
-surface before the limit hit, independent of running any phase: Codex
-logged `failed to read plugin hooks config
-<plugin-root>/hooks.json: No such file or directory` while loading the
-plugin — see gotcha #2 and #5 in
-[`agent-hosts.md`](agent-hosts.md#gotchas) for what this means (the
-`SessionStart` hook's config likely never loads for Codex at all, which
-revises the earlier "just needs `/hooks` trust" diagnosis). Retry once the
-usage limit resets.
+The smoke passes only if root and child sessions remain separate, the child points directly to the
+root, entry identity is `(sessionId, createdAt)`, and archive enforcement is consistent.

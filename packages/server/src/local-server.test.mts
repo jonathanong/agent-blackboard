@@ -1,8 +1,8 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { hashToken } from './auth/hash.mjs'
-import { generateTelemetryToken } from './auth/tokens.mjs'
-import type { CredentialRecord, TelemetryEntry } from './core/types.mjs'
+import { generateClientToken } from './auth/tokens.mjs'
+import type { CredentialRecord, SessionEntry } from './core/types.mjs'
 import {
   adminEnvFromProcess,
   createServer,
@@ -11,8 +11,8 @@ import {
   respond,
   storeFromProcess,
 } from './local-server.mjs'
-import { MemoryTelemetryStore } from './store/memory.mjs'
-import type { TelemetryStore } from './store/store.mjs'
+import { MemoryBlackboardStore } from './store/memory.mjs'
+import type { BlackboardStore } from './store/store.mjs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 function fakeIncomingMessage(overrides: Partial<IncomingMessage> = {}): IncomingMessage {
@@ -60,29 +60,33 @@ function fakeServerResponse(opts: { failWriteHead?: boolean; failWrite?: boolean
   })
 }
 
-function notImplementedStore(overrides: Partial<TelemetryStore> = {}): TelemetryStore {
+function notImplementedStore(overrides: Partial<BlackboardStore> = {}): BlackboardStore {
   const notImplemented = (name: string) => () => {
     throw new Error(`${name} not implemented in this test double`)
   }
   return {
+    createSession: notImplemented('createSession'),
+    getSession: notImplemented('getSession'),
+    listSessions: notImplemented('listSessions'),
+    archiveSession: notImplemented('archiveSession'),
     appendEntry: notImplemented('appendEntry'),
     getEntries: notImplemented('getEntries'),
-    patchEntries: notImplemented('patchEntries'),
+    patchEntry: notImplemented('patchEntry'),
     createCredential: notImplemented('createCredential'),
     listCredentials: notImplemented('listCredentials'),
     getCredentialById: notImplemented('getCredentialById'),
     deleteCredential: notImplemented('deleteCredential'),
     ...overrides,
-  } as TelemetryStore
+  } as BlackboardStore
 }
 
 describe('parseIncomingRequest', () => {
   it('parses method, path, and query params (last value wins on repeats)', () => {
     const request = parseIncomingRequest(
-      fakeIncomingMessage({ url: '/telemetry?a=1&b=2&a=3', method: 'get' }),
+      fakeIncomingMessage({ url: '/sessions/s1/entries?a=1&b=2&a=3', method: 'get' }),
     )
     expect(request.method).toBe('GET')
-    expect(request.path).toBe('/telemetry')
+    expect(request.path).toBe('/sessions/s1/entries')
     expect(request.query).toEqual({ a: '3', b: '2' })
   })
 
@@ -96,7 +100,7 @@ describe('parseIncomingRequest', () => {
   })
 
   it('defaults method to GET when absent and passes the raw message through as body', () => {
-    const req = fakeIncomingMessage({ method: undefined, url: '/telemetry' })
+    const req = fakeIncomingMessage({ method: undefined, url: '/sessions' })
     const request = parseIncomingRequest(req)
     expect(request.method).toBe('GET')
     expect(request.body).toBe(req)
@@ -115,28 +119,28 @@ describe('currentTime', () => {
 })
 
 describe('adminEnvFromProcess / storeFromProcess', () => {
-  const ORIGINAL_ADMIN = process.env.ATEL_ADMIN_CREDENTIALS
-  const ORIGINAL_STORE = process.env.ATEL_STORE
+  const ORIGINAL_ADMIN = process.env.AGENT_BLACKBOARD_ADMIN_CREDENTIALS
+  const ORIGINAL_STORE = process.env.AGENT_BLACKBOARD_STORE
 
   afterEach(() => {
-    if (ORIGINAL_ADMIN === undefined) delete process.env.ATEL_ADMIN_CREDENTIALS
-    else process.env.ATEL_ADMIN_CREDENTIALS = ORIGINAL_ADMIN
-    if (ORIGINAL_STORE === undefined) delete process.env.ATEL_STORE
-    else process.env.ATEL_STORE = ORIGINAL_STORE
+    if (ORIGINAL_ADMIN === undefined) delete process.env.AGENT_BLACKBOARD_ADMIN_CREDENTIALS
+    else process.env.AGENT_BLACKBOARD_ADMIN_CREDENTIALS = ORIGINAL_ADMIN
+    if (ORIGINAL_STORE === undefined) delete process.env.AGENT_BLACKBOARD_STORE
+    else process.env.AGENT_BLACKBOARD_STORE = ORIGINAL_STORE
   })
 
-  it('adminEnvFromProcess reflects ATEL_ADMIN_CREDENTIALS presence', () => {
-    delete process.env.ATEL_ADMIN_CREDENTIALS
+  it('adminEnvFromProcess reflects AGENT_BLACKBOARD_ADMIN_CREDENTIALS presence', () => {
+    delete process.env.AGENT_BLACKBOARD_ADMIN_CREDENTIALS
     expect(adminEnvFromProcess()).toEqual({})
-    process.env.ATEL_ADMIN_CREDENTIALS = 'abc'
-    expect(adminEnvFromProcess()).toEqual({ ATEL_ADMIN_CREDENTIALS: 'abc' })
+    process.env.AGENT_BLACKBOARD_ADMIN_CREDENTIALS = 'abc'
+    expect(adminEnvFromProcess()).toEqual({ AGENT_BLACKBOARD_ADMIN_CREDENTIALS: 'abc' })
   })
 
-  it('storeFromProcess picks the in-memory store only when ATEL_STORE=memory', () => {
-    process.env.ATEL_STORE = 'memory'
-    expect(storeFromProcess()).toBeInstanceOf(MemoryTelemetryStore)
-    process.env.ATEL_STORE = 'dynamo'
-    expect(storeFromProcess()).not.toBeInstanceOf(MemoryTelemetryStore)
+  it('storeFromProcess picks the in-memory store only when AGENT_BLACKBOARD_STORE=memory', () => {
+    process.env.AGENT_BLACKBOARD_STORE = 'memory'
+    expect(storeFromProcess()).toBeInstanceOf(MemoryBlackboardStore)
+    process.env.AGENT_BLACKBOARD_STORE = 'dynamo'
+    expect(storeFromProcess()).not.toBeInstanceOf(MemoryBlackboardStore)
   })
 })
 
@@ -151,7 +155,7 @@ describe('respond (unit, fake req/res)', () => {
     consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const req = fakeIncomingMessage({
       method: 'GET',
-      url: '/telemetry',
+      url: '/sessions',
       headers: { authorization: 'Bearer nope' },
     })
     const res = fakeServerResponse()
@@ -160,8 +164,8 @@ describe('respond (unit, fake req/res)', () => {
         throw new Error('db unavailable')
       },
     })
-    // A syntactically valid telemetry token so auth resolution reaches the store.
-    const { token } = generateTelemetryToken()
+    // A syntactically valid client token so auth resolution reaches the store.
+    const { token } = generateClientToken()
     req.headers.authorization = `Bearer ${token}`
 
     await respond(req, res as unknown as ServerResponse, { store })
@@ -174,10 +178,10 @@ describe('respond (unit, fake req/res)', () => {
 
   it('responds 500 and logs a non-Error throw from handleRequest', async () => {
     consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    const { token } = generateTelemetryToken()
+    const { token } = generateClientToken()
     const req = fakeIncomingMessage({
       method: 'GET',
-      url: '/telemetry',
+      url: '/sessions',
       headers: { authorization: `Bearer ${token}` },
     })
     const res = fakeServerResponse()
@@ -208,7 +212,7 @@ describe('respond (unit, fake req/res)', () => {
 
   it('writes entries as they stream and destroys — not cleanly ends — on a mid-stream failure', async () => {
     consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    const { token, credId } = generateTelemetryToken()
+    const { token, credId } = generateClientToken()
     const record: CredentialRecord = {
       id: credId,
       name: 'test',
@@ -217,23 +221,24 @@ describe('respond (unit, fake req/res)', () => {
     }
     const store = notImplementedStore({
       getCredentialById: async (id) => (id === credId ? record : undefined),
+      getSession: async () => ({
+        id: 's1',
+        parentSessionId: null,
+        createdAt: new Date(0).toISOString(),
+        archivedAt: null,
+      }),
       getEntries: async function* explode() {
         yield {
-          id: 's1#e1',
-          credId,
           sessionId: 's1',
-          agent: 'test',
           createdAt: new Date(0).toISOString(),
-          archived: false,
           data: {},
-          ttl: 0,
         }
         throw new Error('scan broke')
       },
     })
     const req = fakeIncomingMessage({
       method: 'GET',
-      url: '/telemetry',
+      url: '/sessions/s1/entries',
       headers: { authorization: `Bearer ${token}` },
     })
     const res = fakeServerResponse()
@@ -249,7 +254,7 @@ describe('respond (unit, fake req/res)', () => {
 
   it('wraps a non-Error thrown value in a real Error before destroying on a mid-stream failure', async () => {
     consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    const { token, credId } = generateTelemetryToken()
+    const { token, credId } = generateClientToken()
     const record: CredentialRecord = {
       id: credId,
       name: 'test',
@@ -258,20 +263,25 @@ describe('respond (unit, fake req/res)', () => {
     }
     const store = notImplementedStore({
       getCredentialById: async (id) => (id === credId ? record : undefined),
+      getSession: async () => ({
+        id: 's1',
+        parentSessionId: null,
+        createdAt: new Date(0).toISOString(),
+        archivedAt: null,
+      }),
       // Not a generator function (which would need a `yield` to satisfy
       // require-yield) — a plain async-iterable object still satisfies
-      // AsyncIterable<TelemetryEntry> structurally.
+      // AsyncIterable<SessionEntry> structurally.
       getEntries: () => ({
         [Symbol.asyncIterator]: () => ({
           // eslint-disable-next-line no-throw-literal -- exercises the non-Error branch of the destroy() wrap
-          next: (): Promise<IteratorResult<TelemetryEntry>> =>
-            Promise.reject('scan broke (string)'),
+          next: (): Promise<IteratorResult<SessionEntry>> => Promise.reject('scan broke (string)'),
         }),
       }),
     })
     const req = fakeIncomingMessage({
       method: 'GET',
-      url: '/telemetry',
+      url: '/sessions/s1/entries',
       headers: { authorization: `Bearer ${token}` },
     })
     const res = fakeServerResponse()
@@ -297,15 +307,15 @@ describe('respond (unit, fake req/res)', () => {
 })
 
 describe('createServer (end-to-end over a real socket)', () => {
-  const ADMIN_TOKEN = 'atl_admin_x_secret'
+  const ADMIN_TOKEN = 'abb_admin_x_secret'
   const adminEnv = {
-    ATEL_ADMIN_CREDENTIALS: Buffer.from(
+    AGENT_BLACKBOARD_ADMIN_CREDENTIALS: Buffer.from(
       JSON.stringify([{ name: 'admin', token: ADMIN_TOKEN }]),
     ).toString('base64'),
   }
 
   async function withServer<T>(
-    store: TelemetryStore,
+    store: BlackboardStore,
     fn: (baseUrl: string) => Promise<T>,
   ): Promise<T> {
     const server = createServer({ store, env: adminEnv })
@@ -320,23 +330,30 @@ describe('createServer (end-to-end over a real socket)', () => {
     }
   }
 
-  it('round-trips credentials -> append -> get through real HTTP against the in-memory store', async () => {
-    await withServer(new MemoryTelemetryStore(), async (baseUrl) => {
+  it('round-trips credentials -> session -> append -> get through real HTTP', async () => {
+    await withServer(new MemoryBlackboardStore(), async (baseUrl) => {
       const created = (await fetch(`${baseUrl}/credentials`, {
         method: 'POST',
         headers: { authorization: `Bearer ${ADMIN_TOKEN}`, 'content-type': 'application/json' },
         body: JSON.stringify({ name: 'agent-1' }),
       }).then((r) => r.json())) as { token: string }
-      expect(created.token).toMatch(/^atl_sk_/)
+      expect(created.token).toMatch(/^abb_sk_/)
 
-      const appended = await fetch(`${baseUrl}/telemetry`, {
+      const session = await fetch(`${baseUrl}/sessions`, {
         method: 'POST',
         headers: { authorization: `Bearer ${created.token}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ sessionId: 's1', agent: 'claude', data: { note: 'hi' } }),
+        body: JSON.stringify({ id: 's1', parentSessionId: null }),
+      })
+      expect(session.status).toBe(201)
+
+      const appended = await fetch(`${baseUrl}/sessions/s1/entries`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${created.token}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ data: { note: 'hi' } }),
       })
       expect(appended.status).toBe(201)
 
-      const listed = (await fetch(`${baseUrl}/telemetry`, {
+      const listed = (await fetch(`${baseUrl}/sessions/s1/entries`, {
         headers: { authorization: `Bearer ${created.token}` },
       }).then((r) => r.json())) as Array<{ data: unknown }>
       expect(listed).toHaveLength(1)
@@ -344,24 +361,24 @@ describe('createServer (end-to-end over a real socket)', () => {
     })
   })
 
-  it('rejects a telemetry token on /credentials and an admin token on /telemetry (401)', async () => {
-    await withServer(new MemoryTelemetryStore(), async (baseUrl) => {
-      const { token: telemetryToken } = generateTelemetryToken()
-      const credentialsWithTelemetryToken = await fetch(`${baseUrl}/credentials`, {
-        headers: { authorization: `Bearer ${telemetryToken}` },
+  it('rejects a client token on /credentials and an admin token on /sessions (401)', async () => {
+    await withServer(new MemoryBlackboardStore(), async (baseUrl) => {
+      const { token: clientToken } = generateClientToken()
+      const credentialsWithClientToken = await fetch(`${baseUrl}/credentials`, {
+        headers: { authorization: `Bearer ${clientToken}` },
       })
-      expect(credentialsWithTelemetryToken.status).toBe(401)
+      expect(credentialsWithClientToken.status).toBe(401)
 
-      const telemetryWithAdminToken = await fetch(`${baseUrl}/telemetry`, {
+      const sessionsWithAdminToken = await fetch(`${baseUrl}/sessions`, {
         headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
       })
-      expect(telemetryWithAdminToken.status).toBe(401)
+      expect(sessionsWithAdminToken.status).toBe(401)
     })
   })
 
-  it('returns 401 for an unauthenticated /telemetry request and 404 for an unknown path', async () => {
-    await withServer(new MemoryTelemetryStore(), async (baseUrl) => {
-      const unauthorized = await fetch(`${baseUrl}/telemetry`)
+  it('returns 401 for an unauthenticated /sessions request and 404 for an unknown path', async () => {
+    await withServer(new MemoryBlackboardStore(), async (baseUrl) => {
+      const unauthorized = await fetch(`${baseUrl}/sessions`)
       expect(unauthorized.status).toBe(401)
 
       const notFound = await fetch(`${baseUrl}/nope`)

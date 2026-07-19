@@ -1,93 +1,54 @@
 # CLI commands
 
-The `atel` command (published in `@jongleberry/atel`).
-Output is JSON by default; exit code is `0` on success, `1` on any error,
-with a one-line `Error: ...` message on stderr — never a raw stack trace.
+The `agent-blackboard` CLI uses `AGENT_BLACKBOARD_URL` plus either
+`AGENT_BLACKBOARD_TOKEN` for sessions/entries or `AGENT_BLACKBOARD_ADMIN_TOKEN` for credentials.
+Client and admin credentials are never interchangeable.
+
+## Sessions
 
 ```sh
-npx @jongleberry/atel --help
+agent-blackboard sessions create root-123
+agent-blackboard sessions create worker-456 --parent-session-id root-123
+agent-blackboard sessions list
+agent-blackboard sessions get worker-456
+agent-blackboard sessions archive worker-456
 ```
 
-## Configuration
+`sessions create` always sends `parentSessionId`: it is `null` when the flag is omitted. Session ids
+are never inferred or generated.
 
-| Env var                  | Used by                  | Meaning                                            |
-| ------------------------ | ------------------------ | -------------------------------------------------- |
-| `ATEL_URL`               | all commands             | Base URL of the atel server.                       |
-| `ATEL_TOKEN`             | `append`, `get`, `patch` | Telemetry credential (`atl_sk_<credId>_<secret>`). |
-| `ATEL_ADMIN_TOKEN`       | `credentials`            | Admin credential (`atl_admin_<name>_<secret>`).    |
-| `CLAUDE_CODE_SESSION_ID` | session resolution       | Fallback session id (Claude Code).                 |
-| `CODEX_THREAD_ID`        | session resolution       | Fallback session id (Codex).                       |
-
-Telemetry and admin tokens are never interchangeable — see
-[`architecture.md#auth-model`](architecture.md#auth-model).
-
-## `atel append <json>`
-
-Append one entry to the telemetry stream for the current (or given) session.
+## Entries
 
 ```sh
-atel append '{"note": "found a flaky retry in the payments worker"}'
-atel append   # reads JSON from stdin if no argument is given
+agent-blackboard append --session-id worker-456 '{"note":"found the edge case"}'
+agent-blackboard append --session-id worker-456 < entry.json
+agent-blackboard get --session-id worker-456 --format json
+agent-blackboard get --session-id worker-456 --format jsonl
+agent-blackboard get --session-id worker-456 --format markdown
+agent-blackboard patch --session-id worker-456 \
+  --created-at 2026-07-19T20:00:00.000Z --data '{"pr":7777}'
 ```
 
-## `atel get [flags]`
+`append`, `get`, and `patch` require `--session-id`. `patch` identifies one entry with
+`--session-id` plus `--created-at` and shallow-merges the `--data` object. Reads stream bytes to
+stdout without buffering the full response.
 
-Streams entries to stdout as they arrive — never buffers the full response,
-regardless of format.
-
-| Flag                | Values                    | Default                  | Meaning                                                                |
-| ------------------- | ------------------------- | ------------------------ | ---------------------------------------------------------------------- |
-| `--session-id <id>` | string                    | resolved current session | Which session to read.                                                 |
-| `--agent <name>`    | string                    | (none)                   | Filter by agent identifier.                                            |
-| `--archived <bool>` | `true`/`false`            | (none)                   | Filter by archived status.                                             |
-| `--format <fmt>`    | `json`/`jsonl`/`markdown` | `json`                   | Output format.                                                         |
-| `--all-sessions`    | flag                      | off                      | Read across every session for this credential, instead of one session. |
+## Credentials
 
 ```sh
-atel get                              # this session, json
-atel get --format jsonl
-atel get --format markdown
-atel get --all-sessions --agent codex
-atel get --archived false
+agent-blackboard credentials create --name "my laptop"
+agent-blackboard credentials list
+agent-blackboard credentials delete --name "my laptop"
+agent-blackboard credentials delete --id <credential-id>
 ```
 
-## `atel patch <id> [flags]`
+Creating a credential prints its raw token once. Names are not unique; deletion by name removes all
+matches. Credential commands are never exposed over MCP.
 
-Patch one entry, or a batch from a file.
-
-| Flag                | Values         | Meaning                                                                             |
-| ------------------- | -------------- | ----------------------------------------------------------------------------------- |
-| `--archived <bool>` | `true`/`false` | Archive/unarchive the entry.                                                        |
-| `--data <json>`     | JSON object    | Shallow-merged into the entry's existing `data` — not a replace.                    |
-| `--file <path>`     | file path      | Batch mode: a JSON array of `{ id, archived?, data? }`, ignores `<id>`/other flags. |
+## MCP server
 
 ```sh
-atel patch <id> --archived true
-atel patch <id> --data '{"pr": 7777}'
-atel patch --file patches.json
+agent-blackboard mcp
 ```
 
-## `atel credentials <subcommand>`
-
-Admin-only (`ATEL_ADMIN_TOKEN`). Never exposed over MCP.
-
-| Subcommand | Flags                                         | Meaning                                                                                          |
-| ---------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `create`   | `--name <name>` (required)                    | Creates a credential, prints `{ id, name, token, createdAt }` — the raw token is shown **once**. |
-| `list`     | —                                             | Lists `{ id, name, createdAt }[]` — never includes tokens.                                       |
-| `delete`   | `--id <id>` or `--name <name>` (one required) | Deletes the credential(s); by name, deletes **all** matches (names aren't unique).               |
-
-```sh
-atel credentials create --name "my laptop"
-atel credentials list
-atel credentials delete --name "my laptop"
-```
-
-## `atel mcp`
-
-Starts the MCP stdio server. See [`mcp.md`](mcp.md) for the tools it
-exposes.
-
-```sh
-atel mcp
-```
+See [MCP tools](mcp.md).

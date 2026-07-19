@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readJsonBody, readRawBodyText } from './body.mjs'
+import { readJsonBody } from './body.mjs'
 
 async function* asyncChunks(
   chunks: Array<string | Uint8Array>,
@@ -42,19 +42,5 @@ describe('readJsonBody', () => {
 
   it('returns ok:false on invalid JSON text', async () => {
     expect(await readJsonBody('not json')).toEqual({ ok: false })
-  })
-})
-
-describe('readRawBodyText', () => {
-  it('returns empty string for undefined body', async () => {
-    expect(await readRawBodyText(undefined)).toBe('')
-  })
-
-  it('returns the string as-is', async () => {
-    expect(await readRawBodyText('hello')).toBe('hello')
-  })
-
-  it('returns undefined for an already-parsed value', async () => {
-    expect(await readRawBodyText({ a: 1 })).toBeUndefined()
   })
 })

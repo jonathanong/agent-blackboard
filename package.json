@@ -1,16 +1,16 @@
 {
-  "name": "atel",
+  "name": "agent-blackboard",
   "private": true,
-  "description": "Agent Telemetry: a stream for autonomous agents to record findings for later self-review and distillation.",
-  "homepage": "https://github.com/jonathanong/atel#readme",
+  "description": "Agent Blackboard: session-scoped entries for autonomous agents.",
+  "homepage": "https://github.com/jonathanong/agent-blackboard#readme",
   "bugs": {
-    "url": "https://github.com/jonathanong/atel/issues"
+    "url": "https://github.com/jonathanong/agent-blackboard/issues"
   },
   "license": "MIT",
   "author": "",
   "repository": {
     "type": "git",
-    "url": "https://github.com/jonathanong/atel"
+    "url": "https://github.com/jonathanong/agent-blackboard"
   },
   "type": "module",
   "scripts": {
@@ -31,7 +31,7 @@
   },
   "devDependencies": {
     "@ast-grep/cli": "^0.44.1",
-    "@jongleberry/atel": "workspace:*",
+    "@jongleberry/agent-blackboard": "workspace:*",
     "@types/node": "^26.1.1",
     "@vitest/coverage-v8": "^4.1.10",
     "dependency-cruiser": "^18.1.0",

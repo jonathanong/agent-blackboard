@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { MemoryTelemetryStore } from '../store/memory.mjs'
+import { MemoryBlackboardStore } from '../store/memory.mjs'
 import { handleRequest } from './handle-request.mjs'
 import type { HandleRequestDeps } from './handle-request.mjs'
 import type { HandlerRequest } from './types.mjs'
 
 function deps(overrides: Partial<HandleRequestDeps> = {}): HandleRequestDeps {
   return {
-    store: new MemoryTelemetryStore(),
+    store: new MemoryBlackboardStore(),
     now: () => new Date('2024-01-01T00:00:00.000Z'),
     env: {},
     ...overrides,
@@ -29,13 +29,18 @@ describe('handleRequest', () => {
   })
 
   it('normalizes a trailing slash before matching a route', async () => {
-    const response = await handleRequest(request({ path: '/telemetry/' }), deps())
-    // No auth header -> still routed to the telemetry handler (401), not 404.
+    const response = await handleRequest(request({ path: '/sessions/' }), deps())
+    // No auth header -> still routed to the sessions handler (401), not 404.
     expect(response.status).toBe(401)
   })
 
-  it('routes /telemetry to the telemetry handler', async () => {
-    const response = await handleRequest(request({ path: '/telemetry' }), deps())
+  it('routes nested entry paths to the entry handler', async () => {
+    const response = await handleRequest(request({ path: '/sessions/s1/entries' }), deps())
+    expect(response.status).toBe(401)
+  })
+
+  it('routes one-session paths to the session handler', async () => {
+    const response = await handleRequest(request({ path: '/sessions/s1' }), deps())
     expect(response.status).toBe(401)
   })
 

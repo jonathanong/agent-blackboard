@@ -1,17 +1,13 @@
 {
   "$schema": "https://unpkg.com/knip/schema.json",
-  // Invoked externally by the Claude Code hook runtime via hooks.json's
-  // command/args (a JSON convention knip has no plugin for), not imported
-  // by anything in this repo — not real dead code.
-  "ignore": ["plugins/atel/hooks/*.mjs"],
   // Not an npm package — a separately-installed Rust binary (brew/cargo/GitHub release
   // locally, lycheeverse/lychee-action in CI). See CLAUDE.md.
   "ignoreBinaries": ["lychee"],
   // A workspace self-dependency of the root, added only so pnpm links its bin into
-  // root's node_modules/.bin (`pnpm exec atel` locally). Never imported.
-  "ignoreDependencies": ["@jongleberry/atel"],
+  // root's node_modules/.bin (`pnpm exec agent-blackboard` locally). Never imported.
+  "ignoreDependencies": ["@jongleberry/agent-blackboard"],
   "workspaces": {
-    "packages/atel": {
+    "packages/agent-blackboard": {
       "entry": ["src/index.mts!", "src/cli/index.mts!"],
       "project": ["src/**/*.mts!", "!src/**/*.test.mts!"],
     },

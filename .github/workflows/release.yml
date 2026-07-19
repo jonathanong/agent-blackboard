@@ -85,17 +85,17 @@ jobs:
       - name: Bump version, sync plugin manifests, commit, tag
         id: bump
         run: |
-          pnpm --filter @jongleberry/atel version "${{ inputs.bump }}" --no-git-tag-version
-          VERSION=$(node -p "require('./packages/atel/package.json').version")
+          pnpm --filter @jongleberry/agent-blackboard version "${{ inputs.bump }}" --no-git-tag-version
+          VERSION=$(node -p "require('./packages/agent-blackboard/package.json').version")
           node .github/scripts/sync-plugin-version.mjs
-          git add packages/atel/package.json pnpm-lock.yaml .claude-plugin/plugin.json plugins/atel/.codex-plugin/plugin.json
-          git commit -m "chore(release): atel v$VERSION"
+          git add packages/agent-blackboard/package.json pnpm-lock.yaml .claude-plugin/plugin.json plugins/agent-blackboard/.codex-plugin/plugin.json
+          git commit -m "chore(release): agent-blackboard v$VERSION"
           git tag -a "v$VERSION" -m "v$VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - run: git push origin HEAD:main --follow-tags
 
-      - run: pnpm --filter @jongleberry/atel publish --provenance --access public --no-git-checks
+      - run: pnpm --filter @jongleberry/agent-blackboard publish --provenance --access public --no-git-checks
 
       - name: Create GitHub release
         env:
