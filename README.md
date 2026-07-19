@@ -7,6 +7,23 @@ entries back later. Root sessions have `parentSessionId: null`; every subagent c
 session whose `parentSessionId` is its direct parent. The service generates timestamps only: callers
 always provide session ids, and an entry is identified by `(sessionId, createdAt)`.
 
+## Improvement loop
+
+The project applies the [blackboard design pattern](<https://en.wikipedia.org/wiki/Blackboard_(design_pattern)>)
+to agent workflow improvement:
+
+```mermaid
+flowchart LR
+    F["Agent workflow"] --> A["Working agents"]
+    A -->|"write entries"| B[("Agent Blackboard")]
+    B -->|"read session entries"| D["Distiller agent"]
+    D -->|"distill learnings into tickets"| T[("Ticketing system")]
+    T -->|"pick up tickets"| I["Improvement agent"]
+    I -->|"improve the workflow"| F
+
+    click B "https://en.wikipedia.org/wiki/Blackboard_(design_pattern)" "Blackboard design pattern"
+```
+
 ## Architecture
 
 - `packages/server` — Lambda + DynamoDB service deployed with CloudFormation.
