@@ -14,6 +14,10 @@ const QUERY_PAGE_LIMIT = 100
  * than imported from that module to avoid a circular import:
  * `dynamo-entries.mts` already imports `dynamoGetSession` from
  * `dynamo-sessions.mts`, which is this function's only caller.
+ *
+ * Uses `ConsistentRead` — an eventually-consistent query could miss an entry
+ * appended just before archival, and once `archivedAt` flips no further
+ * append can ever surface it, stranding that entry with no `ttl`.
  */
 export async function fanOutEntryTtl(
   doc: DynamoDBDocumentClient,
@@ -34,6 +38,7 @@ export async function fanOutEntryTtl(
         },
         ExclusiveStartKey: exclusiveStartKey,
         Limit: QUERY_PAGE_LIMIT,
+        ConsistentRead: true,
       }),
     )
     for (const item of page.Items ?? []) {
