@@ -8,30 +8,62 @@ import {
   handleSessionSearch,
 } from './tool-sessions.mjs'
 
-it('creates roots/children and archives explicit sessions', async () => {
-  const session = {
-    id: 's',
-    parentSessionId: null,
-    agent: 'test',
-    version: '1',
-    createdAt: 'now',
-    archivedAt: null,
-    data: {},
-  }
-  const child = {
-    ...session,
-    id: 'child',
-    parentSessionId: 's',
-    agent: 'other',
-    data: { branch: 'dev', nested: { ok: true } },
-  }
-  const fixture = await startHttpFixture((req, res) =>
-    sendJson(
-      res,
-      200,
-      req.method === 'GET' ? { sessions: [session, child], nextCursor: null } : session,
-    ),
-  )
+const session: Session = {
+  id: 's',
+  parentSessionId: null,
+  agent: 'test',
+  version: '1',
+  createdAt: 'now',
+  archivedAt: null,
+  data: {},
+}
+
+const child: Session = {
+  ...session,
+  id: 'child',
+  parentSessionId: 's',
+  agent: 'other',
+  data: { branch: 'dev', nested: { ok: true } },
+}
+
+const archivedSession: Session = {
+  ...session,
+  id: 'archived',
+  archivedAt: 'later',
+}
+
+/**
+ * Routes `GET /sessions/<id>` to a direct-get response ("missing" 404s, "error-session" 500s),
+ * `GET /sessions` (list, no id segment) to the list envelope, and any other method (POST/PATCH,
+ * used by create/patch/archive) to a bare `session`.
+ */
+function startSessionsFixture() {
+  return startHttpFixture((req, res) => {
+    const url = new URL(req.url as string, 'http://localhost')
+    if (req.method === 'GET' && url.pathname === '/sessions/child') {
+      return sendJson(res, 200, child)
+    }
+    if (req.method === 'GET' && url.pathname === '/sessions/s') {
+      return sendJson(res, 200, session)
+    }
+    if (req.method === 'GET' && url.pathname === '/sessions/archived') {
+      return sendJson(res, 200, archivedSession)
+    }
+    if (req.method === 'GET' && url.pathname === '/sessions/missing') {
+      return sendJson(res, 404, { error: 'not found' })
+    }
+    if (req.method === 'GET' && url.pathname === '/sessions/error-session') {
+      return sendJson(res, 500, { error: 'boom' })
+    }
+    if (req.method === 'GET' && url.pathname === '/sessions') {
+      return sendJson(res, 200, { sessions: [session, child], nextCursor: null })
+    }
+    return sendJson(res, 200, session)
+  })
+}
+
+it('creates, patches, and archives explicit sessions', async () => {
+  const fixture = await startSessionsFixture()
   try {
     const config = { baseUrl: fixture.baseUrl, token: 't' }
     expect(
@@ -44,7 +76,80 @@ it('creates roots/children and archives explicit sessions', async () => {
       session,
     )
     expect(() => handleSessionPatch({ sessionId: 's', data: {} }, config)).toThrow('non-empty')
-    expect(await handleSessionSearch({}, config)).toEqual({ sessions: [session, child] })
+    expect(await handleSessionArchive({ sessionId: 's' }, config)).toEqual(session)
+    expect(() => handleSessionCreate({ sessionId: 's' }, config)).toThrow()
+  } finally {
+    await fixture.close()
+  }
+})
+
+it('session_search without sessionId forwards filters and pagination straight to the server', async () => {
+  const fixture = await startSessionsFixture()
+  try {
+    const config = { baseUrl: fixture.baseUrl, token: 't' }
+
+    expect(await handleSessionSearch({}, config)).toEqual({
+      sessions: [session, child],
+      nextCursor: null,
+    })
+    expect(fixture.requests.at(-1)?.url).toBe('/sessions?archived=false')
+
+    expect(await handleSessionSearch({ archived: 1 }, config)).toEqual({
+      sessions: [session, child],
+      nextCursor: null,
+    })
+    expect(fixture.requests.at(-1)?.url).toBe('/sessions?archived=true')
+
+    for (const archived of [-1, 2, false, true, '0']) {
+      await expect(handleSessionSearch({ archived }, config)).rejects.toThrow('0 or 1')
+    }
+
+    await handleSessionSearch({ parentSessionId: null }, config)
+    expect(
+      new URL(fixture.requests.at(-1)!.url, 'http://localhost').searchParams.get('parentSessionId'),
+    ).toBe('')
+
+    await handleSessionSearch({ agent: 'other' }, config)
+    expect(
+      new URL(fixture.requests.at(-1)!.url, 'http://localhost').searchParams.get('agent'),
+    ).toBe('other')
+
+    await handleSessionSearch({ version: '1' }, config)
+    expect(
+      new URL(fixture.requests.at(-1)!.url, 'http://localhost').searchParams.get('version'),
+    ).toBe('1')
+
+    await handleSessionSearch({ data: { branch: 'dev' } }, config)
+    expect(new URL(fixture.requests.at(-1)!.url, 'http://localhost').searchParams.get('data')).toBe(
+      JSON.stringify({ branch: 'dev' }),
+    )
+  } finally {
+    await fixture.close()
+  }
+})
+
+it('passes limit and cursor straight through and returns the server page without draining', async () => {
+  const fixture = await startHttpFixture((req, res) =>
+    sendJson(res, 200, { sessions: [session], nextCursor: 'page-2' }),
+  )
+  try {
+    const config = { baseUrl: fixture.baseUrl, token: 't' }
+    const result = await handleSessionSearch({ limit: 5, cursor: 'page-1' }, config)
+    expect(result).toEqual({ sessions: [session], nextCursor: 'page-2' })
+    expect(fixture.requests).toHaveLength(1)
+    const url = new URL(fixture.requests[0]!.url, 'http://localhost')
+    expect(url.searchParams.get('limit')).toBe('5')
+    expect(url.searchParams.get('cursor')).toBe('page-1')
+  } finally {
+    await fixture.close()
+  }
+})
+
+it('session_search with sessionId does a direct get and filters in-process, never listing', async () => {
+  const fixture = await startSessionsFixture()
+  try {
+    const config = { baseUrl: fixture.baseUrl, token: 't' }
+
     expect(
       await handleSessionSearch(
         {
@@ -56,74 +161,56 @@ it('creates roots/children and archives explicit sessions', async () => {
         },
         config,
       ),
-    ).toEqual({ sessions: [child] })
-    expect(await handleSessionSearch({ parentSessionId: null }, config)).toEqual({
-      sessions: [session],
-    })
-    for (const args of [
-      { sessionId: 'missing' },
-      { parentSessionId: 'missing' },
-      { agent: 'missing' },
-      { version: 'missing' },
-      { data: { branch: 'missing' } },
+    ).toEqual({ sessions: [child], nextCursor: null })
+
+    for (const badArgs of [
+      { sessionId: 'child', parentSessionId: 'nope' },
+      { sessionId: 'child', agent: 'nope' },
+      { sessionId: 'child', version: 'nope' },
+      { sessionId: 'child', data: { branch: 'nope' } },
     ]) {
-      expect(await handleSessionSearch(args, config)).toEqual({ sessions: [] })
+      expect(await handleSessionSearch(badArgs, config)).toEqual({
+        sessions: [],
+        nextCursor: null,
+      })
     }
-    expect(await handleSessionSearch({ archived: 0 }, config)).toEqual({
-      sessions: [session, child],
+
+    expect(await handleSessionSearch({ sessionId: 'missing' }, config)).toEqual({
+      sessions: [],
+      nextCursor: null,
     })
-    expect(fixture.requests.at(-1)?.url).toBe('/sessions?archived=false')
-    expect(await handleSessionSearch({ archived: 1 }, config)).toEqual({
-      sessions: [session, child],
+
+    expect(await handleSessionSearch({ sessionId: 'archived', archived: 1 }, config)).toEqual({
+      sessions: [archivedSession],
+      nextCursor: null,
     })
-    expect(fixture.requests.at(-1)?.url).toBe('/sessions?archived=true')
-    for (const archived of [-1, 2, false, true, '0']) {
-      await expect(handleSessionSearch({ archived }, config)).rejects.toThrow('0 or 1')
-    }
-    await expect(handleSessionSearch({ sessionId: 1 }, config)).rejects.toThrow('sessionId')
-    await expect(handleSessionSearch({ parentSessionId: 1 }, config)).rejects.toThrow(
-      'parentSessionId',
-    )
-    await expect(handleSessionSearch({ data: [] }, config)).rejects.toThrow('data')
-    expect(await handleSessionArchive({ sessionId: 's' }, config)).toEqual(session)
-    expect(() => handleSessionCreate({ sessionId: 's' }, config)).toThrow()
+    expect(await handleSessionSearch({ sessionId: 'archived' }, config)).toEqual({
+      sessions: [],
+      nextCursor: null,
+    })
+
+    await expect(handleSessionSearch({ sessionId: 'error-session' }, config)).rejects.toThrow('500')
+
+    expect(fixture.requests.some((request) => request.url === '/sessions')).toBe(false)
+    expect(fixture.requests.some((request) => request.url.startsWith('/sessions?'))).toBe(false)
   } finally {
     await fixture.close()
   }
 })
 
-it('drains every listSessions page before filtering, so a match on page 2 is found', async () => {
-  function session(overrides: Partial<Session>): Session {
-    return {
-      id: 's',
-      parentSessionId: null,
-      agent: 'test',
-      version: '1',
-      createdAt: 'now',
-      archivedAt: null,
-      data: {},
-      ...overrides,
-    }
-  }
-  const first = session({ id: 'first' })
-  const second = session({ id: 'second', agent: 'other' })
-  const fixture = await startHttpFixture((req, res) => {
-    const hasCursor = new URL(req.url, 'http://localhost').searchParams.has('cursor')
-    sendJson(
-      res,
-      200,
-      hasCursor
-        ? { sessions: [second], nextCursor: null }
-        : { sessions: [first], nextCursor: 'page-2' },
-    )
-  })
+it('validates sessionId/parentSessionId/data/limit/cursor input types', async () => {
+  const fixture = await startSessionsFixture()
   try {
     const config = { baseUrl: fixture.baseUrl, token: 't' }
-    expect(await handleSessionSearch({ agent: 'other' }, config)).toEqual({ sessions: [second] })
-    expect(fixture.requests.map((request) => request.url)).toEqual([
-      '/sessions?archived=false',
-      '/sessions?archived=false&cursor=page-2',
-    ])
+    await expect(handleSessionSearch({ sessionId: 1 }, config)).rejects.toThrow('sessionId')
+    await expect(handleSessionSearch({ parentSessionId: 1 }, config)).rejects.toThrow(
+      'parentSessionId',
+    )
+    await expect(handleSessionSearch({ data: [] }, config)).rejects.toThrow('data')
+    for (const limit of [0, -1, '5']) {
+      await expect(handleSessionSearch({ limit }, config)).rejects.toThrow('limit')
+    }
+    await expect(handleSessionSearch({ cursor: 123 }, config)).rejects.toThrow('cursor')
   } finally {
     await fixture.close()
   }

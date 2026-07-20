@@ -35,7 +35,10 @@ it('dispatches every entry/session tool and rejects unknown names', async () => 
     await expect(
       dispatchTool('session_patch', { sessionId: 's', data: { branch: 'main' } }, config),
     ).resolves.toEqual(session)
-    await expect(dispatchTool('session_search', {}, config)).resolves.toEqual({ sessions: [entry] })
+    await expect(dispatchTool('session_search', {}, config)).resolves.toEqual({
+      sessions: [entry],
+      nextCursor: null,
+    })
     await expect(
       dispatchTool('entry_append', { sessionId: 's', data: {} }, config),
     ).resolves.toEqual(entry)

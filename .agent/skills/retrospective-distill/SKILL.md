@@ -20,9 +20,11 @@ If the scope or mutation authority is missing, perform read-only analysis and pr
 ## Exact procedure
 
 1. Call `session_search({ "archived": 0 })`. Apply exact `agent`, `version`,
-   `parentSessionId`, or `data` filters when the approved scope requires them. Use the returned
-   `sessions` array as the active-session worklist. If MCP is unavailable, use
-   `agent-blackboard sessions list` as the fallback.
+   `parentSessionId`, or `data` filters when the approved scope requires them. `session_search`
+   returns one page at a time as `{ sessions, nextCursor }`; keep calling it with `cursor` set to
+   the previous `nextCursor` until `nextCursor` is `null`, and concatenate every page's `sessions`
+   into the active-session worklist. If MCP is unavailable, use `agent-blackboard sessions list`
+   as the fallback (the CLI already drains every page for you).
 2. For every returned session, call `entry_get({ "sessionId": "<id>" })`. Do not skip sessions
    with no retrospective entry; ongoing blackboard evidence is also input. Keep each entry's `sessionId`,
    `createdAt`, `type`, `summary`, `evidence`, and `impact`. Set a missing optional field to `null`;
@@ -77,7 +79,9 @@ create authorized actions, and archive eligible sessions. Never delegate those m
 
 ```text
 1. session_search({"archived":0})
-   -> {"sessions":[{"id":"root-2"},{"id":"child-7"}]}
+   -> {"sessions":[{"id":"root-2"},{"id":"child-7"}], "nextCursor":null}
+   # if nextCursor were non-null, repeat with cursor set to it and concatenate
+   # sessions across pages until nextCursor is null (see step 1 above)
 2. entry_get({"sessionId":"root-2"})
 3. entry_get({"sessionId":"child-7"})
 4. Normalize the returned entries, cluster evidence, check duplicates, and propose actions.

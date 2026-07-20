@@ -25,7 +25,10 @@ export const ENTRY_TOOLS: Tool[] = [
   },
   {
     name: 'session_search',
-    description: 'Searches active or archived sessions using exact metadata and data filters.',
+    description:
+      'Searches active or archived sessions using exact metadata and data filters. Returns ' +
+      'one page at a time via limit/cursor; page until nextCursor is null for the complete ' +
+      'result set.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -44,6 +47,18 @@ export const ENTRY_TOOLS: Tool[] = [
         data: {
           type: 'object',
           description: 'Top-level data fields whose JSON values must match exactly.',
+        },
+        limit: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 200,
+          description:
+            'Max sessions per page (server default 50, hard max 200 — see MAX_SESSIONS_LIMIT in packages/server/src/store/store.mts).',
+        },
+        cursor: {
+          type: 'string',
+          description:
+            "Opaque cursor from a previous call's nextCursor. Omit to fetch the first page.",
         },
       },
     },

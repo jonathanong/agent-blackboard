@@ -1,66 +1,94 @@
 import { isDeepStrictEqual } from 'node:util'
+import { AgentBlackboardError } from '../client/errors.mjs'
 import { Sessions } from '../client/sessions.mjs'
-import { expectObject, nullableString, requiredString } from './validate.mjs'
-import type { ClientConfig, Session } from '../client/types.mjs'
+import { expectObject, nullableString, optionalPositiveInt, requiredString } from './validate.mjs'
+import type { ClientConfig, ListSessionsQuery, Session } from '../client/types.mjs'
 
-async function listAllSessions(sessions: Sessions, archived: boolean): Promise<Session[]> {
-  // `handleSessionSearch`'s contract is "every match", not a page: drain every
-  // `nextCursor` here before filtering client-side, mirroring the CLI's
-  // `sessions list` drain loop. WS1 only wires `archived` through to the
-  // server; WS3 will push the rest of `SessionSearchFilters` down too.
-  const all: Session[] = []
-  let cursor: string | undefined
-  do {
-    const page = await sessions.list(cursor === undefined ? { archived } : { archived, cursor })
-    all.push(...page.sessions)
-    cursor = page.nextCursor ?? undefined
-  } while (cursor !== undefined)
-  return all
+/** Parsed, validated `session_search` args, shared by the direct-get and list paths. */
+interface SessionSearchArgs {
+  archived: boolean
+  limit: number | undefined
+  cursor: string | undefined
+  hasParent: boolean
+  parentSessionId: string | null | undefined
+  agent: string | undefined
+  version: string | undefined
+  data: Record<string, unknown> | undefined
 }
 
-interface SessionSearchFilters {
-  sessionId?: string
-  parentSessionId?: { value: string | null }
-  agent?: string
-  version?: string
-  data?: Record<string, unknown>
+function parseSessionSearchArgs(args: Record<string, unknown>): SessionSearchArgs {
+  if (args.archived !== undefined && args.archived !== 0 && args.archived !== 1) {
+    throw new Error('"archived" must be 0 or 1.')
+  }
+  const hasParent = Object.hasOwn(args, 'parentSessionId')
+  return {
+    archived: args.archived === 1,
+    limit: optionalPositiveInt(args.limit, 'limit'),
+    cursor: args.cursor === undefined ? undefined : requiredString(args.cursor, 'cursor'),
+    hasParent,
+    parentSessionId: hasParent
+      ? nullableString(args.parentSessionId, 'parentSessionId')
+      : undefined,
+    agent: args.agent === undefined ? undefined : requiredString(args.agent, 'agent'),
+    version: args.version === undefined ? undefined : requiredString(args.version, 'version'),
+    data: args.data === undefined ? undefined : expectObject(args.data, 'data'),
+  }
 }
 
-function matchesSession(session: Session, filters: SessionSearchFilters): boolean {
-  if (filters.sessionId !== undefined && session.id !== filters.sessionId) return false
-  if (filters.parentSessionId && session.parentSessionId !== filters.parentSessionId.value)
-    return false
-  if (filters.agent !== undefined && session.agent !== filters.agent) return false
-  if (filters.version !== undefined && session.version !== filters.version) return false
-  if (filters.data) {
-    for (const [key, value] of Object.entries(filters.data)) {
+/** Whether a single directly-fetched session satisfies every supplied `session_search` filter. */
+function matchesDirectSession(session: Session, parsed: SessionSearchArgs): boolean {
+  if ((session.archivedAt !== null) !== parsed.archived) return false
+  if (parsed.hasParent && session.parentSessionId !== parsed.parentSessionId) return false
+  if (parsed.agent !== undefined && session.agent !== parsed.agent) return false
+  if (parsed.version !== undefined && session.version !== parsed.version) return false
+  if (parsed.data !== undefined) {
+    for (const [key, value] of Object.entries(parsed.data)) {
       if (!isDeepStrictEqual(session.data[key], value)) return false
     }
   }
   return true
 }
 
+/**
+ * `sessionId` is not a server-side `ListSessionsQuery` filter (on DynamoDB that would be a PK
+ * lookup disguised as a scan filter), so a `sessionId`-scoped search is a direct `Sessions.get()`
+ * instead of a list call, with the remaining filters applied in-process to that one session.
+ */
+async function searchBySessionId(
+  sessionId: string,
+  config: ClientConfig,
+  parsed: SessionSearchArgs,
+): Promise<{ sessions: Session[]; nextCursor: string | null }> {
+  let session: Session | null
+  try {
+    session = await new Sessions(config).get(sessionId)
+  } catch (error) {
+    if (error instanceof AgentBlackboardError && error.status === 404) session = null
+    else throw error
+  }
+  const matches = session !== null && matchesDirectSession(session, parsed)
+  return { sessions: matches ? [session as Session] : [], nextCursor: null }
+}
+
 export async function handleSessionSearch(
   args: Record<string, unknown>,
   config: ClientConfig,
-): Promise<{ sessions: Session[] }> {
-  if (args.archived !== undefined && args.archived !== 0 && args.archived !== 1) {
-    throw new Error('"archived" must be 0 or 1.')
+): Promise<{ sessions: Session[]; nextCursor: string | null }> {
+  const parsed = parseSessionSearchArgs(args)
+
+  if (args.sessionId !== undefined) {
+    const sessionId = requiredString(args.sessionId, 'sessionId')
+    return searchBySessionId(sessionId, config, parsed)
   }
-  const hasParent = Object.hasOwn(args, 'parentSessionId')
-  const filters: SessionSearchFilters = {
-    ...(args.sessionId === undefined
-      ? {}
-      : { sessionId: requiredString(args.sessionId, 'sessionId') }),
-    ...(hasParent
-      ? { parentSessionId: { value: nullableString(args.parentSessionId, 'parentSessionId') } }
-      : {}),
-    ...(args.agent === undefined ? {} : { agent: requiredString(args.agent, 'agent') }),
-    ...(args.version === undefined ? {} : { version: requiredString(args.version, 'version') }),
-    ...(args.data === undefined ? {} : { data: expectObject(args.data, 'data') }),
-  }
-  const sessions = await listAllSessions(new Sessions(config), args.archived === 1)
-  return { sessions: sessions.filter((session) => matchesSession(session, filters)) }
+
+  const query: ListSessionsQuery = { archived: parsed.archived }
+  if (parsed.hasParent) query.parentSessionId = parsed.parentSessionId ?? null
+  if (parsed.agent !== undefined) query.agent = parsed.agent
+  if (parsed.version !== undefined) query.version = parsed.version
+  if (parsed.data !== undefined) query.data = parsed.data
+  if (parsed.limit !== undefined) query.limit = parsed.limit
+  if (parsed.cursor !== undefined) query.cursor = parsed.cursor
+  return new Sessions(config).list(query)
 }
 
 export function handleSessionCreate(
