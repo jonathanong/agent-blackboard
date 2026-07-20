@@ -33,7 +33,7 @@ export function buildSessionFilter(query: ListSessionsQuery): SessionFilter {
     values[':parentSessionId'] = query.parentSessionId
     expressions.push('#parentSessionId = :parentSessionId')
   }
-  if (query.data) {
+  if (query.data && Object.keys(query.data).length > 0) {
     names['#data'] = 'data'
     for (const [index, [key, value]] of Object.entries(query.data).entries()) {
       const nameToken = `#dataKey${index}`

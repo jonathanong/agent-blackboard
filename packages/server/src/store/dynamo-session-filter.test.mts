@@ -70,6 +70,14 @@ describe('buildSessionFilter', () => {
     })
   })
 
+  it('treats an empty data object as no filter, contributing no #data alias', () => {
+    expect(buildSessionFilter({ archived: true, data: {} })).toEqual({
+      FilterExpression: 'attribute_exists(#archivedAt)',
+      ExpressionAttributeNames: { '#archivedAt': 'archivedAt' },
+      ExpressionAttributeValues: {},
+    })
+  })
+
   it('combines every filter kind, joined with AND, in declared order', () => {
     expect(
       buildSessionFilter({
