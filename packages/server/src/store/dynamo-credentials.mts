@@ -5,6 +5,11 @@ import { generateClientToken } from '../auth/tokens.mjs'
 import type { CredentialRecord } from '../core/types.mjs'
 import type { CredentialIdOrName } from './store.mjs'
 
+// Deliberately one global partition, not sharded by prefix/hash: credentials are an
+// admin-only, low-cardinality resource (a few dozen items, created/deleted rarely by
+// operators, never in a per-request hot path), so this isn't a hot-partition risk.
+// Hardening is encryption at rest (`SSESpecification` on the table, see
+// infra/template.yaml) rather than re-sharding this partition.
 const CREDENTIAL_PK = 'CRED'
 
 function itemToCredential(item: Record<string, unknown>): CredentialRecord {
