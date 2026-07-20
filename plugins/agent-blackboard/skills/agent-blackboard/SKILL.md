@@ -28,6 +28,7 @@ If the `agent-blackboard` MCP server is connected, use its tools directly:
 
 - `session_create` — create a root or subagent session with explicit `sessionId` and
   `parentSessionId` (use `null` for a root), plus `agent` and `version`.
+- `session_search` — find active or archived sessions with exact metadata and data filters.
 - `session_patch` — shallow-merge `data` into an active session.
 - `session_archive` — set `archivedAt`; archived data remains readable but immutable.
 - `entry_append` — append `data` to an existing active session.

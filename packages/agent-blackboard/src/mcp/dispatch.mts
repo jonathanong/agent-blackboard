@@ -1,7 +1,12 @@
 import { handleEntryAppend } from './tool-append.mjs'
 import { handleEntryGet } from './tool-get.mjs'
 import { handleEntryPatch } from './tool-patch.mjs'
-import { handleSessionArchive, handleSessionCreate, handleSessionPatch } from './tool-sessions.mjs'
+import {
+  handleSessionArchive,
+  handleSessionCreate,
+  handleSessionPatch,
+  handleSessionSearch,
+} from './tool-sessions.mjs'
 import type { ClientConfig } from '../client/types.mjs'
 
 export function dispatchTool(
@@ -14,6 +19,8 @@ export function dispatchTool(
       return handleSessionCreate(args, config)
     case 'session_archive':
       return handleSessionArchive(args, config)
+    case 'session_search':
+      return handleSessionSearch(args, config)
     case 'session_patch':
       return handleSessionPatch(args, config)
     case 'entry_append':

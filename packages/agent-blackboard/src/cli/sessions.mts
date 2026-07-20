@@ -12,7 +12,11 @@ export async function runSessions(argv: string[], ctx: CliContext): Promise<void
   if (subcommand === 'create') {
     const id = positional[0]
     if (!id) throw new CliError('sessions create requires <session-id>.')
-    const parentSessionId = stringFlag(flags, 'parent-session-id') ?? null
+    const parentFlag = stringFlag(flags, 'parent-session-id')
+    if (Object.hasOwn(flags, 'parent-session-id') && !parentFlag) {
+      throw new CliError('sessions create --parent-session-id requires <session-id>.')
+    }
+    const parentSessionId = parentFlag ?? null
     const agent = stringFlag(flags, 'agent')
     const version = stringFlag(flags, 'version')
     if (!agent) throw new CliError('sessions create requires --agent <name>.')

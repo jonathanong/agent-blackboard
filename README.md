@@ -67,6 +67,7 @@ See [CloudFormation deployment](docs/cloudformation.md) for prerequisites and co
 ## Documentation
 
 - [Architecture](docs/architecture.md)
+- [TypeScript API](docs/typescript-api.md)
 - [CLI](docs/cli.md)
 - [MCP tools](docs/mcp.md)
 - [Agent hosts](docs/agent-hosts.md)

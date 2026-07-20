@@ -16,19 +16,24 @@ function text(content: unknown): string {
   return (content as Array<{ text: string }>)[0]!.text
 }
 
-it('lists six tools and returns JSON text or MCP errors', async () => {
+it('lists seven tools and returns JSON text or MCP errors', async () => {
   const entry = { sessionId: 's', createdAt: 'now', data: {} }
   const fixture = await startHttpFixture((_req, res) => sendJson(res, 201, entry))
   try {
     const client = await connectedClient({ baseUrl: fixture.baseUrl, token: 't' })
-    expect((await client.listTools()).tools.map((tool) => tool.name).sort()).toEqual([
+    const tools = (await client.listTools()).tools
+    expect(tools.map((tool) => tool.name).sort()).toEqual([
       'entry_append',
       'entry_get',
       'entry_patch',
       'session_archive',
       'session_create',
       'session_patch',
+      'session_search',
     ])
+    expect(tools.find((tool) => tool.name === 'session_search')?.inputSchema).toMatchObject({
+      properties: { archived: { type: 'integer', enum: [0, 1] } },
+    })
     const result = await client.callTool({
       name: 'entry_append',
       arguments: { sessionId: 's', data: {} },

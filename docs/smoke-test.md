@@ -22,11 +22,14 @@ local server started with `AGENT_BLACKBOARD_STORE=memory pnpm --dir packages/ser
 >    `session_create` with its actual agent and version and the root as `parentSessionId`; append
 >    `{"marker":"child"}`; read its entries; and report the returned objects verbatim.
 > 6. In the root, use MCP to read both sessions' entries. Verify child entries are isolated from the
->    root. Use CLI `sessions get <child>` to verify its parent, agent, and version.
+>    root. Call `session_search` with `archived: 0` and exact root/child metadata filters;
+>    verify it returns the expected complete sessions. Use CLI `sessions get <child>` to verify its
+>    parent, agent, and version.
 > 7. Archive the child through MCP. Verify its session and entries remain readable through both MCP
 >    and CLI, while entry append/patch, session data patch, and creating a grandchild all fail.
 > 8. Verify CLI `sessions list` excludes the child by default and `sessions list --archived true`
->    includes it with a non-null `archivedAt`.
+>    includes it with a non-null `archivedAt`. Verify MCP `session_search` behaves the same way:
+>    `archived: 0` excludes the child and `archived: 1` finds it.
 > 9. Across CLI and MCP, verify omitted session id, parent id, agent, or version is rejected. Verify
 >    appending to a never-created session is rejected and no id was silently generated.
 > 10. Report every command/tool call, returned session/entry shape, and invariant failure. Do not

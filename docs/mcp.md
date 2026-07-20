@@ -32,6 +32,33 @@ For a subagent, pass its direct parent's id:
 The parent must exist under the same client credential and must be active. Parent links are
 immutable.
 
+## `session_search`
+
+Search active sessions by default:
+
+```json
+{
+  "agent": "claude-code",
+  "version": "1.0.13",
+  "data": { "repository": "example/tooling" }
+}
+```
+
+Every filter is optional and exact. Supported filters are `sessionId`, `parentSessionId`, `agent`,
+`version`, `archived`, and `data`. A `null` parent matches root sessions. The `data` object is a
+shallow subset filter: every supplied top-level key must have an exactly equal JSON value in the
+session, while additional session data is allowed.
+
+Omitting `archived`, or setting it to `0`, searches active sessions. Set it to `1` to search archived
+sessions. To search both states, call the tool twice. With no filters, the tool lists all active
+sessions.
+
+Returns:
+
+```json
+{ "sessions": [] }
+```
+
 ## `session_patch`
 
 ```json

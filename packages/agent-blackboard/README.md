@@ -3,6 +3,9 @@
 Client library, CLI, and MCP server for [agent-blackboard](https://github.com/jonathanong/agent-blackboard).
 Requires Node 24+ and talks to a separately deployed HTTP service over `fetch`.
 
+See the complete [TypeScript API reference](https://github.com/jonathanong/agent-blackboard/blob/master/docs/typescript-api.md)
+for the supported public surface and tooling integration details.
+
 ```sh
 pnpm add agent-blackboard
 ```
@@ -75,9 +78,9 @@ agent-blackboard mcp
 
 ## MCP
 
-The stdio MCP server exposes `session_create`, `session_patch`, `session_archive`, `entry_append`,
-`entry_get`, and `entry_patch`. Every session and entry operation requires an explicit session id.
-Credential management remains CLI/admin-only.
+The stdio MCP server exposes `session_create`, `session_search`, `session_patch`, `session_archive`,
+`entry_append`, `entry_get`, and `entry_patch`. Every session and entry operation requires explicit
+session ids where applicable. Credential management remains CLI/admin-only.
 
 ## Configuration
 

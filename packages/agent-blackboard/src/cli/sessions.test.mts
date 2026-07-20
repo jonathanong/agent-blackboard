@@ -44,6 +44,15 @@ it('runs every session command and validates subcommands', async () => {
     await expect(runSessions(['create'], ctx)).rejects.toThrow()
     await expect(runSessions(['create', 's'], ctx)).rejects.toThrow('--agent')
     await expect(runSessions(['create', 's', '--agent', 'test'], ctx)).rejects.toThrow('--version')
+    await expect(
+      runSessions(['create', 's', '--agent', 'test', '--version', '1', '--parent-session-id'], ctx),
+    ).rejects.toThrow('--parent-session-id')
+    await expect(
+      runSessions(
+        ['create', 's', '--parent-session-id=', '--agent', 'test', '--version', '1'],
+        ctx,
+      ),
+    ).rejects.toThrow('--parent-session-id')
     await expect(runSessions(['list', '--archived', 'all'], ctx)).rejects.toThrow('true or false')
     await expect(runSessions(['patch', 's'], ctx)).rejects.toThrow('--data')
     for (const data of ['bad', '[]', '{}']) {

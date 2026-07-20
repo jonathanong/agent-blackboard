@@ -19,9 +19,12 @@ If the scope or mutation authority is missing, perform read-only analysis and pr
 
 ## Exact procedure
 
-1. Resolve sessions. Use `agent-blackboard sessions list` for active sessions and
-   `agent-blackboard sessions list --archived true` when archived evidence is in scope.
-2. Read every selected session explicitly with `entry_get`. Keep each entry's `sessionId`,
+1. Call `session_search({ "archived": 0 })`. Apply exact `agent`, `version`,
+   `parentSessionId`, or `data` filters when the approved scope requires them. Use the returned
+   `sessions` array as the active-session worklist. If MCP is unavailable, use
+   `agent-blackboard sessions list` as the fallback.
+2. For every returned session, call `entry_get({ "sessionId": "<id>" })`. Do not skip sessions
+   with no retrospective entry; ongoing blackboard evidence is also input. Keep each entry's `sessionId`,
    `createdAt`, `type`, `summary`, `evidence`, and `impact`. Set a missing optional field to `null`;
    never invent it. Do not mutate anything yet.
 3. Group entries across agents and subagents by shared root cause or opportunity. Promote a group
@@ -69,3 +72,14 @@ Do not append, patch, archive, create tickets, or edit repository files.
 
 The coordinating agent must merge evidence, deduplicate candidates, check existing destinations,
 create authorized actions, and archive eligible sessions. Never delegate those mutations.
+
+## Example
+
+```text
+1. session_search({"archived":0})
+   -> {"sessions":[{"id":"root-2"},{"id":"child-7"}]}
+2. entry_get({"sessionId":"root-2"})
+3. entry_get({"sessionId":"child-7"})
+4. Normalize the returned entries, cluster evidence, check duplicates, and propose actions.
+5. Create actions and archive eligible sessions only when explicitly authorized.
+```
