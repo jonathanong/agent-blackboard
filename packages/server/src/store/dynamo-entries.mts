@@ -83,7 +83,10 @@ export async function dynamoAppendEntry(
       await requireActiveSession(doc, tableName, input.credId, input.sessionId)
     }
   }
-  throw new Error(`could not allocate a unique timestamp for session ${input.sessionId}`)
+  throw new SessionStoreError(
+    'timestamp_exhausted',
+    `could not allocate a unique timestamp for session ${input.sessionId}`,
+  )
 }
 
 export async function* dynamoGetEntries(

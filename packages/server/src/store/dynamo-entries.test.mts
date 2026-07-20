@@ -101,7 +101,10 @@ describe('DynamoDB entries', () => {
     })
     await expect(
       dynamoAppendEntry(exhausted, 'T', () => NOW, { credId: 'c', sessionId: 's', data: {} }),
-    ).rejects.toThrow('unique timestamp')
+    ).rejects.toMatchObject({
+      code: 'timestamp_exhausted',
+      message: expect.stringContaining('unique timestamp'),
+    })
   })
 
   it('requires an existing session, allows archived reads, and paginates', async () => {

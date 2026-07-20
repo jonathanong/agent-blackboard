@@ -81,6 +81,14 @@ describe('sessions route', () => {
     expect(
       (
         await handleSessionsRoute(
+          request({ method: 'POST', body: 'a'.repeat(380 * 1024 + 1) }),
+          store,
+        )
+      ).status,
+    ).toBe(413)
+    expect(
+      (
+        await handleSessionsRoute(
           request({ method: 'POST', body: { id: 's', parentSessionId: 1, ...AGENT } }),
           store,
         )
@@ -117,6 +125,18 @@ describe('sessions route', () => {
     })
     expect(
       (await handleSessionsRoute(request({ method: 'PATCH', body: 'bad' }), store, 's')).status,
+    ).toBe(400)
+    expect(
+      (
+        await handleSessionsRoute(
+          request({ method: 'PATCH', body: 'a'.repeat(380 * 1024 + 1) }),
+          store,
+          's',
+        )
+      ).status,
+    ).toBe(413)
+    expect(
+      (await handleSessionsRoute(request({ method: 'PATCH', body: [1, 2] }), store, 's')).status,
     ).toBe(400)
     expect(
       (await handleSessionsRoute(request({ method: 'PATCH', body: { data: {} } }), store, 's'))

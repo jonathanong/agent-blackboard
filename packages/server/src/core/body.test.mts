@@ -40,7 +40,27 @@ describe('readJsonBody', () => {
     expect(await readJsonBody(value)).toEqual({ ok: true, value })
   })
 
-  it('returns ok:false on invalid JSON text', async () => {
-    expect(await readJsonBody('not json')).toEqual({ ok: false })
+  it('returns ok:false, tooLarge:false on invalid JSON text', async () => {
+    expect(await readJsonBody('not json')).toEqual({ ok: false, tooLarge: false })
+  })
+
+  it('rejects a string body over the size cap', async () => {
+    const huge = 'a'.repeat(380 * 1024 + 1)
+    expect(await readJsonBody(huge)).toEqual({ ok: false, tooLarge: true })
+  })
+
+  it('rejects a Uint8Array body over the size cap', async () => {
+    const huge = new Uint8Array(380 * 1024 + 1)
+    expect(await readJsonBody(huge)).toEqual({ ok: false, tooLarge: true })
+  })
+
+  it('rejects an async-iterable body once accumulated chunks cross the size cap, without draining it', async () => {
+    const chunkSize = 200 * 1024
+    async function* chunks(): AsyncGenerator<Uint8Array> {
+      yield new Uint8Array(chunkSize)
+      yield new Uint8Array(chunkSize)
+      throw new Error('should never be reached: iterable was drained past the size cap')
+    }
+    expect(await readJsonBody(chunks())).toEqual({ ok: false, tooLarge: true })
   })
 })

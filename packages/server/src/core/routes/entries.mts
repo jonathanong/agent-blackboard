@@ -7,6 +7,7 @@ import {
   errorResponse,
   jsonResponse,
   notFoundResponse,
+  payloadTooLargeResponse,
   streamResponse,
   unauthorizedResponse,
 } from '../response.mjs'
@@ -26,8 +27,12 @@ async function appendEntry(
   sessionId: string,
 ): Promise<HandlerResponse> {
   const parsed = await readJsonBody(request.body)
-  if (!parsed.ok || !objectData(parsed.value))
-    return errorResponse(400, 'body must be a JSON object')
+  if (!parsed.ok) {
+    return parsed.tooLarge
+      ? payloadTooLargeResponse()
+      : errorResponse(400, 'body must be a JSON object')
+  }
+  if (!objectData(parsed.value)) return errorResponse(400, 'body must be a JSON object')
   const data = objectData((parsed.value as Record<string, unknown>).data)
   if (!data) return errorResponse(400, 'data must be an object')
   try {

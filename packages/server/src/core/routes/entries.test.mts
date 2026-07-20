@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryBlackboardStore } from '../../store/memory.mjs'
+import { SessionStoreError } from '../../store/errors.mjs'
 import type { HandlerRequest } from '../types.mjs'
 import { handleEntriesRoute } from './entries.mjs'
 
@@ -72,6 +73,10 @@ describe('entries route', () => {
         400,
       )
     }
+    const oversized = 'a'.repeat(380 * 1024 + 1)
+    expect(
+      (await handleEntriesRoute(request({ method: 'POST', body: oversized }), store, 's')).status,
+    ).toBe(413)
     expect(
       (await handleEntriesRoute(request({ query: { format: 'yaml' } }), store, 's')).status,
     ).toBe(400)
@@ -88,5 +93,17 @@ describe('entries route', () => {
     await expect(
       handleEntriesRoute(request({ method: 'POST', body: { data: {} } }), store, 's'),
     ).rejects.toBe(boom)
+  })
+
+  it('maps a timestamp_exhausted store error to 503', async () => {
+    vi.spyOn(store, 'appendEntry').mockRejectedValueOnce(
+      new SessionStoreError('timestamp_exhausted', 'could not allocate'),
+    )
+    const response = await handleEntriesRoute(
+      request({ method: 'POST', body: { data: {} } }),
+      store,
+      's',
+    )
+    expect(response.status).toBe(503)
   })
 })

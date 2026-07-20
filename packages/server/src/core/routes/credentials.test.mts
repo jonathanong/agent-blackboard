@@ -90,6 +90,15 @@ describe('handleCredentialsRoute', () => {
       expect(response.status).toBe(400)
     })
 
+    it('413s when the body exceeds the size cap', async () => {
+      const response = await handleCredentialsRoute(
+        withAuth({ method: 'POST', body: 'a'.repeat(380 * 1024 + 1) }),
+        store,
+        env,
+      )
+      expect(response.status).toBe(413)
+    })
+
     it('400s when the body is a JSON array (no .name)', async () => {
       const response = await handleCredentialsRoute(
         withAuth({ method: 'POST', body: '[1,2]' }),

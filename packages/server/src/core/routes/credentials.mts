@@ -6,6 +6,7 @@ import {
   errorResponse,
   jsonResponse,
   notFoundResponse,
+  payloadTooLargeResponse,
   unauthorizedResponse,
 } from '../response.mjs'
 import type { HandlerRequest, HandlerResponse } from '../types.mjs'
@@ -19,7 +20,8 @@ async function createCredentialRoute(
   store: BlackboardStore,
 ): Promise<HandlerResponse> {
   const parsed = await readJsonBody(request.body)
-  if (!parsed.ok) return errorResponse(400, 'body must be JSON')
+  if (!parsed.ok)
+    return parsed.tooLarge ? payloadTooLargeResponse() : errorResponse(400, 'body must be JSON')
   const name =
     typeof parsed.value === 'object' && parsed.value !== null
       ? (parsed.value as Record<string, unknown>).name

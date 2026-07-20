@@ -4,6 +4,7 @@ export type SessionStoreErrorCode =
   | 'parent_not_found'
   | 'parent_archived'
   | 'session_archived'
+  | 'timestamp_exhausted'
 
 export class SessionStoreError extends Error {
   constructor(

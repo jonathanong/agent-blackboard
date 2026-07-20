@@ -5,6 +5,7 @@ import {
   errorResponse,
   jsonResponse,
   notFoundResponse,
+  payloadTooLargeResponse,
   unauthorizedResponse,
 } from '../response.mjs'
 import type { HandlerRequest, HandlerResponse } from '../types.mjs'
@@ -30,12 +31,12 @@ async function createSession(
   credId: string,
 ): Promise<HandlerResponse> {
   const parsed = await readJsonBody(request.body)
-  if (
-    !parsed.ok ||
-    typeof parsed.value !== 'object' ||
-    parsed.value === null ||
-    Array.isArray(parsed.value)
-  ) {
+  if (!parsed.ok) {
+    return parsed.tooLarge
+      ? payloadTooLargeResponse()
+      : errorResponse(400, 'body must be a JSON object')
+  }
+  if (typeof parsed.value !== 'object' || parsed.value === null || Array.isArray(parsed.value)) {
     return errorResponse(400, 'body must be a JSON object')
   }
   const body = parsed.value as Record<string, unknown>
@@ -125,7 +126,12 @@ async function patchSession(
   sessionId: string,
 ): Promise<HandlerResponse> {
   const parsed = await readJsonBody(request.body)
-  const body = objectData(parsed.ok ? parsed.value : undefined)
+  if (!parsed.ok) {
+    return parsed.tooLarge
+      ? payloadTooLargeResponse()
+      : errorResponse(400, 'body must be a JSON object')
+  }
+  const body = objectData(parsed.value)
   if (!body) return errorResponse(400, 'body must be a JSON object')
   if (body.archived === true && Object.keys(body).length === 1) {
     return archiveSession(store, credId, sessionId)
