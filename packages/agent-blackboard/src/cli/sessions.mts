@@ -1,4 +1,5 @@
 import { Sessions } from '../client/sessions.mjs'
+import type { ListSessionsQuery, Session } from '../client/types.mjs'
 import { parseArgs, stringFlag } from './args.mjs'
 import type { CliContext } from './context.mjs'
 import { clientConfigFromEnv } from './env.mjs'
@@ -32,14 +33,19 @@ export async function runSessions(argv: string[], ctx: CliContext): Promise<void
     if (archivedFlag !== undefined && archivedFlag !== 'true' && archivedFlag !== 'false') {
       throw new CliError('sessions list --archived must be true or false.')
     }
-    writeLine(
-      ctx.stdout,
-      JSON.stringify(
-        await sessions.list(
-          archivedFlag === undefined ? {} : { archived: archivedFlag === 'true' },
-        ),
-      ),
-    )
+    const query: ListSessionsQuery =
+      archivedFlag === undefined ? {} : { archived: archivedFlag === 'true' }
+    // The CLI's stdout contract is a flat JSON array (pre-pagination shape) —
+    // drain every page here rather than surfacing cursors, so scripts piping
+    // `sessions list` output don't need to know pagination exists.
+    const all: Session[] = []
+    let cursor: string | undefined
+    do {
+      const page = await sessions.list(cursor === undefined ? query : { ...query, cursor })
+      all.push(...page.sessions)
+      cursor = page.nextCursor ?? undefined
+    } while (cursor !== undefined)
+    writeLine(ctx.stdout, JSON.stringify(all))
     return
   }
   const id = positional[0]

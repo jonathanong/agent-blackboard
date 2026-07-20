@@ -3,6 +3,21 @@ import { Sessions } from '../client/sessions.mjs'
 import { expectObject, nullableString, requiredString } from './validate.mjs'
 import type { ClientConfig, Session } from '../client/types.mjs'
 
+async function listAllSessions(sessions: Sessions, archived: boolean): Promise<Session[]> {
+  // `handleSessionSearch`'s contract is "every match", not a page: drain every
+  // `nextCursor` here before filtering client-side, mirroring the CLI's
+  // `sessions list` drain loop. WS1 only wires `archived` through to the
+  // server; WS3 will push the rest of `SessionSearchFilters` down too.
+  const all: Session[] = []
+  let cursor: string | undefined
+  do {
+    const page = await sessions.list(cursor === undefined ? { archived } : { archived, cursor })
+    all.push(...page.sessions)
+    cursor = page.nextCursor ?? undefined
+  } while (cursor !== undefined)
+  return all
+}
+
 interface SessionSearchFilters {
   sessionId?: string
   parentSessionId?: { value: string | null }
@@ -44,7 +59,7 @@ export async function handleSessionSearch(
     ...(args.version === undefined ? {} : { version: requiredString(args.version, 'version') }),
     ...(args.data === undefined ? {} : { data: expectObject(args.data, 'data') }),
   }
-  const sessions = await new Sessions(config).list({ archived: args.archived === 1 })
+  const sessions = await listAllSessions(new Sessions(config), args.archived === 1)
   return { sessions: sessions.filter((session) => matchesSession(session, filters)) }
 }
 

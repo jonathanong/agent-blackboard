@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import { sendJson, startHttpFixture } from '../__tests__/http-fixture.mjs'
+import type { Session } from '../client/types.mjs'
 import {
   handleSessionArchive,
   handleSessionCreate,
@@ -25,7 +26,11 @@ it('creates roots/children and archives explicit sessions', async () => {
     data: { branch: 'dev', nested: { ok: true } },
   }
   const fixture = await startHttpFixture((req, res) =>
-    sendJson(res, 200, req.method === 'GET' ? [session, child] : session),
+    sendJson(
+      res,
+      200,
+      req.method === 'GET' ? { sessions: [session, child], nextCursor: null } : session,
+    ),
   )
   try {
     const config = { baseUrl: fixture.baseUrl, token: 't' }
@@ -82,6 +87,43 @@ it('creates roots/children and archives explicit sessions', async () => {
     await expect(handleSessionSearch({ data: [] }, config)).rejects.toThrow('data')
     expect(await handleSessionArchive({ sessionId: 's' }, config)).toEqual(session)
     expect(() => handleSessionCreate({ sessionId: 's' }, config)).toThrow()
+  } finally {
+    await fixture.close()
+  }
+})
+
+it('drains every listSessions page before filtering, so a match on page 2 is found', async () => {
+  function session(overrides: Partial<Session>): Session {
+    return {
+      id: 's',
+      parentSessionId: null,
+      agent: 'test',
+      version: '1',
+      createdAt: 'now',
+      archivedAt: null,
+      data: {},
+      ...overrides,
+    }
+  }
+  const first = session({ id: 'first' })
+  const second = session({ id: 'second', agent: 'other' })
+  const fixture = await startHttpFixture((req, res) => {
+    const hasCursor = new URL(req.url, 'http://localhost').searchParams.has('cursor')
+    sendJson(
+      res,
+      200,
+      hasCursor
+        ? { sessions: [second], nextCursor: null }
+        : { sessions: [first], nextCursor: 'page-2' },
+    )
+  })
+  try {
+    const config = { baseUrl: fixture.baseUrl, token: 't' }
+    expect(await handleSessionSearch({ agent: 'other' }, config)).toEqual({ sessions: [second] })
+    expect(fixture.requests.map((request) => request.url)).toEqual([
+      '/sessions?archived=false',
+      '/sessions?archived=false&cursor=page-2',
+    ])
   } finally {
     await fixture.close()
   }

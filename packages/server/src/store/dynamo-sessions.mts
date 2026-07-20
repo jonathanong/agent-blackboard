@@ -1,18 +1,10 @@
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
-import {
-  GetCommand,
-  PutCommand,
-  QueryCommand,
-  TransactWriteCommand,
-  UpdateCommand,
-} from '@aws-sdk/lib-dynamodb'
+import { GetCommand, PutCommand, TransactWriteCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb'
 import type { Session } from '../core/types.mjs'
 import { SessionStoreError } from './errors.mjs'
 import { sessionSk, sessionsPk } from './dynamo-keys.mjs'
 import { fanOutEntryTtl } from './dynamo-session-ttl.mjs'
 import type { NewSession } from './store.mjs'
-
-const QUERY_PAGE_LIMIT = 100
 
 export function itemToSession(item: Record<string, unknown>): Session {
   return {
@@ -92,6 +84,7 @@ export async function dynamoCreateSession(
     agent: session.agent,
     version: session.version,
     createdAt: session.createdAt,
+    sessionCreatedAt: session.createdAt,
     data: session.data,
   }
   try {
@@ -135,27 +128,6 @@ export async function dynamoCreateSession(
     }
     throw error
   }
-}
-
-export async function* dynamoListSessions(
-  doc: DynamoDBDocumentClient,
-  tableName: string,
-  credId: string,
-): AsyncGenerator<Session> {
-  let exclusiveStartKey: Record<string, unknown> | undefined
-  do {
-    const page = await doc.send(
-      new QueryCommand({
-        TableName: tableName,
-        KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
-        ExpressionAttributeValues: { ':pk': sessionsPk(credId), ':sk': 'SESSION#' },
-        ExclusiveStartKey: exclusiveStartKey,
-        Limit: QUERY_PAGE_LIMIT,
-      }),
-    )
-    for (const item of page.Items ?? []) yield itemToSession(item)
-    exclusiveStartKey = page.LastEvaluatedKey
-  } while (exclusiveStartKey)
 }
 
 export async function dynamoArchiveSession(

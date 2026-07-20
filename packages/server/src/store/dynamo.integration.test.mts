@@ -19,10 +19,21 @@ async function ensureTable(client: DynamoDBClient): Promise<void> {
         AttributeDefinitions: [
           { AttributeName: 'PK', AttributeType: 'S' },
           { AttributeName: 'SK', AttributeType: 'S' },
+          { AttributeName: 'sessionCreatedAt', AttributeType: 'S' },
         ],
         KeySchema: [
           { AttributeName: 'PK', KeyType: 'HASH' },
           { AttributeName: 'SK', KeyType: 'RANGE' },
+        ],
+        GlobalSecondaryIndexes: [
+          {
+            IndexName: 'SessionsByCreatedAt',
+            KeySchema: [
+              { AttributeName: 'PK', KeyType: 'HASH' },
+              { AttributeName: 'sessionCreatedAt', KeyType: 'RANGE' },
+            ],
+            Projection: { ProjectionType: 'ALL' },
+          },
         ],
         BillingMode: 'PAY_PER_REQUEST',
       }),

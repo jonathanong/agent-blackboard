@@ -1,18 +1,18 @@
 import { randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import type { BlackboardStore } from '../store.mjs'
-import { AGENT, collect, createTestSession, expectValidTimestamp } from './helpers.mjs'
+import { AGENT, createTestSession, expectValidTimestamp } from './helpers.mjs'
 
 /**
  * Session ids are deliberately ordered literals (`'s1' < 's2'`), not
- * `randomUUID()`. DynamoDB's `listSessions` is a `Query` with no
- * `ScanIndexForward` override, so it returns items sorted ascending by SK
- * (`SESSION#<id>`) — i.e. lexically by session id, not by creation time.
- * `MemoryBlackboardStore.listSessions` returns Map insertion (creation)
- * order regardless of id. The two backends only agree on "creation order"
- * when the ids themselves happen to sort that way, so these fixture ids are
- * chosen to make that true rather than asserting an ordering guarantee
- * neither backend actually makes for arbitrary session ids.
+ * `randomUUID()`. `listSessions` orders ascending by `(createdAt, id)` — the
+ * `SessionsByCreatedAt` GSI's range key (Dynamo) and an equivalent in-memory
+ * sort (memory store) both use this pair, tiebreaking on id (code-point
+ * order) when timestamps collide, e.g. under a frozen test clock. These
+ * fixture ids are chosen so id order also matches creation order, keeping
+ * this test's plain equality assertion valid without pinning an ordering
+ * guarantee beyond what both backends actually provide. See
+ * `session-pagination.mts` for pagination/filter-specific conformance.
  */
 const ROOT_ID = 's1'
 const CHILD_ID = 's2'
@@ -39,8 +39,8 @@ export function runSessionsConformance(makeStore: () => BlackboardStore): void {
       expect(await store.getSession(credId, CHILD_ID)).toEqual(child)
       expect(await store.getSession(credId, `missing-${randomUUID()}`)).toBeUndefined()
 
-      expect(await collect(store.listSessions(credId))).toEqual([root, child])
-      expect(await collect(store.listSessions(randomUUID()))).toEqual([])
+      expect((await store.listSessions(credId)).sessions).toEqual([root, child])
+      expect((await store.listSessions(randomUUID())).sessions).toEqual([])
     })
   })
 

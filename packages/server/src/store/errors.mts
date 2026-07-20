@@ -5,6 +5,7 @@ export type SessionStoreErrorCode =
   | 'parent_archived'
   | 'session_archived'
   | 'timestamp_exhausted'
+  | 'invalid_cursor'
 
 export class SessionStoreError extends Error {
   constructor(

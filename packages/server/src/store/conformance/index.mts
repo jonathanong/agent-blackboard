@@ -2,6 +2,7 @@ import type { BlackboardStore } from '../store.mjs'
 import { runCredentialsConformance } from './credentials.mjs'
 import { runEntriesConformance } from './entries.mjs'
 import { runSessionLifecycleConformance } from './session-lifecycle.mjs'
+import { runSessionPaginationConformance } from './session-pagination.mjs'
 import { runSessionsConformance } from './sessions.mjs'
 
 /**
@@ -17,6 +18,7 @@ import { runSessionsConformance } from './sessions.mjs'
  */
 export function runStoreConformance(makeStore: () => BlackboardStore): void {
   runSessionsConformance(makeStore)
+  runSessionPaginationConformance(makeStore)
   runSessionLifecycleConformance(makeStore)
   runEntriesConformance(makeStore)
   runCredentialsConformance(makeStore)

@@ -7,8 +7,10 @@ export const AGENT = { agent: 'conformance-agent', version: '1.0.0' }
 /**
  * Buffers a store's async-iterable result into an array. Conformance
  * fixtures are small, so buffering here is fine even though `BlackboardStore`
- * itself must stream (`listSessions`/`getEntries` implementations must not
- * load a full table/session into memory before yielding the first item).
+ * itself must stream (`getEntries` implementations must not load a full
+ * session into memory before yielding the first entry). `listSessions` is a
+ * single-page `Promise<ListSessionsResult>`, not an async iterable — see
+ * `runSessionPaginationConformance` in `session-pagination.mts` instead.
  */
 export async function collect<T>(items: AsyncIterable<T>): Promise<T[]> {
   const result: T[] = []

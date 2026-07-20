@@ -13,9 +13,11 @@ it('runs every session command and validates subcommands', async () => {
     archivedAt: null,
     data: {},
   }
-  const fixture = await startHttpFixture((req, res) =>
-    sendJson(res, 200, req.url === '/sessions' && req.method === 'GET' ? [session] : session),
-  )
+  const fixture = await startHttpFixture((req, res) => {
+    const isSessionsList =
+      req.method === 'GET' && new URL(req.url, 'http://localhost').pathname === '/sessions'
+    sendJson(res, 200, isSessionsList ? { sessions: [session], nextCursor: null } : session)
+  })
   try {
     const env = { AGENT_BLACKBOARD_URL: fixture.baseUrl, AGENT_BLACKBOARD_TOKEN: 't' }
     for (const argv of [
@@ -61,6 +63,41 @@ it('runs every session command and validates subcommands', async () => {
     await expect(runSessions(['get'], ctx)).rejects.toThrow()
     await expect(runSessions([], ctx)).rejects.toThrow('sessions <subcommand>')
     await expect(runSessions(['nope', 's'], ctx)).rejects.toThrow()
+  } finally {
+    await fixture.close()
+  }
+})
+
+it('drains every page of sessions list into a single flat JSON array', async () => {
+  const pageOne = {
+    id: 'a',
+    parentSessionId: null,
+    agent: 'test-agent',
+    version: '1.0.0',
+    createdAt: 'now',
+    archivedAt: null,
+    data: {},
+  }
+  const pageTwo = { ...pageOne, id: 'b' }
+  let calls = 0
+  const fixture = await startHttpFixture((_req, res) => {
+    calls += 1
+    sendJson(
+      res,
+      200,
+      calls === 1
+        ? { sessions: [pageOne], nextCursor: 'cursor-1' }
+        : { sessions: [pageTwo], nextCursor: null },
+    )
+  })
+  try {
+    const env = { AGENT_BLACKBOARD_URL: fixture.baseUrl, AGENT_BLACKBOARD_TOKEN: 't' }
+    const ctx = createFakeContext({ env })
+    await runSessions(['list'], ctx)
+    expect(calls).toBe(2)
+    expect(ctx.stdoutLines).toHaveLength(1)
+    expect(JSON.parse(ctx.stdoutLines[0]!)).toEqual([pageOne, pageTwo])
+    expect(fixture.requests[1]!.url).toContain('cursor=cursor-1')
   } finally {
     await fixture.close()
   }

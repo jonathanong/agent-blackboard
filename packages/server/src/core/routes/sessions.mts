@@ -9,13 +9,14 @@ import {
   unauthorizedResponse,
 } from '../response.mjs'
 import type { HandlerRequest, HandlerResponse } from '../types.mjs'
+import { parseListSessionsQuery } from './sessions-query.mjs'
 import { storeErrorResponse } from './store-error.mjs'
 
 function isSessionId(value: unknown): value is string {
   return typeof value === 'string' && /^[A-Za-z0-9._:-]+$/.test(value)
 }
 
-function objectData(value: unknown): Record<string, unknown> | undefined {
+export function objectData(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined
@@ -70,14 +71,15 @@ async function listSessions(
   store: BlackboardStore,
   credId: string,
 ): Promise<HandlerResponse> {
-  const archived = request.query.archived ?? 'false'
-  if (archived !== 'true' && archived !== 'false')
-    return errorResponse(400, 'archived must be true or false')
-  const sessions = []
-  for await (const session of store.listSessions(credId)) {
-    if ((session.archivedAt !== null) === (archived === 'true')) sessions.push(session)
+  const parsed = parseListSessionsQuery(request.query)
+  if (!parsed.ok) return errorResponse(400, parsed.error)
+  try {
+    return jsonResponse(200, await store.listSessions(credId, parsed.query))
+  } catch (error) {
+    const response = storeErrorResponse(error)
+    if (response) return response
+    throw error
   }
-  return jsonResponse(200, sessions)
 }
 
 async function getSession(

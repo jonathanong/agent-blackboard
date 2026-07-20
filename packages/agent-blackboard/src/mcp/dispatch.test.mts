@@ -14,7 +14,10 @@ it('dispatches every entry/session tool and rejects unknown names', async () => 
   }
   const entry = { sessionId: 's', createdAt: 'now', data: {} }
   const fixture = await startHttpFixture((req, res) => {
-    if (req.method === 'GET') return sendJson(res, 200, [entry])
+    if (req.method === 'GET') {
+      const isSessionsList = new URL(req.url, 'http://localhost').pathname === '/sessions'
+      return sendJson(res, 200, isSessionsList ? { sessions: [entry], nextCursor: null } : [entry])
+    }
     sendJson(res, 200, req.url.endsWith('/entries') ? entry : session)
   })
   try {

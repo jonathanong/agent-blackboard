@@ -71,7 +71,7 @@ describe('createDynamoStore wiring', () => {
       }),
     ).resolves.toMatchObject({ id: 's' })
     await expect(store.getSession('c', 's')).resolves.toMatchObject({ id: 's' })
-    await expect(collect(store.listSessions('c'))).resolves.toHaveLength(1)
+    await expect(store.listSessions('c')).resolves.toMatchObject({ sessions: [session] })
     await expect(
       store.patchSession('c', { sessionId: 's', data: { branch: 'main' } }),
     ).resolves.toMatchObject({ id: 's' })

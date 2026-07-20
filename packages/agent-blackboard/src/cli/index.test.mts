@@ -6,9 +6,11 @@ import { runCli } from './index.mjs'
 describe('runCli', () => {
   it('dispatches session and entry commands', async () => {
     const value = { sessionId: 's', createdAt: 'now', data: {} }
-    const fixture = await startHttpFixture((req, res) =>
-      sendJson(res, 200, req.method === 'GET' ? [] : value),
-    )
+    const fixture = await startHttpFixture((req, res) => {
+      if (req.method !== 'GET') return sendJson(res, 200, value)
+      const isSessionsList = new URL(req.url, 'http://localhost').pathname === '/sessions'
+      sendJson(res, 200, isSessionsList ? { sessions: [], nextCursor: null } : [])
+    })
     try {
       const env = { AGENT_BLACKBOARD_URL: fixture.baseUrl, AGENT_BLACKBOARD_TOKEN: 't' }
       for (const argv of [

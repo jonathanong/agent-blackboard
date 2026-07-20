@@ -8,16 +8,14 @@ import {
   dynamoListCredentials,
 } from './dynamo-credentials.mjs'
 import { dynamoAppendEntry, dynamoGetEntries } from './dynamo-entries.mjs'
+import { dynamoListSessions } from './dynamo-session-list.mjs'
 import { dynamoPatchSession } from './dynamo-session-patch.mjs'
-import {
-  dynamoArchiveSession,
-  dynamoCreateSession,
-  dynamoGetSession,
-  dynamoListSessions,
-} from './dynamo-sessions.mjs'
+import { dynamoArchiveSession, dynamoCreateSession, dynamoGetSession } from './dynamo-sessions.mjs'
 import type {
   BlackboardStore,
   CredentialIdOrName,
+  ListSessionsQuery,
+  ListSessionsResult,
   NewSession,
   NewSessionEntry,
   SessionPatch,
@@ -35,8 +33,8 @@ export function createDynamoStore(options: DynamoStoreOptions = {}): BlackboardS
     getSession(credId: string, sessionId: string): Promise<Session | undefined> {
       return dynamoGetSession(doc, tableName, credId, sessionId)
     },
-    listSessions(credId: string): AsyncIterable<Session> {
-      return dynamoListSessions(doc, tableName, credId)
+    listSessions(credId: string, query?: ListSessionsQuery): Promise<ListSessionsResult> {
+      return dynamoListSessions(doc, tableName, credId, query)
     },
     patchSession(credId: string, patch: SessionPatch): Promise<Session> {
       return dynamoPatchSession(doc, tableName, credId, patch)

@@ -4,7 +4,6 @@ import {
   dynamoArchiveSession,
   dynamoCreateSession,
   dynamoGetSession,
-  dynamoListSessions,
   itemToSession,
 } from './dynamo-sessions.mjs'
 
@@ -75,9 +74,13 @@ describe('DynamoDB sessions', () => {
         ...AGENT,
       })
       expect(session).toMatchObject({ id: 's', parentSessionId })
-      expect(seen[0]!.constructor.name).toBe(
-        parentSessionId ? 'TransactWriteCommand' : 'PutCommand',
-      )
+      const command = seen[0]!
+      expect(command.constructor.name).toBe(parentSessionId ? 'TransactWriteCommand' : 'PutCommand')
+      const putItem = parentSessionId
+        ? (command.input.TransactItems as { Put?: { Item: Record<string, unknown> } }[])[1]!.Put!
+            .Item
+        : (command.input.Item as Record<string, unknown>)
+      expect(putItem.sessionCreatedAt).toBe(session.createdAt)
     }
   })
 
@@ -144,18 +147,6 @@ describe('DynamoDB sessions', () => {
         ...AGENT,
       }),
     ).rejects.toThrow('boom')
-  })
-
-  it('lists paginated sessions and tolerates missing Items', async () => {
-    let call = 0
-    const doc = client(() => {
-      call += 1
-      return call === 1 ? { Items: [item()], LastEvaluatedKey: { PK: 'x', SK: 'y' } } : {}
-    })
-    const sessions = []
-    for await (const session of dynamoListSessions(doc, 'T', 'c')) sessions.push(session)
-    expect(sessions).toHaveLength(1)
-    expect(call).toBe(2)
   })
 
   const TTL_DAYS = 30
