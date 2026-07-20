@@ -17,7 +17,7 @@ function buildListSessionsQuery(query: ListSessionsQuery): Record<string, string
   if (query.agent !== undefined) wire.agent = query.agent
   if (query.version !== undefined) wire.version = query.version
   if (query.parentSessionId !== undefined) {
-    wire.parentSessionId = query.parentSessionId === null ? '' : query.parentSessionId
+    wire.parentSessionId = query.parentSessionId ?? ''
   }
   if (query.data !== undefined) wire.data = JSON.stringify(query.data)
   if (query.limit !== undefined) wire.limit = String(query.limit)

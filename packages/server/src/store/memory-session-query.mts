@@ -3,11 +3,17 @@ import type { Session } from '../core/types.mjs'
 import type { ListSessionsQuery } from './store.mjs'
 import type { SessionCursorKey } from './session-cursor.mjs'
 
+function compareStrings(a: string, b: string): number {
+  if (a < b) return -1
+  if (a > b) return 1
+  return 0
+}
+
 /** Orders sessions by creation time, tiebroken by id (code-point order). */
 export function sortSessions(sessions: Session[]): void {
   sessions.sort((a, b) => {
     if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1
-    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+    return compareStrings(a.id, b.id)
   })
 }
 

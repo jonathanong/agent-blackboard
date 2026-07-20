@@ -6,6 +6,27 @@ export type ListSessionsQueryResult =
   | { ok: true; query: ListSessionsQuery }
   | { ok: false; error: string }
 
+type FieldResult<T> = { ok: true; value: T } | { ok: false }
+
+/** Parses the `data` query param into an object filter, or fails if it isn't one. */
+function parseDataParam(raw: string): FieldResult<Record<string, unknown>> {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return { ok: false }
+  }
+  const data = objectData(parsed)
+  return data ? { ok: true, value: data } : { ok: false }
+}
+
+/** Parses the `limit` query param into a bounded integer, or fails if it isn't one. */
+function parseLimitParam(raw: string): FieldResult<number> {
+  const limit = Number(raw)
+  if (!Number.isInteger(limit) || limit < 1 || limit > MAX_SESSIONS_LIMIT) return { ok: false }
+  return { ok: true, value: limit }
+}
+
 /**
  * Parses `GET /sessions` query params into a `ListSessionsQuery`. A bare
  * request (no `archived` param) defaults to `archived: false` — this must
@@ -30,23 +51,17 @@ export function parseListSessionsQuery(query: QueryMap): ListSessionsQueryResult
   }
 
   if (query.data !== undefined) {
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(query.data)
-    } catch {
-      return { ok: false, error: 'data must be a JSON object' }
-    }
-    const data = objectData(parsed)
-    if (!data) return { ok: false, error: 'data must be a JSON object' }
-    result.data = data
+    const parsed = parseDataParam(query.data)
+    if (!parsed.ok) return { ok: false, error: 'data must be a JSON object' }
+    result.data = parsed.value
   }
 
   if (query.limit !== undefined) {
-    const limit = Number(query.limit)
-    if (!Number.isInteger(limit) || limit < 1 || limit > MAX_SESSIONS_LIMIT) {
+    const limit = parseLimitParam(query.limit)
+    if (!limit.ok) {
       return { ok: false, error: `limit must be an integer between 1 and ${MAX_SESSIONS_LIMIT}` }
     }
-    result.limit = limit
+    result.limit = limit.value
   }
 
   if (query.cursor !== undefined) result.cursor = query.cursor
