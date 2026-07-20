@@ -20,13 +20,6 @@ export interface SessionPatch {
   data: Record<string, unknown>
 }
 
-/** Identifies one entry by its composite key and shallow-merges `data`. */
-export interface EntryPatch {
-  sessionId: string
-  createdAt: string
-  data: Record<string, unknown>
-}
-
 export interface CredentialIdOrName {
   id?: string
   name?: string
@@ -48,7 +41,6 @@ export interface BlackboardStore {
 
   appendEntry(entry: NewSessionEntry): Promise<SessionEntry>
   getEntries(credId: string, sessionId: string): AsyncIterable<SessionEntry>
-  patchEntry(credId: string, patch: EntryPatch): Promise<SessionEntry>
 
   createCredential(name: string): Promise<{ record: CredentialRecord; token: string }>
 

@@ -1,11 +1,6 @@
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  dynamoAppendEntry,
-  dynamoGetEntries,
-  dynamoPatchEntry,
-  itemToEntry,
-} from './dynamo-entries.mjs'
+import { dynamoAppendEntry, dynamoGetEntries, itemToEntry } from './dynamo-entries.mjs'
 
 interface Command {
   constructor: { name: string }
@@ -140,74 +135,5 @@ describe('DynamoDB entries', () => {
         ),
       ),
     ).toEqual([])
-  })
-
-  it('patches with a session condition and rejects missing entries', async () => {
-    const missing = client((command) =>
-      command.constructor.name === 'GetCommand' &&
-      (command.input.Key as { PK: string }).PK.startsWith('SESSIONS')
-        ? { Item: session() }
-        : {},
-    )
-    await expect(
-      dynamoPatchEntry(missing, 'T', 'c', { sessionId: 's', createdAt: 'now', data: {} }),
-    ).rejects.toMatchObject({ code: 'entry_not_found' })
-
-    let gets = 0
-    let transaction: Record<string, unknown> | undefined
-    const success = client((command) => {
-      if (command.constructor.name === 'GetCommand')
-        return { Item: gets++ === 0 ? session() : entry('now') }
-      transaction = command.input
-      return {}
-    })
-    await expect(
-      dynamoPatchEntry(success, 'T', 'c', {
-        sessionId: 's',
-        createdAt: 'now',
-        data: { b: 2 },
-      }),
-    ).resolves.toMatchObject({ data: { a: 1, b: 2 } })
-    expect(transaction!.TransactItems).toHaveLength(2)
-  })
-
-  it('diagnoses archive races while patching and preserves unrelated failures', async () => {
-    for (const [sessionAfterRace, expected] of [
-      [undefined, 'session_not_found'],
-      [session('later'), 'session_archived'],
-      [session(), undefined],
-    ] as const) {
-      let get = 0
-      const doc = client((command) => {
-        if (command.constructor.name === 'GetCommand') {
-          get += 1
-          if (get === 1) return { Item: session() }
-          if (get === 2) return { Item: entry('now') }
-          return sessionAfterRace ? { Item: sessionAfterRace } : {}
-        }
-        throw canceled()
-      })
-      const result = dynamoPatchEntry(doc, 'T', 'c', {
-        sessionId: 's',
-        createdAt: 'now',
-        data: { b: 2 },
-      })
-      if (expected) await expect(result).rejects.toMatchObject({ code: expected })
-      else await expect(result).rejects.toThrow('canceled')
-    }
-    await expect(
-      dynamoPatchEntry(
-        client((command) => {
-          if (command.constructor.name === 'GetCommand')
-            return (command.input.Key as { PK: string }).PK.startsWith('SESSIONS')
-              ? { Item: session() }
-              : { Item: entry('now') }
-          throw new Error('boom')
-        }),
-        'T',
-        'c',
-        { sessionId: 's', createdAt: 'now', data: {} },
-      ),
-    ).rejects.toThrow('boom')
   })
 })

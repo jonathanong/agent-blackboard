@@ -91,16 +91,5 @@ else.
 { "sessionId": "worker-456", "format": "jsonl" }
 ```
 
-`format` is optional and may be `json` or `jsonl`. Returns `{ "entries": SessionEntry[] }`.
-
-## `entry_patch`
-
-```json
-{
-  "sessionId": "worker-456",
-  "createdAt": "2026-07-19T20:00:00.000Z",
-  "data": { "pr": 7777 }
-}
-```
-
-The composite key `(sessionId, createdAt)` selects exactly one entry. `data` is shallow-merged.
+`format` is optional and may be `json` or `jsonl`. Returns `{ "entries": SessionEntry[] }`. Entries
+are append-only: once written, an entry's `data` cannot be changed in place.

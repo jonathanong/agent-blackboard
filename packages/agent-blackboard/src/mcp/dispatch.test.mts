@@ -39,9 +39,6 @@ it('dispatches every entry/session tool and rejects unknown names', async () => 
     await expect(
       dispatchTool('entry_get', { sessionId: 's', format: 'json' }, config),
     ).resolves.toEqual({ entries: [entry] })
-    await expect(
-      dispatchTool('entry_patch', { sessionId: 's', createdAt: 'now', data: {} }, config),
-    ).resolves.toEqual(entry)
     expect(() => dispatchTool('nope', {}, config)).toThrow('Unknown tool: nope')
   } finally {
     await fixture.close()

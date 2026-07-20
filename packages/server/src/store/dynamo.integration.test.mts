@@ -78,12 +78,6 @@ describe.skipIf(!ENDPOINT)('DynamoDB Local session/entry integration', () => {
     const second = await store.appendEntry({ credId, sessionId: childId, data: { b: 2 } })
     expect(first.createdAt).not.toBe(second.createdAt)
     expect(await collect(store.getEntries(credId, childId))).toEqual([first, second])
-    const patched = await store.patchEntry(credId, {
-      sessionId: childId,
-      createdAt: first.createdAt,
-      data: { pr: 7 },
-    })
-    expect(patched.data).toEqual({ a: 1, pr: 7 })
     expect(await collect(store.listSessions(credId))).toHaveLength(2)
   })
 

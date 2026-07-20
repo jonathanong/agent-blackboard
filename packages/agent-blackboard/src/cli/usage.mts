@@ -9,7 +9,6 @@ Usage:
   agent-blackboard append --session-id <id> <json>
   agent-blackboard append --session-id <id> --file <json|markdown|text>
   agent-blackboard get --session-id <id> [--format json|jsonl|markdown]
-  agent-blackboard patch --session-id <id> --created-at <timestamp> --data <json>
   agent-blackboard credentials <subcommand>
   agent-blackboard mcp
 

@@ -33,7 +33,7 @@ await sessions.create({
 })
 await sessions.patch({ sessionId: 'worker-456', data: { branch: 'fix/retry' } })
 
-const entry = await entries.append({
+await entries.append({
   sessionId: 'worker-456',
   data: { note: 'found a flaky retry' },
 })
@@ -41,12 +41,6 @@ const entry = await entries.append({
 for await (const current of entries.get({ sessionId: 'worker-456' })) {
   console.log(current)
 }
-
-await entries.patch({
-  sessionId: entry.sessionId,
-  createdAt: entry.createdAt,
-  data: { pr: 7777 },
-})
 
 await sessions.archive('worker-456')
 
@@ -71,7 +65,6 @@ agent-blackboard sessions get worker-456
 agent-blackboard append --session-id worker-456 '{"note":"investigating"}'
 agent-blackboard append --session-id worker-456 --file findings.md
 agent-blackboard get --session-id worker-456 --format jsonl
-agent-blackboard patch --session-id worker-456 --created-at <timestamp> --data '{"pr":7777}'
 agent-blackboard sessions archive worker-456
 agent-blackboard mcp
 ```
@@ -79,8 +72,8 @@ agent-blackboard mcp
 ## MCP
 
 The stdio MCP server exposes `session_create`, `session_search`, `session_patch`, `session_archive`,
-`entry_append`, `entry_get`, and `entry_patch`. Every session and entry operation requires explicit
-session ids where applicable. Credential management remains CLI/admin-only.
+`entry_append`, and `entry_get`. Every session and entry operation requires explicit session ids
+where applicable. Credential management remains CLI/admin-only.
 
 ## Configuration
 

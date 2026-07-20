@@ -72,9 +72,6 @@ describe('createDynamoStore wiring', () => {
       entry,
     )
     await expect(collect(store.getEntries('c', 's'))).resolves.toEqual([entry])
-    await expect(
-      store.patchEntry('c', { sessionId: 's', createdAt: entry.createdAt, data: {} }),
-    ).resolves.toEqual(entry)
     expect(getCount).toBeGreaterThan(0)
   })
 })

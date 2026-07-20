@@ -78,7 +78,7 @@ await sessions.patch({
   data: { repository: 'example/tooling', branch: 'main' },
 })
 
-const created = await entries.append({
+await entries.append({
   sessionId: 'root-123',
   data: {
     type: 'finding',
@@ -86,10 +86,9 @@ const created = await entries.append({
   },
 })
 
-await entries.patch({
-  sessionId: created.sessionId,
-  createdAt: created.createdAt,
-  data: { reproduced: true },
+await entries.append({
+  sessionId: 'root-123',
+  data: { type: 'finding-update', reproduced: true },
 })
 
 for await (const entry of entries.get({ sessionId: 'root-123' })) {
@@ -158,8 +157,8 @@ not patchable.
 Sets `archivedAt` and returns the complete session. Archival is idempotent: archiving an already
 archived session preserves its original `archivedAt`.
 
-Archived sessions and their entries remain readable. Session patches, entry appends, entry patches,
-and creation of new children are rejected.
+Archived sessions and their entries remain readable. Session patches, entry appends, and creation of
+new children are rejected.
 
 ### `Session`
 
@@ -222,18 +221,8 @@ exports the broader `EntryWireFormat` and `GetRawEntriesQuery` types for adapter
 not export a raw-response entry method. Use the documented HTTP API when an integration needs raw
 Markdown bytes.
 
-### `patch(input): Promise<SessionEntry>`
-
-```ts
-interface PatchEntryInput {
-  sessionId: string
-  createdAt: string
-  data: Record<string, unknown>
-}
-```
-
-Selects exactly one entry by `(sessionId, createdAt)` and shallow-merges a non-empty `data` object.
-The entry identity and timestamp do not change. Patching an archived session is rejected.
+Entries are append-only: there is no method to modify an entry's `data` in place. To record an
+update, append a new entry.
 
 ### `SessionEntry`
 
@@ -323,8 +312,8 @@ The package root exports:
 
 - configuration: `ClientConfig`, `AuthOptions`;
 - sessions: `Session`, `CreateSessionInput`, `PatchSessionInput`, `ListSessionsQuery`;
-- entries: `SessionEntry`, `AppendEntryInput`, `PatchEntryInput`, `GetEntriesQuery`,
-  `GetRawEntriesQuery`, `EntryWireFormat`, `StructuredEntryFormat`;
+- entries: `SessionEntry`, `AppendEntryInput`, `GetEntriesQuery`, `GetRawEntriesQuery`,
+  `EntryWireFormat`, `StructuredEntryFormat`;
 - credentials: `CredentialCreated`, `CredentialSummary`.
 
 The package is currently version `0.0.0`. Tooling should pin an exact version until a stable

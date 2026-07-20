@@ -10,7 +10,6 @@ import { CliError } from './errors.mjs'
 import { clientConfigFromEnv } from './env.mjs'
 import { runGet } from './get.mjs'
 import { writeLine } from './output.mjs'
-import { runPatch } from './patch.mjs'
 import { runSessions } from './sessions.mjs'
 import { USAGE } from './usage.mjs'
 
@@ -48,9 +47,6 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
       case 'get':
         await runGet(rest, ctx)
         break
-      case 'patch':
-        await runPatch(rest, ctx)
-        break
       case 'sessions':
         await runSessions(rest, ctx)
         break
@@ -62,7 +58,7 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
         break
       default:
         throw new CliError(
-          `Unknown command: ${command}. Expected one of: sessions, append, get, patch, credentials, mcp.`,
+          `Unknown command: ${command}. Expected one of: sessions, append, get, credentials, mcp.`,
         )
     }
     return 0

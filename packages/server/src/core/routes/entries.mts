@@ -60,33 +60,6 @@ async function getEntries(
   )
 }
 
-async function patchEntry(
-  request: HandlerRequest,
-  store: BlackboardStore,
-  credId: string,
-  sessionId: string,
-): Promise<HandlerResponse> {
-  const parsed = await readJsonBody(request.body)
-  const body = objectData(parsed.ok ? parsed.value : undefined)
-  if (!body) return errorResponse(400, 'body must be a JSON object')
-  if (typeof body.createdAt !== 'string' || Number.isNaN(Date.parse(body.createdAt))) {
-    return errorResponse(400, 'createdAt must be an ISO timestamp')
-  }
-  const data = objectData(body.data)
-  if (!data || Object.keys(data).length === 0)
-    return errorResponse(400, 'data must be a non-empty object')
-  try {
-    return jsonResponse(
-      200,
-      await store.patchEntry(credId, { sessionId, createdAt: body.createdAt, data }),
-    )
-  } catch (error) {
-    const response = storeErrorResponse(error)
-    if (response) return response
-    throw error
-  }
-}
-
 export async function handleEntriesRoute(
   request: HandlerRequest,
   store: BlackboardStore,
@@ -96,6 +69,5 @@ export async function handleEntriesRoute(
   if (!cred) return unauthorizedResponse()
   if (request.method === 'POST') return appendEntry(request, store, cred.id, sessionId)
   if (request.method === 'GET') return getEntries(request, store, cred.id, sessionId)
-  if (request.method === 'PATCH') return patchEntry(request, store, cred.id, sessionId)
   return notFoundResponse()
 }

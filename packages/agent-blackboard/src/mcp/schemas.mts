@@ -93,17 +93,4 @@ export const ENTRY_TOOLS: Tool[] = [
       required: ['sessionId'],
     },
   },
-  {
-    name: 'entry_patch',
-    description: 'Shallow-merges data into one timestamp-addressed session entry.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        sessionId: SESSION_ID,
-        createdAt: { type: 'string', description: 'The entry timestamp returned by entry_append.' },
-        data: { type: 'object', description: 'Non-empty data to shallow-merge.' },
-      },
-      required: ['sessionId', 'createdAt', 'data'],
-    },
-  },
 ]

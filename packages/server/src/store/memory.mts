@@ -4,7 +4,6 @@ import type { CredentialRecord, Session, SessionEntry } from '../core/types.mjs'
 import { SessionStoreError } from './errors.mjs'
 import type {
   CredentialIdOrName,
-  EntryPatch,
   NewSession,
   NewSessionEntry,
   BlackboardStore,
@@ -112,21 +111,6 @@ export class MemoryBlackboardStore implements BlackboardStore {
     for (const [key, entry] of this.#entries) {
       if (key.startsWith(prefix)) yield entry
     }
-  }
-
-  async patchEntry(credId: string, patch: EntryPatch): Promise<SessionEntry> {
-    this.#requireActiveSession(credId, patch.sessionId)
-    const key = `${credId} ${patch.sessionId} ${patch.createdAt}`
-    const entry = this.#entries.get(key)
-    if (!entry) {
-      throw new SessionStoreError(
-        'entry_not_found',
-        `entry not found: ${patch.sessionId} at ${patch.createdAt}`,
-      )
-    }
-    const updated = { ...entry, data: { ...entry.data, ...patch.data } }
-    this.#entries.set(key, updated)
-    return updated
   }
 
   async createCredential(name: string): Promise<{ record: CredentialRecord; token: string }> {

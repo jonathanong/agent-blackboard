@@ -15,7 +15,6 @@ describe('runCli', () => {
         ['sessions', 'list'],
         ['append', '--session-id', 's', '{}'],
         ['get', '--session-id', 's'],
-        ['patch', '--session-id', 's', '--created-at', 'now', '--data', '{}'],
       ]) {
         expect(await runCli(argv, createFakeContext({ env }))).toBe(0)
       }

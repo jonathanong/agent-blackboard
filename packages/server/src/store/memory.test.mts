@@ -105,27 +105,11 @@ describe('MemoryBlackboardStore entries', () => {
     expect(await collect(subject.getEntries('c', 's'))).toEqual([first, second])
   })
 
-  it('patches by sessionId+createdAt and rejects missing or archived entries', async () => {
+  it('rejects appends to an archived session', async () => {
     const subject = store()
     await subject.createSession({ credId: 'c', id: 's', parentSessionId: null, ...AGENT })
-    const entry = await subject.appendEntry({ credId: 'c', sessionId: 's', data: { a: 1 } })
-    expect(
-      await subject.patchEntry('c', {
-        sessionId: 's',
-        createdAt: entry.createdAt,
-        data: { b: 2 },
-      }),
-    ).toMatchObject({ data: { a: 1, b: 2 } })
-    await expect(
-      subject.patchEntry('c', { sessionId: 's', createdAt: 'missing', data: {} }),
-    ).rejects.toMatchObject({ code: 'entry_not_found' })
+    await subject.appendEntry({ credId: 'c', sessionId: 's', data: { a: 1 } })
     await subject.archiveSession('c', 's')
-    await expect(collect(subject.getEntries('c', 's'))).resolves.toMatchObject([
-      { data: { a: 1, b: 2 } },
-    ])
-    await expect(
-      subject.patchEntry('c', { sessionId: 's', createdAt: entry.createdAt, data: {} }),
-    ).rejects.toMatchObject({ code: 'session_archived' })
     await expect(
       subject.appendEntry({ credId: 'c', sessionId: 's', data: {} }),
     ).rejects.toMatchObject({ code: 'session_archived' })

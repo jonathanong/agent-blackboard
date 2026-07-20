@@ -40,12 +40,6 @@ export interface AppendEntryInput {
   data: Record<string, unknown>
 }
 
-export interface PatchEntryInput {
-  sessionId: string
-  createdAt: string
-  data: Record<string, unknown>
-}
-
 export type EntryWireFormat = 'json' | 'jsonl' | 'markdown'
 export type StructuredEntryFormat = Extract<EntryWireFormat, 'json' | 'jsonl'>
 
