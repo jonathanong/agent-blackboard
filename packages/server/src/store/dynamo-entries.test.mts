@@ -95,8 +95,12 @@ describe('DynamoDB entries', () => {
         { credId: 'c', sessionId: 's', data: {} },
       ),
     ).rejects.toThrow('boom')
+    let attempts = 0
     const exhausted = client((command) => {
-      if (command.constructor.name === 'TransactWriteCommand') throw canceled()
+      if (command.constructor.name === 'TransactWriteCommand') {
+        attempts++
+        throw canceled()
+      }
       return { Item: session() }
     })
     await expect(
@@ -105,6 +109,7 @@ describe('DynamoDB entries', () => {
       code: 'timestamp_exhausted',
       message: expect.stringContaining('unique timestamp'),
     })
+    expect(attempts).toBe(100)
   })
 
   it('requires an existing session, allows archived reads, and paginates', async () => {
