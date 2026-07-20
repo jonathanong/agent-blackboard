@@ -32,10 +32,18 @@ async function collect<T>(items: AsyncIterable<T>): Promise<T[]> {
 describe('createDynamoStore wiring', () => {
   it('delegates every session and entry operation', async () => {
     let getCount = 0
+    let entryTtlUpdateCount = 0
     const doc = client((command) => {
       if (command.constructor.name === 'PutCommand') return {}
-      if (command.constructor.name === 'UpdateCommand')
+      if (command.constructor.name === 'UpdateCommand') {
+        const key = command.input.Key as { PK: string }
+        // archiveSession fans ttl onto every entry (see dynamo-session-ttl.mts)
+        // before flipping archivedAt on the session itself — this branch
+        // proves the QueryCommand mock's one entry below actually drives a
+        // per-entry UpdateItem, not just the final session UpdateItem.
+        if (key.PK.startsWith('ENTRIES')) entryTtlUpdateCount += 1
         return { Attributes: { ...session, archivedAt: 'later' } }
+      }
       if (command.constructor.name === 'TransactWriteCommand') return {}
       if (command.constructor.name === 'GetCommand') {
         getCount += 1
@@ -68,6 +76,7 @@ describe('createDynamoStore wiring', () => {
       store.patchSession('c', { sessionId: 's', data: { branch: 'main' } }),
     ).resolves.toMatchObject({ id: 's' })
     await expect(store.archiveSession('c', 's')).resolves.toMatchObject({ archivedAt: 'later' })
+    expect(entryTtlUpdateCount).toBe(1)
     await expect(store.appendEntry({ credId: 'c', sessionId: 's', data: {} })).resolves.toEqual(
       entry,
     )

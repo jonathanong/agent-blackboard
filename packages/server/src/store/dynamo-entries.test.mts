@@ -36,7 +36,7 @@ async function collect<T>(items: AsyncIterable<T>): Promise<T[]> {
 }
 
 describe('DynamoDB entries', () => {
-  it('maps entries and appends with an active-session transaction and ttl', async () => {
+  it('maps entries and appends with an active-session transaction, without a ttl', async () => {
     expect(itemToEntry(entry())).toEqual({
       sessionId: 's',
       createdAt: NOW.toISOString(),
@@ -48,10 +48,11 @@ describe('DynamoDB entries', () => {
       return {}
     })
     await expect(
-      dynamoAppendEntry(doc, 'T', 10, () => NOW, { credId: 'c', sessionId: 's', data: {} }),
+      dynamoAppendEntry(doc, 'T', () => NOW, { credId: 'c', sessionId: 's', data: {} }),
     ).resolves.toEqual({ sessionId: 's', createdAt: NOW.toISOString(), data: {} })
     const operations = input!.TransactItems as Array<{ Put?: { Item: Record<string, unknown> } }>
-    expect(operations[1]!.Put!.Item).toMatchObject({ PK: 'ENTRIES#c#s', ttl: 1768089600 })
+    expect(operations[1]!.Put!.Item).toMatchObject({ PK: 'ENTRIES#c#s' })
+    expect(operations[1]!.Put!.Item).not.toHaveProperty('ttl')
   })
 
   it('retries timestamp collisions and diagnoses missing/archived sessions', async () => {
@@ -62,7 +63,7 @@ describe('DynamoDB entries', () => {
       if (command.constructor.name === 'GetCommand') return { Item: session() }
       return {}
     })
-    const result = await dynamoAppendEntry(retry, 'T', 1, () => NOW, {
+    const result = await dynamoAppendEntry(retry, 'T', () => NOW, {
       credId: 'c',
       sessionId: 's',
       data: {},
@@ -78,7 +79,7 @@ describe('DynamoDB entries', () => {
         return itemValue ? { Item: itemValue } : {}
       })
       await expect(
-        dynamoAppendEntry(doc, 'T', 1, () => NOW, { credId: 'c', sessionId: 's', data: {} }),
+        dynamoAppendEntry(doc, 'T', () => NOW, { credId: 'c', sessionId: 's', data: {} }),
       ).rejects.toMatchObject({ code })
     }
   })
@@ -90,7 +91,6 @@ describe('DynamoDB entries', () => {
           throw new Error('boom')
         }),
         'T',
-        1,
         () => NOW,
         { credId: 'c', sessionId: 's', data: {} },
       ),
@@ -100,7 +100,7 @@ describe('DynamoDB entries', () => {
       return { Item: session() }
     })
     await expect(
-      dynamoAppendEntry(exhausted, 'T', 1, () => NOW, { credId: 'c', sessionId: 's', data: {} }),
+      dynamoAppendEntry(exhausted, 'T', () => NOW, { credId: 'c', sessionId: 's', data: {} }),
     ).rejects.toThrow('unique timestamp')
   })
 

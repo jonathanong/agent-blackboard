@@ -158,25 +158,101 @@ describe('DynamoDB sessions', () => {
     expect(call).toBe(2)
   })
 
-  it('archives sessions, preserving an existing timestamp', async () => {
-    const missing = client(() => ({}))
-    await expect(dynamoArchiveSession(missing, 'T', now, 'c', 's')).rejects.toMatchObject({
-      code: 'session_not_found',
+  const TTL_DAYS = 30
+
+  it('rejects archiving an unknown session without touching entries', async () => {
+    let calls = 0
+    const missing = client(() => {
+      calls += 1
+      return {}
     })
-    const archived = client(() => ({ Item: item({ archivedAt: 'old' }) }))
-    await expect(dynamoArchiveSession(archived, 'T', now, 'c', 's')).resolves.toMatchObject({
-      archivedAt: 'old',
-    })
-    let call = 0
-    const success = client(() =>
-      ++call === 1 ? { Item: item() } : { Attributes: item({ archivedAt: 'new' }) },
+    await expect(dynamoArchiveSession(missing, 'T', TTL_DAYS, now, 'c', 's')).rejects.toMatchObject(
+      { code: 'session_not_found' },
     )
-    await expect(dynamoArchiveSession(success, 'T', now, 'c', 's')).resolves.toMatchObject({
+    expect(calls).toBe(1)
+  })
+
+  it('is idempotent on an already-archived session, preserving its timestamp and skipping entries', async () => {
+    let calls = 0
+    const archived = client(() => {
+      calls += 1
+      return { Item: item({ archivedAt: 'old' }) }
+    })
+    await expect(
+      dynamoArchiveSession(archived, 'T', TTL_DAYS, now, 'c', 's'),
+    ).resolves.toMatchObject({ archivedAt: 'old' })
+    expect(calls).toBe(1)
+  })
+
+  it('archives a session with zero entries', async () => {
+    const doc = client((command) => {
+      if (command.constructor.name === 'GetCommand') return { Item: item() }
+      if (command.constructor.name === 'QueryCommand') return {}
+      if (command.constructor.name === 'UpdateCommand')
+        return { Attributes: item({ archivedAt: 'new' }) }
+      throw new Error(`unexpected ${command.constructor.name}`)
+    })
+    await expect(dynamoArchiveSession(doc, 'T', TTL_DAYS, now, 'c', 's')).resolves.toMatchObject({
       archivedAt: 'new',
     })
-    call = 0
-    const absent = client(() => (++call === 1 ? { Item: item() } : {}))
-    await expect(dynamoArchiveSession(absent, 'T', now, 'c', 's')).rejects.toThrow(
+  })
+
+  it('fans the same ttl onto every entry before flipping archivedAt on the session', async () => {
+    const calls: Command[] = []
+    const doc = client((command) => {
+      calls.push(command)
+      if (command.constructor.name === 'GetCommand') return { Item: item() }
+      if (command.constructor.name === 'QueryCommand') {
+        return {
+          Items: [
+            { PK: 'ENTRIES#c#s', SK: 'ENTRY#a' },
+            { PK: 'ENTRIES#c#s', SK: 'ENTRY#b' },
+          ],
+        }
+      }
+      const key = command.input.Key as { PK: string }
+      return key.PK === 'SESSIONS#c' ? { Attributes: item({ archivedAt: 'new' }) } : {}
+    })
+    const expectedTtl = Math.floor(now().getTime() / 1000) + TTL_DAYS * 86400
+
+    await expect(dynamoArchiveSession(doc, 'T', TTL_DAYS, now, 'c', 's')).resolves.toMatchObject({
+      archivedAt: 'new',
+    })
+
+    const isEntryUpdate = (c: Command): boolean =>
+      c.constructor.name === 'UpdateCommand' && (c.input.Key as { PK: string }).PK === 'ENTRIES#c#s'
+    const isSessionUpdate = (c: Command): boolean =>
+      c.constructor.name === 'UpdateCommand' && (c.input.Key as { PK: string }).PK === 'SESSIONS#c'
+
+    const entryUpdates = calls.filter(isEntryUpdate)
+    expect(entryUpdates).toHaveLength(2)
+    for (const update of entryUpdates) {
+      expect(update.input).toMatchObject({
+        UpdateExpression: 'SET #ttl = :ttl',
+        ExpressionAttributeNames: { '#ttl': 'ttl' },
+        ExpressionAttributeValues: { ':ttl': expectedTtl },
+      })
+    }
+
+    const lastEntryIndex = calls.reduce((last, c, index) => (isEntryUpdate(c) ? index : last), -1)
+    const sessionIndex = calls.findIndex(isSessionUpdate)
+    expect(sessionIndex).toBeGreaterThan(lastEntryIndex)
+
+    const sessionUpdate = calls[sessionIndex]!
+    expect(sessionUpdate.input).toMatchObject({
+      UpdateExpression: 'SET archivedAt = :archivedAt, #ttl = :ttl',
+      ExpressionAttributeValues: { ':archivedAt': now().toISOString(), ':ttl': expectedTtl },
+    })
+  })
+
+  it('throws if the final archive update returns no session', async () => {
+    const doc = client((command) => {
+      if (command.constructor.name === 'GetCommand') return { Item: item() }
+      if (command.constructor.name === 'QueryCommand') return {}
+      if (command.constructor.name === 'UpdateCommand') return {}
+      throw new Error(`unexpected ${command.constructor.name}`)
+    })
+    await expect(dynamoArchiveSession(doc, 'T', TTL_DAYS, now, 'c', 's')).rejects.toThrow(
       'returned no session',
     )
   })

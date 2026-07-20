@@ -44,7 +44,6 @@ async function requireSession(
 export async function dynamoAppendEntry(
   doc: DynamoDBDocumentClient,
   tableName: string,
-  ttlDays: number,
   now: () => Date,
   input: NewSessionEntry,
 ): Promise<SessionEntry> {
@@ -71,7 +70,6 @@ export async function dynamoAppendEntry(
                   SK: entrySk(createdAt),
                   entityType: 'entry',
                   ...entry,
-                  ttl: Math.floor((initial + offset) / 1000) + ttlDays * 86400,
                 },
                 ConditionExpression: 'attribute_not_exists(PK)',
               },

@@ -42,10 +42,10 @@ export function createDynamoStore(options: DynamoStoreOptions = {}): BlackboardS
       return dynamoPatchSession(doc, tableName, credId, patch)
     },
     archiveSession(credId: string, sessionId: string): Promise<Session> {
-      return dynamoArchiveSession(doc, tableName, now, credId, sessionId)
+      return dynamoArchiveSession(doc, tableName, ttlDays, now, credId, sessionId)
     },
     appendEntry(entry: NewSessionEntry): Promise<SessionEntry> {
-      return dynamoAppendEntry(doc, tableName, ttlDays, now, entry)
+      return dynamoAppendEntry(doc, tableName, now, entry)
     },
     getEntries(credId: string, sessionId: string): AsyncIterable<SessionEntry> {
       return dynamoGetEntries(doc, tableName, credId, sessionId)

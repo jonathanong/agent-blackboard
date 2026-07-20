@@ -9,7 +9,9 @@ Parameters:
     Type: Number
     Default: 90
     MinValue: 1
-    Description: Days an entry lives before DynamoDB TTL deletes it.
+    Description: >-
+      Days an archived session and its entries are retained before DynamoDB
+      TTL deletes them.
 
   AdminCredentials:
     Type: String
@@ -49,6 +51,8 @@ Resources:
       TimeToLiveSpecification:
         AttributeName: ttl
         Enabled: true
+      SSESpecification:
+        SSEEnabled: true
 
   AgentBlackboardFunctionRole:
     Type: AWS::IAM::Role
