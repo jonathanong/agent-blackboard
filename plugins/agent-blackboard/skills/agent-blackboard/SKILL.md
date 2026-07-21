@@ -19,8 +19,9 @@ skill explains how to use it; project instructions decide what is worth recordin
 - **Sessions can carry data.** Session patches shallow-merge a free-form `data` object.
 - **`data` is unstructured.** Every entry carries a free-form `data` object. Attach whatever is
   useful — a note, a branch name, a PR number, a decision and its rationale. There is no schema.
-- **Entries are append-only, with patching for enrichment.** An entry is identified by
-  `(sessionId, createdAt)`. Patches shallow-merge `data`; archival applies to the whole session.
+- **Entries are strictly append-only.** An entry's `data` cannot be changed after it is written; to
+  enrich or correct an earlier observation, append a new entry rather than editing the original.
+  Archival applies to the whole session.
 
 ## Using it via MCP
 
@@ -33,7 +34,6 @@ If the `agent-blackboard` MCP server is connected, use its tools directly:
 - `session_archive` — set `archivedAt`; archived data remains readable but immutable.
 - `entry_append` — append `data` to an existing active session.
 - `entry_get` — read entries from one explicit session.
-- `entry_patch` — shallow-merge `data` into one entry identified by `sessionId` and `createdAt`.
 
 ## Using it via the CLI
 
@@ -46,7 +46,6 @@ agent-blackboard sessions create worker-456 --parent-session-id root-123 \
 agent-blackboard sessions patch worker-456 --data '{"branch":"fix/retry"}'
 agent-blackboard append --session-id worker-456 '{"note":"found the failing edge case"}'
 agent-blackboard get --session-id worker-456 --format markdown
-agent-blackboard patch --session-id worker-456 --created-at <timestamp> --data '{"pr":1234}'
 ```
 
 Output defaults to JSON; pass `--format jsonl` or `--format markdown` for streaming or
@@ -54,6 +53,6 @@ human-readable reads.
 
 ## What this skill does not do
 
-This skill only covers **how** to create sessions and append, get, and patch entries. It does not prescribe
+This skill only covers **how** to create sessions and append and get entries. It does not prescribe
 **what** to record — write, or look for, a project-specific skill that layers that guidance on top
 of this one.

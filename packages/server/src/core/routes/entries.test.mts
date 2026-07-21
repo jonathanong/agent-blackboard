@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryBlackboardStore } from '../../store/memory.mjs'
+import { SessionStoreError } from '../../store/errors.mjs'
 import type { HandlerRequest } from '../types.mjs'
 import { handleEntriesRoute } from './entries.mjs'
 
@@ -47,24 +48,17 @@ describe('entries route', () => {
     expect((await handleEntriesRoute(request({ method: 'DELETE' }), store, 's')).status).toBe(404)
   })
 
-  it('appends, streams, patches, and blocks archived sessions', async () => {
+  it('appends, streams, and blocks archived sessions', async () => {
     const appendedResponse = await handleEntriesRoute(
       request({ method: 'POST', body: { data: { marker: 'x' } } }),
       store,
       's',
     )
     expect(appendedResponse.status).toBe(201)
-    const appended = (await json(appendedResponse)) as { createdAt: string }
     const listed = await handleEntriesRoute(request({ query: { format: 'json' } }), store, 's')
     expect(await json(listed)).toHaveLength(1)
     const jsonl = await handleEntriesRoute(request({ query: { format: 'jsonl' } }), store, 's')
     expect(await collect(jsonl.body)).toContain('"marker":"x"')
-    const patched = await handleEntriesRoute(
-      request({ method: 'PATCH', body: { createdAt: appended.createdAt, data: { pr: 1 } } }),
-      store,
-      's',
-    )
-    expect(await json(patched)).toMatchObject({ data: { marker: 'x', pr: 1 } })
     await store.archiveSession(credId, 's')
     expect(
       (await handleEntriesRoute(request({ method: 'POST', body: { data: {} } }), store, 's'))
@@ -73,38 +67,19 @@ describe('entries route', () => {
     expect((await handleEntriesRoute(request(), store, 's')).status).toBe(200)
   })
 
-  it('validates append, format, and patch inputs', async () => {
+  it('validates append and format inputs', async () => {
     for (const body of ['bad', [], {}, { data: [] }]) {
       expect((await handleEntriesRoute(request({ method: 'POST', body }), store, 's')).status).toBe(
         400,
       )
     }
+    const oversized = 'a'.repeat(380 * 1024 + 1)
+    expect(
+      (await handleEntriesRoute(request({ method: 'POST', body: oversized }), store, 's')).status,
+    ).toBe(413)
     expect(
       (await handleEntriesRoute(request({ query: { format: 'yaml' } }), store, 's')).status,
     ).toBe(400)
-    for (const body of [
-      'bad',
-      {},
-      { createdAt: 'bad', data: { a: 1 } },
-      { createdAt: new Date().toISOString(), data: {} },
-      { createdAt: new Date().toISOString(), data: [] },
-    ]) {
-      expect(
-        (await handleEntriesRoute(request({ method: 'PATCH', body }), store, 's')).status,
-      ).toBe(400)
-    }
-    expect(
-      (
-        await handleEntriesRoute(
-          request({
-            method: 'PATCH',
-            body: { createdAt: new Date().toISOString(), data: { a: 1 } },
-          }),
-          store,
-          's',
-        )
-      ).status,
-    ).toBe(404)
     expect(
       (await handleEntriesRoute(request({ method: 'POST', body: { data: {} } }), store, 'missing'))
         .status,
@@ -118,16 +93,17 @@ describe('entries route', () => {
     await expect(
       handleEntriesRoute(request({ method: 'POST', body: { data: {} } }), store, 's'),
     ).rejects.toBe(boom)
-    vi.spyOn(store, 'patchEntry').mockRejectedValueOnce(boom)
-    await expect(
-      handleEntriesRoute(
-        request({
-          method: 'PATCH',
-          body: { createdAt: '2026-01-01T00:00:00.000Z', data: { a: 1 } },
-        }),
-        store,
-        's',
-      ),
-    ).rejects.toBe(boom)
+  })
+
+  it('maps a timestamp_exhausted store error to 503', async () => {
+    vi.spyOn(store, 'appendEntry').mockRejectedValueOnce(
+      new SessionStoreError('timestamp_exhausted', 'could not allocate'),
+    )
+    const response = await handleEntriesRoute(
+      request({ method: 'POST', body: { data: {} } }),
+      store,
+      's',
+    )
+    expect(response.status).toBe(503)
   })
 })

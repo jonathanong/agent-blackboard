@@ -1,5 +1,30 @@
 import type { CredentialRecord, Session, SessionEntry } from '../core/types.mjs'
 
+export const DEFAULT_SESSIONS_LIMIT = 50
+export const MAX_SESSIONS_LIMIT = 200
+
+/**
+ * Server-side filter pushdown for `listSessions`. `parentSessionId` and
+ * `data` use presence (not `undefined`) to distinguish "no filter" from
+ * "filter for this value" — see each field's own comment.
+ */
+export interface ListSessionsQuery {
+  archived?: boolean
+  agent?: string
+  version?: string
+  /** Absent = no filter. `null` = filter for root sessions. String = filter for that parent. */
+  parentSessionId?: string | null
+  /** Per-key equality filter against the session's `data` object. */
+  data?: Record<string, unknown>
+  limit?: number
+  cursor?: string
+}
+
+export interface ListSessionsResult {
+  sessions: Session[]
+  nextCursor: string | null
+}
+
 /** Body accepted by `appendEntry`; `credId` comes from authentication. */
 export interface NewSessionEntry {
   credId: string
@@ -20,13 +45,6 @@ export interface SessionPatch {
   data: Record<string, unknown>
 }
 
-/** Identifies one entry by its composite key and shallow-merges `data`. */
-export interface EntryPatch {
-  sessionId: string
-  createdAt: string
-  data: Record<string, unknown>
-}
-
 export interface CredentialIdOrName {
   id?: string
   name?: string
@@ -42,13 +60,12 @@ export interface CredentialIdOrName {
 export interface BlackboardStore {
   createSession(session: NewSession): Promise<Session>
   getSession(credId: string, sessionId: string): Promise<Session | undefined>
-  listSessions(credId: string): AsyncIterable<Session>
+  listSessions(credId: string, query?: ListSessionsQuery): Promise<ListSessionsResult>
   patchSession(credId: string, patch: SessionPatch): Promise<Session>
   archiveSession(credId: string, sessionId: string): Promise<Session>
 
   appendEntry(entry: NewSessionEntry): Promise<SessionEntry>
   getEntries(credId: string, sessionId: string): AsyncIterable<SessionEntry>
-  patchEntry(credId: string, patch: EntryPatch): Promise<SessionEntry>
 
   createCredential(name: string): Promise<{ record: CredentialRecord; token: string }>
 

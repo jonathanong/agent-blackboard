@@ -53,11 +53,22 @@ Omitting `archived`, or setting it to `0`, searches active sessions. Set it to `
 sessions. To search both states, call the tool twice. With no filters, the tool lists all active
 sessions.
 
+Except when `sessionId` is supplied (see below), the tool returns one page at a time rather than
+every match: pass `limit` (max sessions per page, server default 50, hard max 200) and `cursor`
+(the opaque `nextCursor` from a previous call) to page through results. Omit `cursor` to fetch the
+first page, and keep calling with the returned `nextCursor` until it comes back `null` to see every
+match.
+
 Returns:
 
 ```json
-{ "sessions": [] }
+{ "sessions": [], "nextCursor": null }
 ```
+
+When `sessionId` is supplied, the tool bypasses pagination entirely: it does a single direct lookup
+of that session (not a list scan) and then applies any other supplied filters to it in-process.
+`limit` and `cursor` are ignored in this case, `nextCursor` is always `null`, and `sessions` is
+either empty (no such session, or it didn't match the other filters) or a single-element array.
 
 ## `session_patch`
 
@@ -91,16 +102,5 @@ else.
 { "sessionId": "worker-456", "format": "jsonl" }
 ```
 
-`format` is optional and may be `json` or `jsonl`. Returns `{ "entries": SessionEntry[] }`.
-
-## `entry_patch`
-
-```json
-{
-  "sessionId": "worker-456",
-  "createdAt": "2026-07-19T20:00:00.000Z",
-  "data": { "pr": 7777 }
-}
-```
-
-The composite key `(sessionId, createdAt)` selects exactly one entry. `data` is shallow-merged.
+`format` is optional and may be `json` or `jsonl`. Returns `{ "entries": SessionEntry[] }`. Entries
+are append-only: once written, an entry's `data` cannot be changed in place.

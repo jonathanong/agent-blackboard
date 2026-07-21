@@ -7,18 +7,15 @@ import {
   dynamoGetCredentialById,
   dynamoListCredentials,
 } from './dynamo-credentials.mjs'
-import { dynamoAppendEntry, dynamoGetEntries, dynamoPatchEntry } from './dynamo-entries.mjs'
+import { dynamoAppendEntry, dynamoGetEntries } from './dynamo-entries.mjs'
+import { dynamoListSessions } from './dynamo-session-list.mjs'
 import { dynamoPatchSession } from './dynamo-session-patch.mjs'
-import {
-  dynamoArchiveSession,
-  dynamoCreateSession,
-  dynamoGetSession,
-  dynamoListSessions,
-} from './dynamo-sessions.mjs'
+import { dynamoArchiveSession, dynamoCreateSession, dynamoGetSession } from './dynamo-sessions.mjs'
 import type {
   BlackboardStore,
   CredentialIdOrName,
-  EntryPatch,
+  ListSessionsQuery,
+  ListSessionsResult,
   NewSession,
   NewSessionEntry,
   SessionPatch,
@@ -36,23 +33,20 @@ export function createDynamoStore(options: DynamoStoreOptions = {}): BlackboardS
     getSession(credId: string, sessionId: string): Promise<Session | undefined> {
       return dynamoGetSession(doc, tableName, credId, sessionId)
     },
-    listSessions(credId: string): AsyncIterable<Session> {
-      return dynamoListSessions(doc, tableName, credId)
+    listSessions(credId: string, query?: ListSessionsQuery): Promise<ListSessionsResult> {
+      return dynamoListSessions(doc, tableName, credId, query)
     },
     patchSession(credId: string, patch: SessionPatch): Promise<Session> {
       return dynamoPatchSession(doc, tableName, credId, patch)
     },
     archiveSession(credId: string, sessionId: string): Promise<Session> {
-      return dynamoArchiveSession(doc, tableName, now, credId, sessionId)
+      return dynamoArchiveSession(doc, tableName, ttlDays, now, credId, sessionId)
     },
     appendEntry(entry: NewSessionEntry): Promise<SessionEntry> {
-      return dynamoAppendEntry(doc, tableName, ttlDays, now, entry)
+      return dynamoAppendEntry(doc, tableName, now, entry)
     },
     getEntries(credId: string, sessionId: string): AsyncIterable<SessionEntry> {
       return dynamoGetEntries(doc, tableName, credId, sessionId)
-    },
-    patchEntry(credId: string, patch: EntryPatch): Promise<SessionEntry> {
-      return dynamoPatchEntry(doc, tableName, credId, patch)
     },
     createCredential(name: string): Promise<{ record: CredentialRecord; token: string }> {
       return dynamoCreateCredential(doc, tableName, now, name)

@@ -59,7 +59,12 @@ describe('sessions route', () => {
     )
     expect(childResponse.status).toBe(201)
     const listResponse = await handleSessionsRoute(request(), store)
-    expect(await body(listResponse)).toHaveLength(2)
+    // Both share the frozen NOW clock, so listSessions's (createdAt, id) sort
+    // ties on createdAt and falls back to id ordering: 'child' < 'root'.
+    expect(await body(listResponse)).toMatchObject({
+      sessions: [{ id: 'child' }, { id: 'root' }],
+      nextCursor: null,
+    })
     expect(await body(await handleSessionsRoute(request(), store, 'child'))).toMatchObject({
       parentSessionId: 'root',
     })
@@ -78,6 +83,14 @@ describe('sessions route', () => {
       const response = await handleSessionsRoute(request({ method: 'POST', body: invalid }), store)
       expect(response.status).toBe(400)
     }
+    expect(
+      (
+        await handleSessionsRoute(
+          request({ method: 'POST', body: 'a'.repeat(380 * 1024 + 1) }),
+          store,
+        )
+      ).status,
+    ).toBe(413)
     expect(
       (
         await handleSessionsRoute(
@@ -119,6 +132,18 @@ describe('sessions route', () => {
       (await handleSessionsRoute(request({ method: 'PATCH', body: 'bad' }), store, 's')).status,
     ).toBe(400)
     expect(
+      (
+        await handleSessionsRoute(
+          request({ method: 'PATCH', body: 'a'.repeat(380 * 1024 + 1) }),
+          store,
+          's',
+        )
+      ).status,
+    ).toBe(413)
+    expect(
+      (await handleSessionsRoute(request({ method: 'PATCH', body: [1, 2] }), store, 's')).status,
+    ).toBe(400)
+    expect(
       (await handleSessionsRoute(request({ method: 'PATCH', body: { data: {} } }), store, 's'))
         .status,
     ).toBe(400)
@@ -143,10 +168,13 @@ describe('sessions route', () => {
       's',
     )
     expect(await body(archived)).toMatchObject({ archivedAt: NOW.toISOString() })
-    expect(await body(await handleSessionsRoute(request(), store))).toEqual([])
+    expect(await body(await handleSessionsRoute(request(), store))).toMatchObject({
+      sessions: [],
+      nextCursor: null,
+    })
     expect(
       await body(await handleSessionsRoute(request({ query: { archived: 'true' } }), store)),
-    ).toHaveLength(1)
+    ).toMatchObject({ sessions: [{ id: 's' }] })
     expect((await handleSessionsRoute(request({ query: { archived: 'all' } }), store)).status).toBe(
       400,
     )
@@ -170,6 +198,87 @@ describe('sessions route', () => {
     ).toBe(404)
   })
 
+  it('rejects invalid list query params with 400 before ever touching the store', async () => {
+    for (const query of [
+      { limit: '0' },
+      { limit: '-1' },
+      { limit: '1.5' },
+      { limit: '201' },
+      { data: 'not json' },
+      { data: '[1,2]' },
+    ]) {
+      expect((await handleSessionsRoute(request({ query }), store)).status).toBe(400)
+    }
+  })
+
+  it('rejects a malformed cursor with a 400 invalid_cursor error', async () => {
+    const response = await handleSessionsRoute(
+      request({ query: { cursor: 'not-a-real-cursor' } }),
+      store,
+    )
+    expect(response.status).toBe(400)
+  })
+
+  it('filters listed sessions by agent, version, and parentSessionId', async () => {
+    const credId = (await store.listCredentials())[0]!.id
+    await store.createSession({ credId, id: 'root', parentSessionId: null, ...AGENT })
+    await store.createSession({
+      credId,
+      id: 'child',
+      parentSessionId: 'root',
+      agent: AGENT.agent,
+      version: '2.0.0',
+    })
+    await store.createSession({
+      credId,
+      id: 'other',
+      parentSessionId: null,
+      agent: 'other-agent',
+      version: AGENT.version,
+    })
+
+    expect(
+      await body(await handleSessionsRoute(request({ query: { agent: 'other-agent' } }), store)),
+    ).toMatchObject({ sessions: [{ id: 'other' }] })
+    expect(
+      await body(await handleSessionsRoute(request({ query: { version: '2.0.0' } }), store)),
+    ).toMatchObject({ sessions: [{ id: 'child' }] })
+    expect(
+      await body(await handleSessionsRoute(request({ query: { parentSessionId: 'root' } }), store)),
+    ).toMatchObject({ sessions: [{ id: 'child' }] })
+    // Tied on the frozen NOW clock again: 'other' < 'root'.
+    expect(
+      await body(await handleSessionsRoute(request({ query: { parentSessionId: '' } }), store)),
+    ).toMatchObject({ sessions: [{ id: 'other' }, { id: 'root' }] })
+  })
+
+  it('pages through listed sessions via nextCursor without loss or duplication', async () => {
+    const credId = (await store.listCredentials())[0]!.id
+    const created: string[] = []
+    for (let i = 0; i < 5; i += 1) {
+      await store.createSession({ credId, id: `s${i}`, parentSessionId: null, ...AGENT })
+      created.push(`s${i}`)
+    }
+
+    const seen = new Set<string>()
+    let cursor: string | undefined
+    let iterations = 0
+    do {
+      const query: Record<string, string> =
+        cursor === undefined ? { limit: '2' } : { limit: '2', cursor }
+      const page = (await body(await handleSessionsRoute(request({ query }), store))) as {
+        sessions: { id: string }[]
+        nextCursor: string | null
+      }
+      for (const session of page.sessions) seen.add(session.id)
+      cursor = page.nextCursor ?? undefined
+      iterations += 1
+      expect(iterations).toBeLessThanOrEqual(created.length + 1)
+    } while (cursor !== undefined)
+
+    expect(seen).toEqual(new Set(created))
+  })
+
   it('propagates unexpected store failures', async () => {
     const boom = new Error('boom')
     vi.spyOn(store, 'createSession').mockRejectedValueOnce(boom)
@@ -191,5 +300,7 @@ describe('sessions route', () => {
         's',
       ),
     ).rejects.toBe(boom)
+    vi.spyOn(store, 'listSessions').mockRejectedValueOnce(boom)
+    await expect(handleSessionsRoute(request(), store)).rejects.toBe(boom)
   })
 })

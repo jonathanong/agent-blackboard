@@ -64,8 +64,9 @@ Never infer or generate any of them. Ask for missing values.
    ```
 
 5. Add optional `files`, `commands`, or `decision` fields only when they improve reuse.
-6. Save the returned `createdAt`. To enrich the same observation, call `entry_patch` with the exact
-   `(sessionId, createdAt)`. Append a new entry for a different observation.
+6. Entries are append-only. To enrich an earlier observation, call `entry_append` again with a new
+   entry rather than modifying the original — reference the earlier entry's `createdAt` in the new
+   entry's `data` if the connection isn't otherwise obvious.
 7. Continue the assigned work. Do not archive the session.
 
 Do not log routine progress, placeholder text, unsupported guesses, or vague narration.

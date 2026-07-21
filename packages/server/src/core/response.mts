@@ -28,6 +28,10 @@ export function unauthorizedResponse(): HandlerResponse {
   return errorResponse(401, 'unauthorized')
 }
 
+export function payloadTooLargeResponse(): HandlerResponse {
+  return errorResponse(413, 'request body too large')
+}
+
 export function streamResponse(
   status: number,
   contentType: string,

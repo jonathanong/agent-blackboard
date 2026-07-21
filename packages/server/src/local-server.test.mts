@@ -72,7 +72,6 @@ function notImplementedStore(overrides: Partial<BlackboardStore> = {}): Blackboa
     archiveSession: notImplemented('archiveSession'),
     appendEntry: notImplemented('appendEntry'),
     getEntries: notImplemented('getEntries'),
-    patchEntry: notImplemented('patchEntry'),
     createCredential: notImplemented('createCredential'),
     listCredentials: notImplemented('listCredentials'),
     getCredentialById: notImplemented('getCredentialById'),

@@ -26,7 +26,7 @@ local server started with `AGENT_BLACKBOARD_STORE=memory pnpm --dir packages/ser
 >    verify it returns the expected complete sessions. Use CLI `sessions get <child>` to verify its
 >    parent, agent, and version.
 > 7. Archive the child through MCP. Verify its session and entries remain readable through both MCP
->    and CLI, while entry append/patch, session data patch, and creating a grandchild all fail.
+>    and CLI, while entry append, session data patch, and creating a grandchild all fail.
 > 8. Verify CLI `sessions list` excludes the child by default and `sessions list --archived true`
 >    includes it with a non-null `archivedAt`. Verify MCP `session_search` behaves the same way:
 >    `archived: 0` excludes the child and `archived: 1` finds it.

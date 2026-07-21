@@ -1,11 +1,6 @@
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  dynamoAppendEntry,
-  dynamoGetEntries,
-  dynamoPatchEntry,
-  itemToEntry,
-} from './dynamo-entries.mjs'
+import { dynamoAppendEntry, dynamoGetEntries, itemToEntry } from './dynamo-entries.mjs'
 
 interface Command {
   constructor: { name: string }
@@ -41,7 +36,7 @@ async function collect<T>(items: AsyncIterable<T>): Promise<T[]> {
 }
 
 describe('DynamoDB entries', () => {
-  it('maps entries and appends with an active-session transaction and ttl', async () => {
+  it('maps entries and appends with an active-session transaction, without a ttl', async () => {
     expect(itemToEntry(entry())).toEqual({
       sessionId: 's',
       createdAt: NOW.toISOString(),
@@ -53,10 +48,11 @@ describe('DynamoDB entries', () => {
       return {}
     })
     await expect(
-      dynamoAppendEntry(doc, 'T', 10, () => NOW, { credId: 'c', sessionId: 's', data: {} }),
+      dynamoAppendEntry(doc, 'T', () => NOW, { credId: 'c', sessionId: 's', data: {} }),
     ).resolves.toEqual({ sessionId: 's', createdAt: NOW.toISOString(), data: {} })
     const operations = input!.TransactItems as Array<{ Put?: { Item: Record<string, unknown> } }>
-    expect(operations[1]!.Put!.Item).toMatchObject({ PK: 'ENTRIES#c#s', ttl: 1768089600 })
+    expect(operations[1]!.Put!.Item).toMatchObject({ PK: 'ENTRIES#c#s' })
+    expect(operations[1]!.Put!.Item).not.toHaveProperty('ttl')
   })
 
   it('retries timestamp collisions and diagnoses missing/archived sessions', async () => {
@@ -67,7 +63,7 @@ describe('DynamoDB entries', () => {
       if (command.constructor.name === 'GetCommand') return { Item: session() }
       return {}
     })
-    const result = await dynamoAppendEntry(retry, 'T', 1, () => NOW, {
+    const result = await dynamoAppendEntry(retry, 'T', () => NOW, {
       credId: 'c',
       sessionId: 's',
       data: {},
@@ -83,7 +79,7 @@ describe('DynamoDB entries', () => {
         return itemValue ? { Item: itemValue } : {}
       })
       await expect(
-        dynamoAppendEntry(doc, 'T', 1, () => NOW, { credId: 'c', sessionId: 's', data: {} }),
+        dynamoAppendEntry(doc, 'T', () => NOW, { credId: 'c', sessionId: 's', data: {} }),
       ).rejects.toMatchObject({ code })
     }
   })
@@ -95,18 +91,25 @@ describe('DynamoDB entries', () => {
           throw new Error('boom')
         }),
         'T',
-        1,
         () => NOW,
         { credId: 'c', sessionId: 's', data: {} },
       ),
     ).rejects.toThrow('boom')
+    let attempts = 0
     const exhausted = client((command) => {
-      if (command.constructor.name === 'TransactWriteCommand') throw canceled()
+      if (command.constructor.name === 'TransactWriteCommand') {
+        attempts++
+        throw canceled()
+      }
       return { Item: session() }
     })
     await expect(
-      dynamoAppendEntry(exhausted, 'T', 1, () => NOW, { credId: 'c', sessionId: 's', data: {} }),
-    ).rejects.toThrow('unique timestamp')
+      dynamoAppendEntry(exhausted, 'T', () => NOW, { credId: 'c', sessionId: 's', data: {} }),
+    ).rejects.toMatchObject({
+      code: 'timestamp_exhausted',
+      message: expect.stringContaining('unique timestamp'),
+    })
+    expect(attempts).toBe(100)
   })
 
   it('requires an existing session, allows archived reads, and paginates', async () => {
@@ -140,74 +143,5 @@ describe('DynamoDB entries', () => {
         ),
       ),
     ).toEqual([])
-  })
-
-  it('patches with a session condition and rejects missing entries', async () => {
-    const missing = client((command) =>
-      command.constructor.name === 'GetCommand' &&
-      (command.input.Key as { PK: string }).PK.startsWith('SESSIONS')
-        ? { Item: session() }
-        : {},
-    )
-    await expect(
-      dynamoPatchEntry(missing, 'T', 'c', { sessionId: 's', createdAt: 'now', data: {} }),
-    ).rejects.toMatchObject({ code: 'entry_not_found' })
-
-    let gets = 0
-    let transaction: Record<string, unknown> | undefined
-    const success = client((command) => {
-      if (command.constructor.name === 'GetCommand')
-        return { Item: gets++ === 0 ? session() : entry('now') }
-      transaction = command.input
-      return {}
-    })
-    await expect(
-      dynamoPatchEntry(success, 'T', 'c', {
-        sessionId: 's',
-        createdAt: 'now',
-        data: { b: 2 },
-      }),
-    ).resolves.toMatchObject({ data: { a: 1, b: 2 } })
-    expect(transaction!.TransactItems).toHaveLength(2)
-  })
-
-  it('diagnoses archive races while patching and preserves unrelated failures', async () => {
-    for (const [sessionAfterRace, expected] of [
-      [undefined, 'session_not_found'],
-      [session('later'), 'session_archived'],
-      [session(), undefined],
-    ] as const) {
-      let get = 0
-      const doc = client((command) => {
-        if (command.constructor.name === 'GetCommand') {
-          get += 1
-          if (get === 1) return { Item: session() }
-          if (get === 2) return { Item: entry('now') }
-          return sessionAfterRace ? { Item: sessionAfterRace } : {}
-        }
-        throw canceled()
-      })
-      const result = dynamoPatchEntry(doc, 'T', 'c', {
-        sessionId: 's',
-        createdAt: 'now',
-        data: { b: 2 },
-      })
-      if (expected) await expect(result).rejects.toMatchObject({ code: expected })
-      else await expect(result).rejects.toThrow('canceled')
-    }
-    await expect(
-      dynamoPatchEntry(
-        client((command) => {
-          if (command.constructor.name === 'GetCommand')
-            return (command.input.Key as { PK: string }).PK.startsWith('SESSIONS')
-              ? { Item: session() }
-              : { Item: entry('now') }
-          throw new Error('boom')
-        }),
-        'T',
-        'c',
-        { sessionId: 's', createdAt: 'now', data: {} },
-      ),
-    ).rejects.toThrow('boom')
   })
 })

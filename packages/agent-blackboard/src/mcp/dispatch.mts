@@ -1,6 +1,5 @@
 import { handleEntryAppend } from './tool-append.mjs'
 import { handleEntryGet } from './tool-get.mjs'
-import { handleEntryPatch } from './tool-patch.mjs'
 import {
   handleSessionArchive,
   handleSessionCreate,
@@ -27,8 +26,6 @@ export function dispatchTool(
       return handleEntryAppend(args, config)
     case 'entry_get':
       return handleEntryGet(args, config)
-    case 'entry_patch':
-      return handleEntryPatch(args, config)
     default:
       throw new Error(`Unknown tool: ${name}`)
   }

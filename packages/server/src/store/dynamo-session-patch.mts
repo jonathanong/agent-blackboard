@@ -12,9 +12,13 @@ export async function dynamoPatchSession(
   credId: string,
   patch: SessionPatch,
 ): Promise<Session> {
+  const entries = Object.entries(patch.data)
+  if (entries.length === 0) {
+    throw new Error('patchSession requires at least one key in data')
+  }
   const names: Record<string, string> = { '#data': 'data' }
   const values: Record<string, unknown> = {}
-  const assignments = Object.entries(patch.data).map(([key, value], index) => {
+  const assignments = entries.map(([key, value], index) => {
     names[`#key${index}`] = key
     values[`:value${index}`] = value
     return `#data.#key${index} = :value${index}`

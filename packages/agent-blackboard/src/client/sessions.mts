@@ -3,11 +3,27 @@ import type {
   ClientConfig,
   CreateSessionInput,
   ListSessionsQuery,
+  ListSessionsResult,
   PatchSessionInput,
   Session,
 } from './types.mjs'
 
 const JSON_HEADERS = { 'content-type': 'application/json' }
+
+/** Converts a typed `listSessions` query into wire-format string params. */
+function buildListSessionsQuery(query: ListSessionsQuery): Record<string, string> {
+  const wire: Record<string, string> = {}
+  if (query.archived !== undefined) wire.archived = String(query.archived)
+  if (query.agent !== undefined) wire.agent = query.agent
+  if (query.version !== undefined) wire.version = query.version
+  if (query.parentSessionId !== undefined) {
+    wire.parentSessionId = query.parentSessionId ?? ''
+  }
+  if (query.data !== undefined) wire.data = JSON.stringify(query.data)
+  if (query.limit !== undefined) wire.limit = String(query.limit)
+  if (query.cursor !== undefined) wire.cursor = query.cursor
+  return wire
+}
 
 export class Sessions {
   readonly #config: ClientConfig
@@ -24,9 +40,11 @@ export class Sessions {
     })
   }
 
-  list(query: ListSessionsQuery = {}): Promise<Session[]> {
-    const suffix = query.archived === undefined ? '' : `?archived=${String(query.archived)}`
-    return requestJson(this.#config, `/sessions${suffix}`, { method: 'GET' })
+  list(query: ListSessionsQuery = {}): Promise<ListSessionsResult> {
+    return requestJson(this.#config, '/sessions', {
+      method: 'GET',
+      query: buildListSessionsQuery(query),
+    })
   }
 
   get(sessionId: string): Promise<Session> {

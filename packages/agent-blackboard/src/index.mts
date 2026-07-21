@@ -3,7 +3,7 @@
  * agent-blackboard HTTP service.
  *
  * - `Sessions` — explicit session lifecycle and parent relationships.
- * - `Entries` — append/read/patch entries using caller-supplied session ids.
+ * - `Entries` — append/read entries using caller-supplied session ids.
  * - `Auth` — admin-only credential management.
  *
  * This module must never import `@aws-sdk/*` or anything from
@@ -24,7 +24,6 @@ export type {
   GetEntriesQuery,
   GetRawEntriesQuery,
   ListSessionsQuery,
-  PatchEntryInput,
   PatchSessionInput,
   Session,
   SessionEntry,

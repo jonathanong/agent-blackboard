@@ -2,13 +2,18 @@ import { hashToken } from '../auth/hash.mjs'
 import { generateClientToken } from '../auth/tokens.mjs'
 import type { CredentialRecord, Session, SessionEntry } from '../core/types.mjs'
 import { SessionStoreError } from './errors.mjs'
-import type {
-  CredentialIdOrName,
-  EntryPatch,
-  NewSession,
-  NewSessionEntry,
-  BlackboardStore,
-  SessionPatch,
+import { matchesListFilter, resumeIndex, sortSessions } from './memory-session-query.mjs'
+import { decodeSessionCursor, encodeSessionCursor } from './session-cursor.mjs'
+import {
+  DEFAULT_SESSIONS_LIMIT,
+  MAX_SESSIONS_LIMIT,
+  type CredentialIdOrName,
+  type ListSessionsQuery,
+  type ListSessionsResult,
+  type NewSession,
+  type NewSessionEntry,
+  type BlackboardStore,
+  type SessionPatch,
 } from './store.mjs'
 
 export interface MemoryStoreOptions {
@@ -63,11 +68,32 @@ export class MemoryBlackboardStore implements BlackboardStore {
     return this.#sessions.get(this.#sessionKey(credId, sessionId))
   }
 
-  async *listSessions(credId: string): AsyncIterable<Session> {
+  async listSessions(credId: string, query: ListSessionsQuery = {}): Promise<ListSessionsResult> {
     const prefix = `${credId} `
+    const all: Session[] = []
     for (const [key, session] of this.#sessions) {
-      if (key.startsWith(prefix)) yield session
+      if (key.startsWith(prefix)) all.push(session)
     }
+    sortSessions(all)
+
+    let start = 0
+    if (query.cursor !== undefined) {
+      const key = decodeSessionCursor(query.cursor)
+      const found = resumeIndex(all, key)
+      start = found === -1 ? all.length : found
+    }
+
+    const limit = Math.min(Math.max(query.limit ?? DEFAULT_SESSIONS_LIMIT, 1), MAX_SESSIONS_LIMIT)
+    const page = all.slice(start, start + limit)
+    const sessions = page.filter((session) => matchesListFilter(session, query))
+
+    const last = page.at(-1)
+    const nextCursor =
+      last && start + limit < all.length
+        ? encodeSessionCursor({ createdAt: last.createdAt, sessionId: last.id })
+        : null
+
+    return { sessions, nextCursor }
   }
 
   async patchSession(credId: string, patch: SessionPatch): Promise<Session> {
@@ -112,21 +138,6 @@ export class MemoryBlackboardStore implements BlackboardStore {
     for (const [key, entry] of this.#entries) {
       if (key.startsWith(prefix)) yield entry
     }
-  }
-
-  async patchEntry(credId: string, patch: EntryPatch): Promise<SessionEntry> {
-    this.#requireActiveSession(credId, patch.sessionId)
-    const key = `${credId} ${patch.sessionId} ${patch.createdAt}`
-    const entry = this.#entries.get(key)
-    if (!entry) {
-      throw new SessionStoreError(
-        'entry_not_found',
-        `entry not found: ${patch.sessionId} at ${patch.createdAt}`,
-      )
-    }
-    const updated = { ...entry, data: { ...entry.data, ...patch.data } }
-    this.#entries.set(key, updated)
-    return updated
   }
 
   async createCredential(name: string): Promise<{ record: CredentialRecord; token: string }> {

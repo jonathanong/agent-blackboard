@@ -24,3 +24,11 @@ export function optionalEntryFormat(value: unknown): StructuredEntryFormat | und
   if (value === 'json' || value === 'jsonl') return value
   throw new Error('"format" must be "json" or "jsonl".')
 }
+
+export function optionalPositiveInt(value: unknown, field: string): number | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+    throw new Error(`"${field}" must be a positive integer.`)
+  }
+  return value
+}

@@ -44,6 +44,17 @@ describe('dynamoPatchSession', () => {
     })
   })
 
+  it('rejects an empty data patch before sending any command', async () => {
+    const send = vi.fn(() => {
+      throw new Error('should never be called')
+    })
+    const doc = { send } as unknown as DynamoDBDocumentClient
+    await expect(dynamoPatchSession(doc, 'T', 'c', { sessionId: 's', data: {} })).rejects.toThrow(
+      'patchSession requires at least one key in data',
+    )
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('surfaces ordinary and malformed successful responses', async () => {
     await expect(
       dynamoPatchSession(

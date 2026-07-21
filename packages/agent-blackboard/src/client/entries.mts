@@ -1,13 +1,6 @@
 import { appendEntry } from './append.mjs'
-import { patchEntry } from './patch.mjs'
 import { streamEntries } from './stream.mjs'
-import type {
-  AppendEntryInput,
-  ClientConfig,
-  GetEntriesQuery,
-  PatchEntryInput,
-  SessionEntry,
-} from './types.mjs'
+import type { AppendEntryInput, ClientConfig, GetEntriesQuery, SessionEntry } from './types.mjs'
 
 export class Entries {
   readonly #config: ClientConfig
@@ -22,9 +15,5 @@ export class Entries {
 
   get(query: GetEntriesQuery): AsyncIterable<SessionEntry> {
     return streamEntries(this.#config, query)
-  }
-
-  patch(input: PatchEntryInput): Promise<SessionEntry> {
-    return patchEntry(this.#config, input)
   }
 }

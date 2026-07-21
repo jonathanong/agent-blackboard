@@ -34,13 +34,11 @@ agent-blackboard append --session-id worker-456 --file notes.txt
 agent-blackboard get --session-id worker-456 --format json
 agent-blackboard get --session-id worker-456 --format jsonl
 agent-blackboard get --session-id worker-456 --format markdown
-agent-blackboard patch --session-id worker-456 \
-  --created-at 2026-07-19T20:00:00.000Z --data '{"pr":7777}'
 ```
 
-`append`, `get`, and `patch` require `--session-id`. `patch` identifies one entry with
-`--session-id` plus `--created-at` and shallow-merges the `--data` object. Reads stream bytes to
-stdout without buffering the full response.
+`append` and `get` require `--session-id`. Entries are append-only: there is no `patch` command for
+entries; to record an update, append a new entry. Reads stream bytes to stdout without buffering the
+full response.
 
 For `append --file`, `.json` files must contain a JSON object. `.md` and `.markdown` files are sent
 as `{ "markdown": "..." }`; `.txt` files are sent as `{ "text": "..." }`.

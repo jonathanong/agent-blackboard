@@ -31,18 +31,31 @@ export interface PatchSessionInput {
   data: Record<string, unknown>
 }
 
+/**
+ * Duplicated independently from `packages/server`'s `ListSessionsQuery`
+ * rather than imported/re-exported: dependency-cruiser forbids
+ * `agent-blackboard` from depending on `packages/server` or `@aws-sdk` at
+ * all, so the wire contract for `GET /sessions` is intentionally maintained
+ * in both places. Keep this shape in sync with
+ * `packages/server/src/store/store.mts`'s `ListSessionsQuery` by hand.
+ */
 export interface ListSessionsQuery {
   archived?: boolean
+  agent?: string
+  version?: string
+  parentSessionId?: string | null
+  data?: Record<string, unknown>
+  limit?: number
+  cursor?: string
+}
+
+export interface ListSessionsResult {
+  sessions: Session[]
+  nextCursor: string | null
 }
 
 export interface AppendEntryInput {
   sessionId: string
-  data: Record<string, unknown>
-}
-
-export interface PatchEntryInput {
-  sessionId: string
-  createdAt: string
   data: Record<string, unknown>
 }
 
