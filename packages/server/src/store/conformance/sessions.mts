@@ -28,6 +28,7 @@ export function runSessionsConformance(makeStore: () => BlackboardStore): void {
       expect(root.parentSessionId).toBeNull()
       expect(root.agent).toBe(AGENT.agent)
       expect(root.version).toBe(AGENT.version)
+      expect(root.lastEntryAt).toBeNull()
       expect(root.archivedAt).toBeNull()
       expect(root.data).toEqual({})
       expectValidTimestamp(root.createdAt)
@@ -62,14 +63,15 @@ export function runSessionsConformance(makeStore: () => BlackboardStore): void {
       ).rejects.toMatchObject({ code: 'parent_not_found' })
     })
 
-    it('rejects an archived parentSessionId', async () => {
+    it('allows an archived parentSessionId without changing the parent', async () => {
       const store = makeStore()
       const credId = randomUUID()
       await createTestSession(store, credId, ROOT_ID, null)
-      await store.archiveSession(credId, ROOT_ID)
-      await expect(createTestSession(store, credId, CHILD_ID, ROOT_ID)).rejects.toMatchObject({
-        code: 'parent_archived',
+      const archived = await store.archiveSession(credId, ROOT_ID)
+      await expect(createTestSession(store, credId, CHILD_ID, ROOT_ID)).resolves.toMatchObject({
+        parentSessionId: ROOT_ID,
       })
+      expect(await store.getSession(credId, ROOT_ID)).toEqual(archived)
     })
   })
 }

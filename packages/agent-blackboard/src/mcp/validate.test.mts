@@ -4,6 +4,7 @@ import {
   nullableString,
   optionalEntryFormat,
   optionalPositiveInt,
+  optionalPositiveNumber,
   requiredString,
 } from './validate.mjs'
 
@@ -29,6 +30,14 @@ describe('MCP validation', () => {
     expect(optionalPositiveInt(5, 'limit')).toBe(5)
     for (const value of [0, -1, 1.5, '5', null]) {
       expect(() => optionalPositiveInt(value, 'limit')).toThrow('positive integer')
+    }
+  })
+
+  it('validates optional positive numbers', () => {
+    expect(optionalPositiveNumber(undefined, 'hours')).toBeUndefined()
+    expect(optionalPositiveNumber(0.5, 'hours')).toBe(0.5)
+    for (const value of [0, -1, Number.POSITIVE_INFINITY, '5', null]) {
+      expect(() => optionalPositiveNumber(value, 'hours')).toThrow('positive number')
     }
   })
 })

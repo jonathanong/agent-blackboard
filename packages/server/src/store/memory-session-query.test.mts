@@ -9,6 +9,7 @@ function session(overrides: Partial<Session> = {}): Session {
     agent: 'a',
     version: '1',
     createdAt: '2026-01-01T00:00:00.000Z',
+    lastEntryAt: null,
     archivedAt: null,
     data: {},
     ...overrides,
@@ -125,5 +126,24 @@ describe('matchesListFilter', () => {
     )
     expect(matchesListFilter(withData, { data: { branch: 'dev' } })).toBe(false)
     expect(matchesListFilter(withData, { data: { missing: true } })).toBe(false)
+  })
+
+  it('filters on strict last-entry inactivity and excludes sessions without entries', () => {
+    const now = new Date('2026-01-01T10:00:00.000Z')
+    expect(
+      matchesListFilter(
+        session({ lastEntryAt: '2026-01-01T01:59:59.999Z' }),
+        { inactiveForHours: 8 },
+        now,
+      ),
+    ).toBe(true)
+    expect(
+      matchesListFilter(
+        session({ lastEntryAt: '2026-01-01T02:00:00.000Z' }),
+        { inactiveForHours: 8 },
+        now,
+      ),
+    ).toBe(false)
+    expect(matchesListFilter(session(), { inactiveForHours: 8 }, now)).toBe(false)
   })
 })

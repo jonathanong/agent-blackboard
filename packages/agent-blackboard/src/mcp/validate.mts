@@ -32,3 +32,11 @@ export function optionalPositiveInt(value: unknown, field: string): number | und
   }
   return value
 }
+
+export function optionalPositiveNumber(value: unknown, field: string): number | undefined {
+  if (value === undefined) return undefined
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+    throw new Error(`"${field}" must be a positive number.`)
+  }
+  return value
+}

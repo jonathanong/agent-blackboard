@@ -33,9 +33,10 @@ export async function dynamoListSessions(
   tableName: string,
   credId: string,
   query: ListSessionsQuery = {},
+  now: Date = new Date(),
 ): Promise<ListSessionsResult> {
   const limit = Math.min(Math.max(query.limit ?? DEFAULT_SESSIONS_LIMIT, 1), MAX_SESSIONS_LIMIT)
-  const filter = buildSessionFilter(query)
+  const filter = buildSessionFilter(query, now)
 
   const page = await doc.send(
     new QueryCommand({

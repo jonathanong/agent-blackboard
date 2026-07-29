@@ -33,8 +33,19 @@ export async function runSessions(argv: string[], ctx: CliContext): Promise<void
     if (archivedFlag !== undefined && archivedFlag !== 'true' && archivedFlag !== 'false') {
       throw new CliError('sessions list --archived must be true or false.')
     }
-    const query: ListSessionsQuery =
-      archivedFlag === undefined ? {} : { archived: archivedFlag === 'true' }
+    const inactiveForHoursFlag = stringFlag(flags, 'inactive-for-hours')
+    const inactiveForHours =
+      inactiveForHoursFlag === undefined ? undefined : Number(inactiveForHoursFlag)
+    if (
+      inactiveForHours !== undefined &&
+      (!Number.isFinite(inactiveForHours) || inactiveForHours <= 0)
+    ) {
+      throw new CliError('sessions list --inactive-for-hours must be a positive number.')
+    }
+    const query: ListSessionsQuery = {
+      ...(archivedFlag === undefined ? {} : { archived: archivedFlag === 'true' }),
+      ...(inactiveForHours === undefined ? {} : { inactiveForHours }),
+    }
     // The CLI's stdout contract is a flat JSON array (pre-pagination shape) —
     // drain every page here rather than surfacing cursors, so scripts piping
     // `sessions list` output don't need to know pagination exists.

@@ -34,16 +34,16 @@ export function createDynamoStore(options: DynamoStoreOptions = {}): BlackboardS
       return dynamoGetSession(doc, tableName, credId, sessionId)
     },
     listSessions(credId: string, query?: ListSessionsQuery): Promise<ListSessionsResult> {
-      return dynamoListSessions(doc, tableName, credId, query)
+      return dynamoListSessions(doc, tableName, credId, query, now())
     },
     patchSession(credId: string, patch: SessionPatch): Promise<Session> {
       return dynamoPatchSession(doc, tableName, credId, patch)
     },
     archiveSession(credId: string, sessionId: string): Promise<Session> {
-      return dynamoArchiveSession(doc, tableName, ttlDays, now, credId, sessionId)
+      return dynamoArchiveSession(doc, tableName, now, credId, sessionId)
     },
     appendEntry(entry: NewSessionEntry): Promise<SessionEntry> {
-      return dynamoAppendEntry(doc, tableName, now, entry)
+      return dynamoAppendEntry(doc, tableName, ttlDays, now, entry)
     },
     getEntries(credId: string, sessionId: string): AsyncIterable<SessionEntry> {
       return dynamoGetEntries(doc, tableName, credId, sessionId)

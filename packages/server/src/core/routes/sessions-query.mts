@@ -27,6 +27,12 @@ function parseLimitParam(raw: string): FieldResult<number> {
   return { ok: true, value: limit }
 }
 
+function parseInactiveForHours(raw: string): FieldResult<number> {
+  const hours = Number(raw)
+  if (!Number.isFinite(hours) || hours <= 0) return { ok: false }
+  return { ok: true, value: hours }
+}
+
 /**
  * Parses `GET /sessions` query params into a `ListSessionsQuery`. A bare
  * request (no `archived` param) defaults to `archived: false` — this must
@@ -54,6 +60,14 @@ export function parseListSessionsQuery(query: QueryMap): ListSessionsQueryResult
     const parsed = parseDataParam(query.data)
     if (!parsed.ok) return { ok: false, error: 'data must be a JSON object' }
     result.data = parsed.value
+  }
+
+  if (query.inactiveForHours !== undefined) {
+    const hours = parseInactiveForHours(query.inactiveForHours)
+    if (!hours.ok) {
+      return { ok: false, error: 'inactiveForHours must be a positive number' }
+    }
+    result.inactiveForHours = hours.value
   }
 
   if (query.limit !== undefined) {

@@ -23,7 +23,8 @@ step-by-step path from a fresh clone to a working, deployed instance.
   - Create/read CloudFormation stacks (`cloudformation:*` on this stack).
   - Create the Lambda function, its Function URL, and its IAM role
     (`lambda:*`, `iam:CreateRole`/`PutRolePolicy`/`PassRole`).
-  - Create the DynamoDB table (`dynamodb:CreateTable` and friends).
+  - Create the DynamoDB table and run deploy-time metadata migration
+    (`dynamodb:CreateTable`, `DescribeTable`, `GetItem`, `Scan`, `UpdateItem`, and `PutItem`).
   - Create and write to the deploy-artifact S3 bucket
     (`s3:CreateBucket`/`PutObject`/`PutPublicAccessBlock`/`HeadObject`).
   - `sts:GetCallerIdentity` (used to name the deploy bucket deterministically).
@@ -125,7 +126,9 @@ it's the same idempotent command for first deploys and updates. Override
 `deploy.mjs` always requires `AGENT_BLACKBOARD_ADMIN_CREDENTIALS` to be set and re-passes it
 on every call (it never relies on CloudFormation reusing a previous
 parameter value) — keep it exported in whatever shell/CI environment you
-deploy from.
+deploy from. After the stack update, deploy also runs a versioned, idempotent table migration that
+removes legacy session TTL attributes, recalculates entry TTL from `createdAt`, and backfills
+`lastEntryAt`. A migration failure fails the deploy; rerunning safely resumes the migration.
 
 ## Tearing down
 

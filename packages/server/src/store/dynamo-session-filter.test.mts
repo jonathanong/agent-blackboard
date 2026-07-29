@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildSessionFilter } from './dynamo-session-filter.mjs'
 
 describe('buildSessionFilter', () => {
+  const NOW = new Date('2026-01-01T10:00:00.000Z')
   it('returns an empty filter for an empty query', () => {
     expect(buildSessionFilter({})).toEqual({})
   })
@@ -78,19 +79,32 @@ describe('buildSessionFilter', () => {
     })
   })
 
+  it('filters sessions with entries strictly older than the inactivity cutoff', () => {
+    expect(buildSessionFilter({ inactiveForHours: 8 }, NOW)).toEqual({
+      FilterExpression: 'attribute_exists(#lastEntryAt) AND #lastEntryAt < :lastEntryCutoff',
+      ExpressionAttributeNames: { '#lastEntryAt': 'lastEntryAt' },
+      ExpressionAttributeValues: { ':lastEntryCutoff': '2026-01-01T02:00:00.000Z' },
+    })
+  })
+
   it('combines every filter kind, joined with AND, in declared order', () => {
     expect(
-      buildSessionFilter({
-        archived: false,
-        agent: 'agent-a',
-        version: '1.0.0',
-        parentSessionId: null,
-        data: { branch: 'main' },
-      }),
+      buildSessionFilter(
+        {
+          archived: false,
+          agent: 'agent-a',
+          version: '1.0.0',
+          parentSessionId: null,
+          data: { branch: 'main' },
+          inactiveForHours: 8,
+        },
+        NOW,
+      ),
     ).toEqual({
       FilterExpression:
         'attribute_not_exists(#archivedAt) AND #agent = :agent AND #version = :version AND ' +
-        '#parentSessionId = :parentSessionId AND #data.#dataKey0 = :dataValue0',
+        '#parentSessionId = :parentSessionId AND #data.#dataKey0 = :dataValue0 AND ' +
+        'attribute_exists(#lastEntryAt) AND #lastEntryAt < :lastEntryCutoff',
       ExpressionAttributeNames: {
         '#archivedAt': 'archivedAt',
         '#agent': 'agent',
@@ -98,12 +112,14 @@ describe('buildSessionFilter', () => {
         '#parentSessionId': 'parentSessionId',
         '#data': 'data',
         '#dataKey0': 'branch',
+        '#lastEntryAt': 'lastEntryAt',
       },
       ExpressionAttributeValues: {
         ':agent': 'agent-a',
         ':version': '1.0.0',
         ':parentSessionId': null,
         ':dataValue0': 'main',
+        ':lastEntryCutoff': '2026-01-01T02:00:00.000Z',
       },
     })
   })

@@ -29,7 +29,11 @@ export function resumeIndex(sorted: Session[], key: SessionCursorKey): number {
   })
 }
 
-export function matchesListFilter(session: Session, query: ListSessionsQuery): boolean {
+export function matchesListFilter(
+  session: Session,
+  query: ListSessionsQuery,
+  now: Date = new Date(),
+): boolean {
   if (query.archived !== undefined && (session.archivedAt !== null) !== query.archived) {
     return false
   }
@@ -42,6 +46,11 @@ export function matchesListFilter(session: Session, query: ListSessionsQuery): b
     for (const [dataKey, value] of Object.entries(query.data)) {
       if (!isDeepStrictEqual(session.data[dataKey], value)) return false
     }
+  }
+  if (query.inactiveForHours !== undefined) {
+    if (session.lastEntryAt === null) return false
+    const cutoff = now.getTime() - query.inactiveForHours * 60 * 60 * 1000
+    if (Date.parse(session.lastEntryAt) >= cutoff) return false
   }
   return true
 }

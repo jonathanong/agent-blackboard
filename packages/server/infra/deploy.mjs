@@ -13,6 +13,7 @@
 //      AGENT_BLACKBOARD_ADMIN_CREDENTIALS (required), AGENT_BLACKBOARD_TTL_DAYS (optional),
 //      STACK_NAME (optional, default "agent-blackboard").
 import { bundle } from './bundle.mjs'
+import { migrateEntryMetadata, migrationClient } from './migrate-entry-metadata.mjs'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
@@ -76,7 +77,7 @@ async function uploadIfMissing(zipPath, bucket, key, region) {
   aws(['s3', 'cp', zipPath, `s3://${bucket}/${key}`, '--region', region])
 }
 
-function stackOutputs(stackName, region) {
+function stackDetails(stackName, region) {
   const raw = aws([
     'cloudformation',
     'describe-stacks',
@@ -86,7 +87,15 @@ function stackOutputs(stackName, region) {
     region,
   ])
   const stack = JSON.parse(raw).Stacks[0]
-  return Object.fromEntries((stack.Outputs ?? []).map((o) => [o.OutputKey, o.OutputValue]))
+  return {
+    outputs: Object.fromEntries((stack.Outputs ?? []).map((o) => [o.OutputKey, o.OutputValue])),
+    parameters: Object.fromEntries(
+      (stack.Parameters ?? []).map((parameter) => [
+        parameter.ParameterKey,
+        parameter.ParameterValue,
+      ]),
+    ),
+  }
 }
 
 export async function deploy() {
@@ -142,7 +151,19 @@ export async function deploy() {
     { stdio: 'inherit' },
   )
 
-  return stackOutputs(stackName, region)
+  const { outputs, parameters } = stackDetails(stackName, region)
+  const tableName = outputs.TableName
+  const ttlDays = Number(parameters.AgentBlackboardTtlDays)
+  if (!tableName || !Number.isFinite(ttlDays) || ttlDays <= 0) {
+    throw new Error('deployed stack did not return a valid table name and TTL parameter')
+  }
+  const migration = await migrateEntryMetadata({
+    doc: migrationClient(region),
+    tableName,
+    ttlDays,
+  })
+  console.error(`Entry metadata migration: ${JSON.stringify(migration)}`)
+  return outputs
 }
 
 const isMain = process.argv[1] === fileURLToPath(import.meta.url)

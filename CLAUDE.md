@@ -43,12 +43,14 @@ agent-blackboard <args>` from anywhere in the repo. This works because the root 
   timestamps only. Session ids use URL-safe letters, numbers, `.`, `_`, `:`, and `-`.
 - Sessions are first-class records. A root session has `parentSessionId: null`; every subagent
   creates its own session with its direct parent's id. Parent links are immutable, must reference
-  an existing active session owned by the same credential. Every session requires caller-supplied
+  an existing session owned by the same credential, whether archived or not. Every session requires caller-supplied
   `agent` and `version`. Session `data` is unstructured JSON and patches shallow-merge it.
 - One DynamoDB table stores multiple item types, never nested entry arrays: session metadata is one
   item and each entry is its own item. An entry is identified by `(sessionId, createdAt)`; archival
-  belongs to the session metadata item as `archivedAt`, not individual entries. Archived sessions
-  and entries stay readable; all writes and creation of children under an archived parent fail.
+  belongs to the session metadata item as `archivedAt`, not individual entries. Archival means the
+  session was distilled exactly once: metadata patches and further retrospectives fail, while
+  entries remain appendable and children may still reference the archived parent. Every entry's
+  DynamoDB TTL is based on its own `createdAt`; session metadata never expires.
 - `data` on an entry is intentionally unstructured JSON — don't impose a schema; let
   agents decide what to attach (branch names, PR numbers, etc.) and filter client-side.
 - Runtime-only modules that can't be exercised by vitest directly (e.g. `handler.mts`'s use of

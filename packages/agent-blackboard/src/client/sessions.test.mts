@@ -10,6 +10,7 @@ describe('Sessions', () => {
       agent: 'test',
       version: '1',
       createdAt: 'now',
+      lastEntryAt: null,
       archivedAt: null,
       data: {},
     }
@@ -57,6 +58,7 @@ describe('Sessions', () => {
         version: '1.0.13',
         parentSessionId: null,
         data: { branch: 'main' },
+        inactiveForHours: 8,
         limit: 5,
         cursor: 'opaque-cursor',
       })
@@ -68,6 +70,7 @@ describe('Sessions', () => {
         version: '1.0.13',
         parentSessionId: '',
         data: JSON.stringify({ branch: 'main' }),
+        inactiveForHours: '8',
         limit: '5',
         cursor: 'opaque-cursor',
       })

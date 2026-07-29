@@ -9,6 +9,7 @@ export interface Session {
   agent: string
   version: string
   createdAt: string
+  lastEntryAt: string | null
   archivedAt: string | null
   data: Record<string, unknown>
 }
@@ -45,6 +46,7 @@ export interface ListSessionsQuery {
   version?: string
   parentSessionId?: string | null
   data?: Record<string, unknown>
+  inactiveForHours?: number
   limit?: number
   cursor?: string
 }

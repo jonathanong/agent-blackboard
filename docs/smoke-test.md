@@ -10,10 +10,12 @@ local server started with `AGENT_BLACKBOARD_STORE=memory pnpm --dir packages/ser
 >
 > 1. Choose a unique root session id. With the CLI, create it using `--agent <your-agent>` and
 >    `--version <your-version>` with no parent. Get it and verify `parentSessionId: null`, the exact
->    agent/version, `data: {}`, and server-generated `createdAt`.
+>    agent/version, `data: {}`, `lastEntryAt: null`, `archivedAt: null`, and server-generated
+>    `createdAt`.
 > 2. Create temporary `.json`, `.md`, and `.txt` files. Use CLI `append --file` for each. Verify the
 >    JSON object is used directly, Markdown becomes `{ "markdown": "..." }`, and text becomes
->    `{ "text": "..." }`, with contents preserved exactly. Remove the temporary files.
+>    `{ "text": "..." }`, with contents preserved exactly. Verify the session's `lastEntryAt`
+>    equals the newest appended entry's `createdAt`. Remove the temporary files.
 > 3. Use CLI `sessions patch <root> --data '{"branch":"smoke"}'`. Get the root and verify the data
 >    was shallow-merged without changing its identity, parent, agent, version, or timestamps.
 > 4. Through MCP, append `{"marker":"root-mcp"}` to the root, save its `createdAt`, patch it with
@@ -24,9 +26,12 @@ local server started with `AGENT_BLACKBOARD_STORE=memory pnpm --dir packages/ser
 > 6. In the root, use MCP to read both sessions' entries. Verify child entries are isolated from the
 >    root. Call `session_search` with `archived: 0` and exact root/child metadata filters;
 >    verify it returns the expected complete sessions. Use CLI `sessions get <child>` to verify its
->    parent, agent, and version.
+>    parent, agent, and version. Exercise `inactiveForHours` through MCP and CLI; verify a session
+>    with no entries is excluded and the strict cutoff behavior agrees across both interfaces.
 > 7. Archive the child through MCP. Verify its session and entries remain readable through both MCP
->    and CLI, while entry append, session data patch, and creating a grandchild all fail.
+>    and CLI. Append another child entry and verify it succeeds, advances `lastEntryAt`, and leaves
+>    the original `archivedAt` unchanged. Verify a session data patch fails, while creating a
+>    grandchild under the archived child succeeds and does not change the parent.
 > 8. Verify CLI `sessions list` excludes the child by default and `sessions list --archived true`
 >    includes it with a non-null `archivedAt`. Verify MCP `session_search` behaves the same way:
 >    `archived: 0` excludes the child and `archived: 1` finds it.
@@ -36,5 +41,6 @@ local server started with `AGENT_BLACKBOARD_STORE=memory pnpm --dir packages/ser
 >     modify repository files.
 
 The smoke passes only if both interfaces agree, root and child sessions remain separate, the child
-points directly to the root, entry identity is `(sessionId, createdAt)`, and archived data remains
-readable while immutable.
+points directly to the root, entry identity is `(sessionId, createdAt)`, inactivity filtering is
+consistent, and archived metadata remains immutable while entries and child creation remain
+available.

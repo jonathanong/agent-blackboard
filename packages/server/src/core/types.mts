@@ -55,6 +55,7 @@ export interface Session {
   agent: string
   version: string
   createdAt: string
+  lastEntryAt: string | null
   archivedAt: string | null
   data: Record<string, unknown>
 }

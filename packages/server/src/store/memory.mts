@@ -44,12 +44,6 @@ export class MemoryBlackboardStore implements BlackboardStore {
           `parent session not found: ${input.parentSessionId}`,
         )
       }
-      if (parent.archivedAt !== null) {
-        throw new SessionStoreError(
-          'parent_archived',
-          `parent session is archived: ${input.parentSessionId}`,
-        )
-      }
     }
     const session: Session = {
       id: input.id,
@@ -57,6 +51,7 @@ export class MemoryBlackboardStore implements BlackboardStore {
       agent: input.agent,
       version: input.version,
       createdAt: this.#now().toISOString(),
+      lastEntryAt: null,
       archivedAt: null,
       data: {},
     }
@@ -85,7 +80,8 @@ export class MemoryBlackboardStore implements BlackboardStore {
 
     const limit = Math.min(Math.max(query.limit ?? DEFAULT_SESSIONS_LIMIT, 1), MAX_SESSIONS_LIMIT)
     const page = all.slice(start, start + limit)
-    const sessions = page.filter((session) => matchesListFilter(session, query))
+    const now = this.#now()
+    const sessions = page.filter((session) => matchesListFilter(session, query, now))
 
     const last = page.at(-1)
     const nextCursor =
@@ -98,7 +94,7 @@ export class MemoryBlackboardStore implements BlackboardStore {
 
   async patchSession(credId: string, patch: SessionPatch): Promise<Session> {
     const key = this.#sessionKey(credId, patch.sessionId)
-    const session = this.#requireActiveSession(credId, patch.sessionId)
+    const session = this.#requireWritableSession(credId, patch.sessionId)
     const updated = { ...session, data: { ...session.data, ...patch.data } }
     this.#sessions.set(key, updated)
     return updated
@@ -117,16 +113,22 @@ export class MemoryBlackboardStore implements BlackboardStore {
   }
 
   async appendEntry(input: NewSessionEntry): Promise<SessionEntry> {
-    this.#requireActiveSession(input.credId, input.sessionId)
-    let timestamp = this.#now().getTime()
-    while (this.#entries.has(this.#entryKey(input.credId, input.sessionId, timestamp)))
-      timestamp += 1
+    const sessionKey = this.#sessionKey(input.credId, input.sessionId)
+    const session = this.#sessions.get(sessionKey)
+    if (!session) {
+      throw new SessionStoreError('session_not_found', `session not found: ${input.sessionId}`)
+    }
+    const timestamp = Math.max(
+      this.#now().getTime(),
+      session.lastEntryAt === null ? 0 : Date.parse(session.lastEntryAt) + 1,
+    )
     const entry: SessionEntry = {
       sessionId: input.sessionId,
       createdAt: new Date(timestamp).toISOString(),
       data: input.data,
     }
     this.#entries.set(this.#entryKey(input.credId, input.sessionId, timestamp), entry)
+    this.#sessions.set(sessionKey, { ...session, lastEntryAt: entry.createdAt })
     return entry
   }
 
@@ -170,13 +172,16 @@ export class MemoryBlackboardStore implements BlackboardStore {
     return matchingIds.length > 0
   }
 
-  #requireActiveSession(credId: string, sessionId: string): Session {
+  #requireWritableSession(credId: string, sessionId: string): Session {
     const session = this.#sessions.get(this.#sessionKey(credId, sessionId))
     if (!session) {
       throw new SessionStoreError('session_not_found', `session not found: ${sessionId}`)
     }
     if (session.archivedAt !== null) {
-      throw new SessionStoreError('session_archived', `session is archived: ${sessionId}`)
+      throw new SessionStoreError(
+        'session_archived',
+        `session is archived; create a new session to change metadata: ${sessionId}`,
+      )
     }
     return session
   }

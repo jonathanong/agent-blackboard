@@ -12,10 +12,12 @@ function client(handler: (command: Command) => unknown): DynamoDBDocumentClient 
 }
 
 const NOW = new Date('2026-01-01T00:00:00.000Z')
+const TTL_DAYS = 30
 const session = (archivedAt?: string) => ({
   id: 's',
   parentSessionId: null,
   createdAt: NOW.toISOString(),
+  lastEntryAt: null,
   ...(archivedAt ? { archivedAt } : {}),
 })
 const entry = (createdAt = NOW.toISOString()) => ({
@@ -36,7 +38,7 @@ async function collect<T>(items: AsyncIterable<T>): Promise<T[]> {
 }
 
 describe('DynamoDB entries', () => {
-  it('maps entries and appends with an active-session transaction, without a ttl', async () => {
+  it('maps entries and atomically appends with lastEntryAt and age-based ttl', async () => {
     expect(itemToEntry(entry())).toEqual({
       sessionId: 's',
       createdAt: NOW.toISOString(),
@@ -48,14 +50,25 @@ describe('DynamoDB entries', () => {
       return {}
     })
     await expect(
-      dynamoAppendEntry(doc, 'T', () => NOW, { credId: 'c', sessionId: 's', data: {} }),
+      dynamoAppendEntry(doc, 'T', TTL_DAYS, () => NOW, {
+        credId: 'c',
+        sessionId: 's',
+        data: {},
+      }),
     ).resolves.toEqual({ sessionId: 's', createdAt: NOW.toISOString(), data: {} })
-    const operations = input!.TransactItems as Array<{ Put?: { Item: Record<string, unknown> } }>
+    const operations = input!.TransactItems as Array<{
+      Update?: Record<string, unknown>
+      Put?: { Item: Record<string, unknown> }
+    }>
+    expect(operations[0]!.Update).toMatchObject({
+      UpdateExpression: 'SET lastEntryAt = :createdAt',
+      ExpressionAttributeValues: { ':createdAt': NOW.toISOString() },
+    })
     expect(operations[1]!.Put!.Item).toMatchObject({ PK: 'ENTRIES#c#s' })
-    expect(operations[1]!.Put!.Item).not.toHaveProperty('ttl')
+    expect(operations[1]!.Put!.Item.ttl).toBe(Math.floor(NOW.getTime() / 1000) + TTL_DAYS * 86400)
   })
 
-  it('retries timestamp collisions and diagnoses missing/archived sessions', async () => {
+  it('retries timestamp collisions and advances past the stored lastEntryAt', async () => {
     let transaction = 0
     const retry = client((command) => {
       if (command.constructor.name === 'TransactWriteCommand' && transaction++ === 0)
@@ -63,25 +76,41 @@ describe('DynamoDB entries', () => {
       if (command.constructor.name === 'GetCommand') return { Item: session() }
       return {}
     })
-    const result = await dynamoAppendEntry(retry, 'T', () => NOW, {
+    const result = await dynamoAppendEntry(retry, 'T', TTL_DAYS, () => NOW, {
       credId: 'c',
       sessionId: 's',
       data: {},
     })
     expect(result.createdAt).toBe('2026-01-01T00:00:00.001Z')
 
-    for (const [itemValue, code] of [
-      [undefined, 'session_not_found'],
-      [session('later'), 'session_archived'],
-    ] as const) {
-      const doc = client((command) => {
-        if (command.constructor.name === 'TransactWriteCommand') throw canceled()
-        return itemValue ? { Item: itemValue } : {}
-      })
-      await expect(
-        dynamoAppendEntry(doc, 'T', () => NOW, { credId: 'c', sessionId: 's', data: {} }),
-      ).rejects.toMatchObject({ code })
-    }
+    let futureTransaction = 0
+    const future = client((command) => {
+      if (command.constructor.name === 'TransactWriteCommand' && futureTransaction++ === 0) {
+        throw canceled()
+      }
+      if (command.constructor.name === 'GetCommand') {
+        return { Item: { ...session('archived'), lastEntryAt: '2026-01-01T00:00:01.000Z' } }
+      }
+      return {}
+    })
+    const afterFuture = await dynamoAppendEntry(future, 'T', TTL_DAYS, () => NOW, {
+      credId: 'c',
+      sessionId: 's',
+      data: {},
+    })
+    expect(afterFuture.createdAt).toBe('2026-01-01T00:00:01.001Z')
+
+    const missing = client((command) => {
+      if (command.constructor.name === 'TransactWriteCommand') throw canceled()
+      return {}
+    })
+    await expect(
+      dynamoAppendEntry(missing, 'T', TTL_DAYS, () => NOW, {
+        credId: 'c',
+        sessionId: 's',
+        data: {},
+      }),
+    ).rejects.toMatchObject({ code: 'session_not_found' })
   })
 
   it('surfaces non-transaction errors and timestamp exhaustion', async () => {
@@ -91,6 +120,7 @@ describe('DynamoDB entries', () => {
           throw new Error('boom')
         }),
         'T',
+        TTL_DAYS,
         () => NOW,
         { credId: 'c', sessionId: 's', data: {} },
       ),
@@ -104,7 +134,11 @@ describe('DynamoDB entries', () => {
       return { Item: session() }
     })
     await expect(
-      dynamoAppendEntry(exhausted, 'T', () => NOW, { credId: 'c', sessionId: 's', data: {} }),
+      dynamoAppendEntry(exhausted, 'T', TTL_DAYS, () => NOW, {
+        credId: 'c',
+        sessionId: 's',
+        data: {},
+      }),
     ).rejects.toMatchObject({
       code: 'timestamp_exhausted',
       message: expect.stringContaining('unique timestamp'),

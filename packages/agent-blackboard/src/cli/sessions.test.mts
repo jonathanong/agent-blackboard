@@ -10,6 +10,7 @@ it('runs every session command and validates subcommands', async () => {
     agent: 'test-agent',
     version: '1.0.0',
     createdAt: 'now',
+    lastEntryAt: null,
     archivedAt: null,
     data: {},
   }
@@ -34,6 +35,7 @@ it('runs every session command and validates subcommands', async () => {
       ],
       ['list'],
       ['list', '--archived', 'true'],
+      ['list', '--inactive-for-hours', '8'],
       ['get', 's'],
       ['patch', 's', '--data', '{"branch":"main"}'],
       ['archive', 's'],
@@ -56,6 +58,11 @@ it('runs every session command and validates subcommands', async () => {
       ),
     ).rejects.toThrow('--parent-session-id')
     await expect(runSessions(['list', '--archived', 'all'], ctx)).rejects.toThrow('true or false')
+    for (const hours of ['0', '-1', 'nope']) {
+      await expect(runSessions(['list', '--inactive-for-hours', hours], ctx)).rejects.toThrow(
+        'positive number',
+      )
+    }
     await expect(runSessions(['patch', 's'], ctx)).rejects.toThrow('--data')
     for (const data of ['bad', '[]', '{}']) {
       await expect(runSessions(['patch', 's', '--data', data], ctx)).rejects.toThrow()
@@ -75,6 +82,7 @@ it('drains every page of sessions list into a single flat JSON array', async () 
     agent: 'test-agent',
     version: '1.0.0',
     createdAt: 'now',
+    lastEntryAt: null,
     archivedAt: null,
     data: {},
   }

@@ -13,6 +13,7 @@ agent-blackboard sessions create worker-456 --parent-session-id root-123 \
 agent-blackboard sessions patch worker-456 --data '{"branch":"fix/retry"}'
 agent-blackboard sessions list
 agent-blackboard sessions list --archived true
+agent-blackboard sessions list --inactive-for-hours 8
 agent-blackboard sessions get worker-456
 agent-blackboard sessions archive worker-456
 ```
@@ -20,8 +21,10 @@ agent-blackboard sessions archive worker-456
 `sessions create` requires caller-supplied `--agent` and `--version` and always sends
 `parentSessionId`: it is `null` when the parent flag is omitted. Session ids are never inferred or
 generated. `sessions patch` shallow-merges a non-empty JSON object into session `data`. Listing
-defaults to active sessions; use `--archived true` to list archived sessions. Archived sessions and
-entries remain readable but cannot be changed.
+defaults to undistilled sessions; use `--archived true` to list archived sessions. Use
+`--inactive-for-hours <hours>` to keep only sessions whose last entry is strictly older than the
+cutoff; sessions without entries are excluded. Archived session metadata cannot be patched, but
+entries may still be appended and children may reference an archived parent.
 
 ## Entries
 

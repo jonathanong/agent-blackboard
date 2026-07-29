@@ -19,15 +19,17 @@ export function runEntriesConformance(makeStore: () => BlackboardStore): void {
       })
     })
 
-    it('rejects appendEntry but not getEntries for an archived session', async () => {
+    it('appends to an archived session without changing its archive timestamp', async () => {
       const store = makeStore()
       const credId = randomUUID()
       await createTestSession(store, credId, SESSION_ID, null)
-      await store.archiveSession(credId, SESSION_ID)
-      await expect(
-        store.appendEntry({ credId, sessionId: SESSION_ID, data: {} }),
-      ).rejects.toMatchObject({ code: 'session_archived' })
-      await expect(collect(store.getEntries(credId, SESSION_ID))).resolves.toEqual([])
+      const archived = await store.archiveSession(credId, SESSION_ID)
+      const appended = await store.appendEntry({ credId, sessionId: SESSION_ID, data: {} })
+      await expect(collect(store.getEntries(credId, SESSION_ID))).resolves.toEqual([appended])
+      await expect(store.getSession(credId, SESSION_ID)).resolves.toMatchObject({
+        archivedAt: archived.archivedAt,
+        lastEntryAt: appended.createdAt,
+      })
     })
 
     it('appends entries with distinct createdAt, retrievable in append order', async () => {
@@ -38,6 +40,9 @@ export function runEntriesConformance(makeStore: () => BlackboardStore): void {
       const second = await store.appendEntry({ credId, sessionId: SESSION_ID, data: { i: 2 } })
       expect(first.createdAt).not.toBe(second.createdAt)
       expect(await collect(store.getEntries(credId, SESSION_ID))).toEqual([first, second])
+      await expect(store.getSession(credId, SESSION_ID)).resolves.toMatchObject({
+        lastEntryAt: second.createdAt,
+      })
     })
 
     it('scopes entries per credId even when the sessionId literal is reused', async () => {

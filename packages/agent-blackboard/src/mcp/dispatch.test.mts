@@ -9,6 +9,7 @@ it('dispatches every entry/session tool and rejects unknown names', async () => 
     agent: 'test',
     version: '1',
     createdAt: 'now',
+    lastEntryAt: null,
     archivedAt: null,
     data: {},
   }

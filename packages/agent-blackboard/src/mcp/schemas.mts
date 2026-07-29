@@ -26,7 +26,7 @@ export const ENTRY_TOOLS: Tool[] = [
   {
     name: 'session_search',
     description:
-      'Searches active or archived sessions using exact metadata and data filters. Returns ' +
+      'Searches undistilled or archived sessions using exact metadata, data, and inactivity filters. Returns ' +
       'one page at a time via limit/cursor; page until nextCursor is null for the complete ' +
       'result set.',
     inputSchema: {
@@ -35,7 +35,7 @@ export const ENTRY_TOOLS: Tool[] = [
         archived: {
           type: 'integer',
           enum: [0, 1],
-          description: '0 or omitted searches active sessions; 1 searches archived sessions.',
+          description: '0 or omitted searches undistilled sessions; 1 searches archived sessions.',
         },
         sessionId: { type: 'string', description: 'Exact session id to match.' },
         parentSessionId: {
@@ -47,6 +47,12 @@ export const ENTRY_TOOLS: Tool[] = [
         data: {
           type: 'object',
           description: 'Top-level data fields whose JSON values must match exactly.',
+        },
+        inactiveForHours: {
+          type: 'number',
+          exclusiveMinimum: 0,
+          description:
+            'Matches sessions whose last entry is strictly older than this many hours; sessions without entries do not match.',
         },
         limit: {
           type: 'integer',
@@ -65,7 +71,7 @@ export const ENTRY_TOOLS: Tool[] = [
   },
   {
     name: 'session_patch',
-    description: 'Shallow-merges arbitrary data into one active session.',
+    description: 'Shallow-merges arbitrary data into one unarchived session.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -77,7 +83,8 @@ export const ENTRY_TOOLS: Tool[] = [
   },
   {
     name: 'session_archive',
-    description: 'Archives a session, preserving reads while preventing further writes.',
+    description:
+      'Marks a session as distilled. Metadata becomes immutable, but entries remain appendable.',
     inputSchema: {
       type: 'object',
       properties: { sessionId: SESSION_ID },
@@ -86,7 +93,7 @@ export const ENTRY_TOOLS: Tool[] = [
   },
   {
     name: 'entry_append',
-    description: 'Appends unstructured data to an existing active session.',
+    description: 'Appends unstructured data to an existing session, including an archived one.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -98,7 +105,7 @@ export const ENTRY_TOOLS: Tool[] = [
   },
   {
     name: 'entry_get',
-    description: 'Reads entries from one existing active or archived session.',
+    description: 'Reads entries from one existing session.',
     inputSchema: {
       type: 'object',
       properties: {
