@@ -33,8 +33,10 @@ flowchart LR
 - `plugins/agent-blackboard` — Claude Code and Codex plugin with MCP registration and usage skill.
 
 DynamoDB uses one table with multiple items: one metadata item per session and one item per entry.
-Entries are never stored in a nested array. Archival is stored as `archivedAt`: archived data stays
-readable, while further writes are blocked.
+Entries are never stored in a nested array. Session metadata tracks `lastEntryAt`; each entry
+expires relative to its own `createdAt`, while session metadata never expires. Archival is stored
+as `archivedAt` and means the session was distilled exactly once. Archived metadata is immutable,
+but entries remain appendable and children may reference archived parents.
 
 ## Quick start
 

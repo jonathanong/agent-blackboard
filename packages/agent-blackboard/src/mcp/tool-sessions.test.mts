@@ -8,12 +8,15 @@ import {
   handleSessionSearch,
 } from './tool-sessions.mjs'
 
+const SEARCH_NOW = new Date('2026-01-01T10:00:00.000Z')
+
 const session: Session = {
   id: 's',
   parentSessionId: null,
   agent: 'test',
   version: '1',
-  createdAt: 'now',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  lastEntryAt: '2026-01-01T01:00:00.000Z',
   archivedAt: null,
   data: {},
 }
@@ -23,6 +26,7 @@ const child: Session = {
   id: 'child',
   parentSessionId: 's',
   agent: 'other',
+  lastEntryAt: '2026-01-01T09:00:00.000Z',
   data: { branch: 'dev', nested: { ok: true } },
 }
 
@@ -30,6 +34,12 @@ const archivedSession: Session = {
   ...session,
   id: 'archived',
   archivedAt: 'later',
+}
+
+const emptySession: Session = {
+  ...session,
+  id: 'empty',
+  lastEntryAt: null,
 }
 
 /**
@@ -48,6 +58,9 @@ function startSessionsFixture() {
     }
     if (req.method === 'GET' && url.pathname === '/sessions/archived') {
       return sendJson(res, 200, archivedSession)
+    }
+    if (req.method === 'GET' && url.pathname === '/sessions/empty') {
+      return sendJson(res, 200, emptySession)
     }
     if (req.method === 'GET' && url.pathname === '/sessions/missing') {
       return sendJson(res, 404, { error: 'not found' })
@@ -123,6 +136,13 @@ it('session_search without sessionId forwards filters and pagination straight to
     expect(new URL(fixture.requests.at(-1)!.url, 'http://localhost').searchParams.get('data')).toBe(
       JSON.stringify({ branch: 'dev' }),
     )
+
+    await handleSessionSearch({ inactiveForHours: 8 }, config)
+    expect(
+      new URL(fixture.requests.at(-1)!.url, 'http://localhost').searchParams.get(
+        'inactiveForHours',
+      ),
+    ).toBe('8')
   } finally {
     await fixture.close()
   }
@@ -160,6 +180,7 @@ it('session_search with sessionId does a direct get and filters in-process, neve
           data: { nested: { ok: true } },
         },
         config,
+        SEARCH_NOW,
       ),
     ).toEqual({ sessions: [child], nextCursor: null })
 
@@ -189,6 +210,16 @@ it('session_search with sessionId does a direct get and filters in-process, neve
       nextCursor: null,
     })
 
+    expect(
+      await handleSessionSearch({ sessionId: 's', inactiveForHours: 8 }, config, SEARCH_NOW),
+    ).toEqual({ sessions: [session], nextCursor: null })
+    expect(
+      await handleSessionSearch({ sessionId: 'child', inactiveForHours: 8 }, config, SEARCH_NOW),
+    ).toEqual({ sessions: [], nextCursor: null })
+    expect(
+      await handleSessionSearch({ sessionId: 'empty', inactiveForHours: 8 }, config, SEARCH_NOW),
+    ).toEqual({ sessions: [], nextCursor: null })
+
     await expect(handleSessionSearch({ sessionId: 'error-session' }, config)).rejects.toThrow('500')
 
     expect(fixture.requests.some((request) => request.url === '/sessions')).toBe(false)
@@ -198,7 +229,7 @@ it('session_search with sessionId does a direct get and filters in-process, neve
   }
 })
 
-it('validates sessionId/parentSessionId/data/limit/cursor input types', async () => {
+it('validates sessionId/parentSessionId/data/inactivity/limit/cursor input types', async () => {
   const fixture = await startSessionsFixture()
   try {
     const config = { baseUrl: fixture.baseUrl, token: 't' }
@@ -209,6 +240,11 @@ it('validates sessionId/parentSessionId/data/limit/cursor input types', async ()
     await expect(handleSessionSearch({ data: [] }, config)).rejects.toThrow('data')
     for (const limit of [0, -1, '5']) {
       await expect(handleSessionSearch({ limit }, config)).rejects.toThrow('limit')
+    }
+    for (const inactiveForHours of [0, -1, Number.POSITIVE_INFINITY, '8']) {
+      await expect(handleSessionSearch({ inactiveForHours }, config)).rejects.toThrow(
+        'inactiveForHours',
+      )
     }
     await expect(handleSessionSearch({ cursor: 123 }, config)).rejects.toThrow('cursor')
   } finally {

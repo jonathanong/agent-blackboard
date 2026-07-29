@@ -1,6 +1,6 @@
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
 import { QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb'
-import type { SessionEntry } from '../core/types.mjs'
+import type { Session, SessionEntry } from '../core/types.mjs'
 import { entrySk, entriesPk, sessionSk, sessionsPk } from './dynamo-keys.mjs'
 import { dynamoGetSession } from './dynamo-sessions.mjs'
 import { SessionStoreError } from './errors.mjs'
@@ -17,49 +17,41 @@ export function itemToEntry(item: Record<string, unknown>): SessionEntry {
   }
 }
 
-async function requireActiveSession(
-  doc: DynamoDBDocumentClient,
-  tableName: string,
-  credId: string,
-  sessionId: string,
-): Promise<void> {
-  const session = await dynamoGetSession(doc, tableName, credId, sessionId)
-  if (!session) throw new SessionStoreError('session_not_found', `session not found: ${sessionId}`)
-  if (session.archivedAt !== null) {
-    throw new SessionStoreError('session_archived', `session is archived: ${sessionId}`)
-  }
-}
-
 async function requireSession(
   doc: DynamoDBDocumentClient,
   tableName: string,
   credId: string,
   sessionId: string,
-): Promise<void> {
-  if (!(await dynamoGetSession(doc, tableName, credId, sessionId))) {
-    throw new SessionStoreError('session_not_found', `session not found: ${sessionId}`)
-  }
+): Promise<Session> {
+  const session = await dynamoGetSession(doc, tableName, credId, sessionId)
+  if (!session) throw new SessionStoreError('session_not_found', `session not found: ${sessionId}`)
+  return session
 }
 
 export async function dynamoAppendEntry(
   doc: DynamoDBDocumentClient,
   tableName: string,
+  ttlDays: number,
   now: () => Date,
   input: NewSessionEntry,
 ): Promise<SessionEntry> {
-  const initial = now().getTime()
+  let timestamp = now().getTime()
   for (let offset = 0; offset < TIMESTAMP_RETRIES; offset++) {
-    const createdAt = new Date(initial + offset).toISOString()
+    const createdAt = new Date(timestamp).toISOString()
+    const ttl = Math.floor(timestamp / 1000) + ttlDays * 86400
     const entry: SessionEntry = { sessionId: input.sessionId, createdAt, data: input.data }
     try {
       await doc.send(
         new TransactWriteCommand({
           TransactItems: [
             {
-              ConditionCheck: {
+              Update: {
                 TableName: tableName,
                 Key: { PK: sessionsPk(input.credId), SK: sessionSk(input.sessionId) },
-                ConditionExpression: 'attribute_exists(PK) AND attribute_not_exists(archivedAt)',
+                UpdateExpression: 'SET lastEntryAt = :createdAt',
+                ConditionExpression:
+                  'attribute_exists(PK) AND (attribute_not_exists(lastEntryAt) OR lastEntryAt < :createdAt)',
+                ExpressionAttributeValues: { ':createdAt': createdAt },
               },
             },
             {
@@ -70,6 +62,7 @@ export async function dynamoAppendEntry(
                   SK: entrySk(createdAt),
                   entityType: 'entry',
                   ...entry,
+                  ttl,
                 },
                 ConditionExpression: 'attribute_not_exists(PK)',
               },
@@ -80,7 +73,11 @@ export async function dynamoAppendEntry(
       return entry
     } catch (error) {
       if (!(error instanceof Error) || error.name !== 'TransactionCanceledException') throw error
-      await requireActiveSession(doc, tableName, input.credId, input.sessionId)
+      const session = await requireSession(doc, tableName, input.credId, input.sessionId)
+      timestamp = Math.max(
+        timestamp + 1,
+        session.lastEntryAt === null ? 0 : Date.parse(session.lastEntryAt) + 1,
+      )
     }
   }
   throw new SessionStoreError(

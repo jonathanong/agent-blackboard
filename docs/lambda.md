@@ -59,7 +59,9 @@ Runs `infra/deploy.mjs`, which:
    (table, role, function, Function URL) on every run after. The changed S3
    key alone signals to CloudFormation that the function code changed; no
    separate `update-function-code` call is needed.
-5. Prints the stack outputs (`FunctionUrl`, `TableName`) via
+5. Migrates legacy records idempotently: session TTL attributes are removed, entry TTL values are
+   based on each entry's `createdAt`, and session `lastEntryAt` is backfilled.
+6. Prints the stack outputs (`FunctionUrl`, `TableName`) via
    `aws cloudformation describe-stacks`.
 
 ```sh
@@ -105,7 +107,7 @@ A single CloudFormation stack:
 | Var                                  | Used by                                 | Meaning                                                                                                                   |
 | ------------------------------------ | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `AGENT_BLACKBOARD_TABLE`             | handler, local-server                   | DynamoDB table name. Default `AgentBlackboard`; on the deployed Lambda, always set from the CloudFormation-managed table. |
-| `AGENT_BLACKBOARD_TTL_DAYS`          | handler, local-server                   | Entry retention in days. Default `90`.                                                                                    |
+| `AGENT_BLACKBOARD_TTL_DAYS`          | handler, local-server                   | Retention for each entry from its `createdAt`. Default `90`; session metadata never expires.                              |
 | `AGENT_BLACKBOARD_ADMIN_CREDENTIALS` | handler, local-server                   | Base64 JSON `[{ "name", "token" }]`. Never written to DynamoDB. Unset = `/credentials*` always 401s.                      |
 | `AGENT_BLACKBOARD_STORE`             | local-server only                       | Set to `memory` to use the in-memory store instead of DynamoDB.                                                           |
 | `PORT`                               | local-server only                       | Listen port for `pnpm run dev`. Default `3000`.                                                                           |

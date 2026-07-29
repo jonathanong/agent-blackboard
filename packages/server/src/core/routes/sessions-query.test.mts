@@ -67,6 +67,24 @@ describe('parseListSessionsQuery', () => {
     })
   })
 
+  it('parses positive integer and fractional inactivity filters', () => {
+    expect(parseListSessionsQuery({ inactiveForHours: '8' })).toEqual({
+      ok: true,
+      query: { archived: false, inactiveForHours: 8 },
+    })
+    expect(parseListSessionsQuery({ inactiveForHours: '0.5' })).toEqual({
+      ok: true,
+      query: { archived: false, inactiveForHours: 0.5 },
+    })
+  })
+
+  it.each(['0', '-1', 'Infinity', 'abc'])('rejects invalid inactivity %s', (value) => {
+    expect(parseListSessionsQuery({ inactiveForHours: value })).toEqual({
+      ok: false,
+      error: 'inactiveForHours must be a positive number',
+    })
+  })
+
   it('rejects unparseable JSON in the data filter', () => {
     expect(parseListSessionsQuery({ data: 'not json' })).toEqual({
       ok: false,

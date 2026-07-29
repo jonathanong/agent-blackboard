@@ -10,8 +10,8 @@ Parameters:
     Default: 90
     MinValue: 1
     Description: >-
-      Days an archived session and its entries are retained before DynamoDB
-      TTL deletes them.
+      Days each entry is retained from its creation time before DynamoDB TTL
+      deletes it. Session metadata does not expire.
 
   AdminCredentials:
     Type: String

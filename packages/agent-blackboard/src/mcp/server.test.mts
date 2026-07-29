@@ -31,7 +31,10 @@ it('lists six tools and returns JSON text or MCP errors', async () => {
       'session_search',
     ])
     expect(tools.find((tool) => tool.name === 'session_search')?.inputSchema).toMatchObject({
-      properties: { archived: { type: 'integer', enum: [0, 1] } },
+      properties: {
+        archived: { type: 'integer', enum: [0, 1] },
+        inactiveForHours: { type: 'number', exclusiveMinimum: 0 },
+      },
     })
     const result = await client.callTool({
       name: 'entry_append',

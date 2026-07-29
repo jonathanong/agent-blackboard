@@ -29,7 +29,25 @@ export function resumeIndex(sorted: Session[], key: SessionCursorKey): number {
   })
 }
 
-export function matchesListFilter(session: Session, query: ListSessionsQuery): boolean {
+function matchesData(session: Session, data: Record<string, unknown> | undefined): boolean {
+  if (data === undefined) return true
+  return Object.entries(data).every(([dataKey, value]) =>
+    isDeepStrictEqual(session.data[dataKey], value),
+  )
+}
+
+function matchesInactivity(session: Session, hours: number | undefined, now: Date): boolean {
+  if (hours === undefined) return true
+  if (session.lastEntryAt === null) return false
+  const cutoff = now.getTime() - hours * 60 * 60 * 1000
+  return Date.parse(session.lastEntryAt) < cutoff
+}
+
+export function matchesListFilter(
+  session: Session,
+  query: ListSessionsQuery,
+  now: Date = new Date(),
+): boolean {
   if (query.archived !== undefined && (session.archivedAt !== null) !== query.archived) {
     return false
   }
@@ -38,10 +56,5 @@ export function matchesListFilter(session: Session, query: ListSessionsQuery): b
   if (query.parentSessionId !== undefined && session.parentSessionId !== query.parentSessionId) {
     return false
   }
-  if (query.data) {
-    for (const [dataKey, value] of Object.entries(query.data)) {
-      if (!isDeepStrictEqual(session.data[dataKey], value)) return false
-    }
-  }
-  return true
+  return matchesData(session, query.data) && matchesInactivity(session, query.inactiveForHours, now)
 }

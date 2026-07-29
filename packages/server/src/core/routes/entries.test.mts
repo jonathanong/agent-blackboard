@@ -48,7 +48,7 @@ describe('entries route', () => {
     expect((await handleEntriesRoute(request({ method: 'DELETE' }), store, 's')).status).toBe(404)
   })
 
-  it('appends, streams, and blocks archived sessions', async () => {
+  it('appends and streams entries before and after archival', async () => {
     const appendedResponse = await handleEntriesRoute(
       request({ method: 'POST', body: { data: { marker: 'x' } } }),
       store,
@@ -63,7 +63,7 @@ describe('entries route', () => {
     expect(
       (await handleEntriesRoute(request({ method: 'POST', body: { data: {} } }), store, 's'))
         .status,
-    ).toBe(409)
+    ).toBe(201)
     expect((await handleEntriesRoute(request(), store, 's')).status).toBe(200)
   })
 

@@ -179,6 +179,28 @@ describe('sessions route', () => {
       400,
     )
     expect(
+      await body(
+        await handleSessionsRoute(
+          request({ method: 'PATCH', body: { data: { late: true } } }),
+          store,
+          's',
+        ),
+      ),
+    ).toEqual({
+      error: 'session is archived; create a new session to change metadata: s',
+    })
+    expect(
+      (
+        await handleSessionsRoute(
+          request({
+            method: 'POST',
+            body: { id: 'child', parentSessionId: 's', ...AGENT },
+          }),
+          store,
+        )
+      ).status,
+    ).toBe(201)
+    expect(
       (
         await handleSessionsRoute(
           request({ method: 'PATCH', body: { data: { late: true } } }),

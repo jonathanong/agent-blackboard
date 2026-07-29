@@ -37,7 +37,7 @@ export function runSessionLifecycleConformance(makeStore: () => BlackboardStore)
       ).rejects.toMatchObject({ code: 'session_not_found' })
     })
 
-    it('shallow-merges data on an active session, preserving and overwriting keys', async () => {
+    it('shallow-merges data on an unarchived session, preserving and overwriting keys', async () => {
       const store = makeStore()
       const credId = randomUUID()
       await createTestSession(store, credId, SESSION_ID, null)

@@ -7,7 +7,10 @@ export interface SessionFilter {
   ExpressionAttributeValues?: Record<string, unknown>
 }
 
-export function buildSessionFilter(query: ListSessionsQuery): SessionFilter {
+export function buildSessionFilter(
+  query: ListSessionsQuery,
+  now: Date = new Date(),
+): SessionFilter {
   const expressions: string[] = []
   const names: Record<string, string> = {}
   const values: Record<string, unknown> = {}
@@ -42,6 +45,13 @@ export function buildSessionFilter(query: ListSessionsQuery): SessionFilter {
       values[valueToken] = value
       expressions.push(`#data.${nameToken} = ${valueToken}`)
     }
+  }
+  if (query.inactiveForHours !== undefined) {
+    names['#lastEntryAt'] = 'lastEntryAt'
+    values[':lastEntryCutoff'] = new Date(
+      now.getTime() - query.inactiveForHours * 60 * 60 * 1000,
+    ).toISOString()
+    expressions.push('attribute_exists(#lastEntryAt) AND #lastEntryAt < :lastEntryCutoff')
   }
 
   if (expressions.length === 0) return {}

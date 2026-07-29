@@ -29,12 +29,12 @@ For a subagent, pass its direct parent's id:
 }
 ```
 
-The parent must exist under the same client credential and must be active. Parent links are
-immutable.
+The parent must exist under the same client credential; archived parents remain valid. Parent links
+are immutable.
 
 ## `session_search`
 
-Search active sessions by default:
+Search undistilled sessions by default:
 
 ```json
 {
@@ -44,12 +44,14 @@ Search active sessions by default:
 }
 ```
 
-Every filter is optional and exact. Supported filters are `sessionId`, `parentSessionId`, `agent`,
-`version`, `archived`, and `data`. A `null` parent matches root sessions. The `data` object is a
-shallow subset filter: every supplied top-level key must have an exactly equal JSON value in the
-session, while additional session data is allowed.
+Every filter is optional. Supported filters are `sessionId`, `parentSessionId`, `agent`, `version`,
+`archived`, `data`, and `inactiveForHours`. A `null` parent matches root sessions. The `data` object
+is a shallow subset filter: every supplied top-level key must have an exactly equal JSON value in
+the session, while additional session data is allowed. `inactiveForHours` must be positive and
+matches sessions whose `lastEntryAt` is strictly older than the calculated cutoff; sessions with no
+entries do not match.
 
-Omitting `archived`, or setting it to `0`, searches active sessions. Set it to `1` to search archived
+Omitting `archived`, or setting it to `0`, searches undistilled sessions. Set it to `1` to search archived
 sessions. To search both states, call the tool twice. With no filters, the tool lists all active
 sessions.
 
@@ -76,7 +78,7 @@ either empty (no such session, or it didn't match the other filters) or a single
 { "sessionId": "worker-456", "data": { "branch": "fix/retry" } }
 ```
 
-The non-empty `data` object is shallow-merged into the active session.
+The non-empty `data` object is shallow-merged into the unarchived session.
 
 ## `session_archive`
 
@@ -85,7 +87,9 @@ The non-empty `data` object is shallow-merged into the active session.
 ```
 
 The server stores the archive timestamp as `archivedAt`. Archived sessions and entries remain
-readable, but session/entry writes and new children are rejected.
+readable. Archival is a one-time distillation marker: session metadata patches and further
+retrospectives/distillation are rejected, but entries remain appendable and new children may refer
+to the archived parent.
 
 ## `entry_append`
 
@@ -94,7 +98,8 @@ readable, but session/entry writes and new children are rejected.
 ```
 
 Returns the created `SessionEntry`. The server supplies `createdAt`; the caller supplies everything
-else.
+else. Appending also updates the session's `lastEntryAt`, including for archived sessions, without
+changing `archivedAt`.
 
 ## `entry_get`
 

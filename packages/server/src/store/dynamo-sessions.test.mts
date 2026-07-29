@@ -35,9 +35,14 @@ function conditional(name = 'ConditionalCheckFailedException'): Error {
 
 describe('DynamoDB sessions', () => {
   it('maps, gets, and misses sessions', async () => {
-    expect(itemToSession(item())).toMatchObject({ id: 's', archivedAt: null })
+    expect(itemToSession(item())).toMatchObject({
+      id: 's',
+      lastEntryAt: null,
+      archivedAt: null,
+    })
     expect(itemToSession(item({ archivedAt: 'later', parentSessionId: 'p' }))).toMatchObject({
       parentSessionId: 'p',
+      lastEntryAt: null,
       archivedAt: 'later',
     })
     expect(
@@ -81,14 +86,22 @@ describe('DynamoDB sessions', () => {
             .Item
         : (command.input.Item as Record<string, unknown>)
       expect(putItem.sessionCreatedAt).toBe(session.createdAt)
+      expect(session.lastEntryAt).toBeNull()
+      if (parentSessionId) {
+        const condition = (
+          command.input.TransactItems as {
+            ConditionCheck?: { ConditionExpression: string }
+          }[]
+        )[0]!.ConditionCheck
+        expect(condition?.ConditionExpression).toBe('attribute_exists(PK)')
+      }
     }
   })
 
-  it('explains duplicate, missing-parent, and archived-parent conditional failures', async () => {
+  it('explains duplicate and missing-parent conditional failures', async () => {
     const scenarios = [
       { gets: [item()], code: 'session_exists' },
       { gets: [undefined, undefined], code: 'parent_not_found' },
-      { gets: [undefined, item({ id: 'p', archivedAt: 'later' })], code: 'parent_archived' },
     ]
     for (const scenario of scenarios) {
       let gets = 0
@@ -149,17 +162,15 @@ describe('DynamoDB sessions', () => {
     ).rejects.toThrow('boom')
   })
 
-  const TTL_DAYS = 30
-
-  it('rejects archiving an unknown session without touching entries', async () => {
+  it('rejects archiving an unknown session', async () => {
     let calls = 0
     const missing = client(() => {
       calls += 1
       return {}
     })
-    await expect(dynamoArchiveSession(missing, 'T', TTL_DAYS, now, 'c', 's')).rejects.toMatchObject(
-      { code: 'session_not_found' },
-    )
+    await expect(dynamoArchiveSession(missing, 'T', now, 'c', 's')).rejects.toMatchObject({
+      code: 'session_not_found',
+    })
     expect(calls).toBe(1)
   })
 
@@ -169,81 +180,39 @@ describe('DynamoDB sessions', () => {
       calls += 1
       return { Item: item({ archivedAt: 'old' }) }
     })
-    await expect(
-      dynamoArchiveSession(archived, 'T', TTL_DAYS, now, 'c', 's'),
-    ).resolves.toMatchObject({ archivedAt: 'old' })
+    await expect(dynamoArchiveSession(archived, 'T', now, 'c', 's')).resolves.toMatchObject({
+      archivedAt: 'old',
+    })
     expect(calls).toBe(1)
   })
 
-  it('archives a session with zero entries', async () => {
+  it('archives a session without touching entries or ttl', async () => {
+    let update: Record<string, unknown> | undefined
     const doc = client((command) => {
       if (command.constructor.name === 'GetCommand') return { Item: item() }
-      if (command.constructor.name === 'QueryCommand') return {}
-      if (command.constructor.name === 'UpdateCommand')
+      if (command.constructor.name === 'UpdateCommand') {
+        update = command.input
         return { Attributes: item({ archivedAt: 'new' }) }
+      }
       throw new Error(`unexpected ${command.constructor.name}`)
     })
-    await expect(dynamoArchiveSession(doc, 'T', TTL_DAYS, now, 'c', 's')).resolves.toMatchObject({
+    await expect(dynamoArchiveSession(doc, 'T', now, 'c', 's')).resolves.toMatchObject({
       archivedAt: 'new',
     })
-  })
-
-  it('fans the same ttl onto every entry before flipping archivedAt on the session', async () => {
-    const calls: Command[] = []
-    const doc = client((command) => {
-      calls.push(command)
-      if (command.constructor.name === 'GetCommand') return { Item: item() }
-      if (command.constructor.name === 'QueryCommand') {
-        return {
-          Items: [
-            { PK: 'ENTRIES#c#s', SK: 'ENTRY#a' },
-            { PK: 'ENTRIES#c#s', SK: 'ENTRY#b' },
-          ],
-        }
-      }
-      const key = command.input.Key as { PK: string }
-      return key.PK === 'SESSIONS#c' ? { Attributes: item({ archivedAt: 'new' }) } : {}
+    expect(update).toMatchObject({
+      UpdateExpression: 'SET archivedAt = :archivedAt',
+      ExpressionAttributeValues: { ':archivedAt': now().toISOString() },
     })
-    const expectedTtl = Math.floor(now().getTime() / 1000) + TTL_DAYS * 86400
-
-    await expect(dynamoArchiveSession(doc, 'T', TTL_DAYS, now, 'c', 's')).resolves.toMatchObject({
-      archivedAt: 'new',
-    })
-
-    const isEntryUpdate = (c: Command): boolean =>
-      c.constructor.name === 'UpdateCommand' && (c.input.Key as { PK: string }).PK === 'ENTRIES#c#s'
-    const isSessionUpdate = (c: Command): boolean =>
-      c.constructor.name === 'UpdateCommand' && (c.input.Key as { PK: string }).PK === 'SESSIONS#c'
-
-    const entryUpdates = calls.filter(isEntryUpdate)
-    expect(entryUpdates).toHaveLength(2)
-    for (const update of entryUpdates) {
-      expect(update.input).toMatchObject({
-        UpdateExpression: 'SET #ttl = :ttl',
-        ExpressionAttributeNames: { '#ttl': 'ttl' },
-        ExpressionAttributeValues: { ':ttl': expectedTtl },
-      })
-    }
-
-    const lastEntryIndex = calls.reduce((last, c, index) => (isEntryUpdate(c) ? index : last), -1)
-    const sessionIndex = calls.findIndex(isSessionUpdate)
-    expect(sessionIndex).toBeGreaterThan(lastEntryIndex)
-
-    const sessionUpdate = calls[sessionIndex]!
-    expect(sessionUpdate.input).toMatchObject({
-      UpdateExpression: 'SET archivedAt = :archivedAt, #ttl = :ttl',
-      ExpressionAttributeValues: { ':archivedAt': now().toISOString(), ':ttl': expectedTtl },
-    })
+    expect(update).not.toHaveProperty('ExpressionAttributeNames')
   })
 
   it('throws if the final archive update returns no session', async () => {
     const doc = client((command) => {
       if (command.constructor.name === 'GetCommand') return { Item: item() }
-      if (command.constructor.name === 'QueryCommand') return {}
       if (command.constructor.name === 'UpdateCommand') return {}
       throw new Error(`unexpected ${command.constructor.name}`)
     })
-    await expect(dynamoArchiveSession(doc, 'T', TTL_DAYS, now, 'c', 's')).rejects.toThrow(
+    await expect(dynamoArchiveSession(doc, 'T', now, 'c', 's')).rejects.toThrow(
       'returned no session',
     )
   })

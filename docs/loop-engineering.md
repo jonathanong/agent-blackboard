@@ -13,10 +13,14 @@ At the end of a session:
 1. Use [`retrospective`](../.agent/skills/retrospective/SKILL.md) to read that exact session.
 2. Combine the recorded entries with important context still in memory.
 3. Append one thorough retrospective as the session's final entry.
-4. Archive the session only when no more entries need to be written.
+4. Leave the session unarchived; ordinary completion and inactivity are not archival boundaries.
 
 For periodic distillation, use
 [`retrospective-distill`](../.agent/skills/retrospective-distill/SKILL.md) to read relevant sessions
 explicitly and turn blackboard evidence into concrete tickets, documentation, lint rules, tests, or
 workflow improvements. There is no cross-session entry query and no per-entry archival; callers do
-this fan-out client-side, then archive whole sessions when appropriate.
+this fan-out client-side, then archive each session exactly once after its evidence is distilled.
+Use the optional `inactiveForHours` session-search filter (for example, `8`) when a distillation
+pass should ignore recently-written sessions. Archived sessions may still accept entries for
+inspection, but those later entries are intentionally not retrospectively synthesized or
+distilled.

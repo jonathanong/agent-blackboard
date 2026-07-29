@@ -20,6 +20,9 @@ function buildListSessionsQuery(query: ListSessionsQuery): Record<string, string
     wire.parentSessionId = query.parentSessionId ?? ''
   }
   if (query.data !== undefined) wire.data = JSON.stringify(query.data)
+  if (query.inactiveForHours !== undefined) {
+    wire.inactiveForHours = String(query.inactiveForHours)
+  }
   if (query.limit !== undefined) wire.limit = String(query.limit)
   if (query.cursor !== undefined) wire.cursor = query.cursor
   return wire

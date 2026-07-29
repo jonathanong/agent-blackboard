@@ -49,9 +49,9 @@ await auth.createCredentials({ name: 'ci-bot' })
 ```
 
 All session ids, agent names, and versions are caller-provided. `parentSessionId` is required and
-nullable. The service only generates `createdAt`/`archivedAt` timestamps. `Entries.get()` returns an
-`AsyncIterable<SessionEntry>` and uses incremental JSONL by default. Non-2xx responses throw
-`AgentBlackboardError`.
+nullable. The service generates `createdAt`/`lastEntryAt`/`archivedAt` timestamps.
+`Entries.get()` returns an `AsyncIterable<SessionEntry>` and uses incremental JSONL by default.
+Non-2xx responses throw `AgentBlackboardError`.
 
 ## CLI
 
@@ -61,6 +61,7 @@ agent-blackboard sessions create worker-456 --parent-session-id root-123 \
   --agent claude-code --version 1.0.13
 agent-blackboard sessions patch worker-456 --data '{"branch":"fix/retry"}'
 agent-blackboard sessions list
+agent-blackboard sessions list --inactive-for-hours 8
 agent-blackboard sessions get worker-456
 agent-blackboard append --session-id worker-456 '{"note":"investigating"}'
 agent-blackboard append --session-id worker-456 --file findings.md

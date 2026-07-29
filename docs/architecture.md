@@ -67,11 +67,11 @@ flowchart LR
 
 One DynamoDB table stores multiple item types. There are no joins and no nested entry arrays.
 
-| Entity     | Partition key                        | Sort key                     | Public fields                                                                  |
-| ---------- | ------------------------------------ | ---------------------------- | ------------------------------------------------------------------------------ |
-| Session    | `SESSIONS#<credentialId>`            | `SESSION#<sessionId>`        | `id`, `parentSessionId`, `agent`, `version`, `createdAt`, `archivedAt`, `data` |
-| Entry      | `ENTRIES#<credentialId>#<sessionId>` | `ENTRY#<createdAt>`          | `sessionId`, `createdAt`, `data`                                               |
-| Credential | internal credential partition        | internal credential sort key | `id`, `name`, `createdAt`                                                      |
+| Entity     | Partition key                        | Sort key                     | Public fields                                                                                 |
+| ---------- | ------------------------------------ | ---------------------------- | --------------------------------------------------------------------------------------------- |
+| Session    | `SESSIONS#<credentialId>`            | `SESSION#<sessionId>`        | `id`, `parentSessionId`, `agent`, `version`, `createdAt`, `lastEntryAt`, `archivedAt`, `data` |
+| Entry      | `ENTRIES#<credentialId>#<sessionId>` | `ENTRY#<createdAt>`          | `sessionId`, `createdAt`, `data`                                                              |
+| Credential | internal credential partition        | internal credential sort key | `id`, `name`, `createdAt`                                                                     |
 
 Each entry is independently writable and queryable. Entry identity is `(sessionId, createdAt)`;
 timestamps are allocated by the service and are collision-safe within a session. TTL is an internal
@@ -84,29 +84,30 @@ entry attribute derived from `createdAt`.
 - A root has `parentSessionId: null`.
 - A subagent creates its own session with the direct parent's id.
 - Parent and child must belong to the same client credential.
-- The parent must exist and be active when the child is created.
+- The parent must exist when the child is created; archived parents remain valid.
 - Parent relationships are immutable.
 - `agent` and `version` are required caller-supplied session metadata.
 - Session `data` is unstructured JSON and patches shallow-merge it.
-- Entry writes require an existing active session.
-- Archiving sets `archivedAt`. Archived sessions and entries remain readable, but all writes and
-  new children are blocked.
+- Every entry append updates `lastEntryAt` and receives a TTL based on its own `createdAt`.
+- Archiving sets `archivedAt` exactly once after distillation. Archived sessions and entries remain
+  readable; metadata patches are blocked, while entries and new children remain allowed.
+- Session metadata has no TTL and remains addressable after all of its entries expire.
 
-DynamoDB transactions combine the active-session condition with entry writes, preventing a write
-from racing successfully with archival.
+DynamoDB transactions combine the session metadata update with each entry write, keeping
+`lastEntryAt` monotonic and entry identities unique under concurrent appends.
 
 ## HTTP API
 
-| Method          | Path                    | Purpose                                               |
-| --------------- | ----------------------- | ----------------------------------------------------- |
-| `POST`          | `/sessions`             | Create `{ id, parentSessionId, agent, version }`      |
-| `GET`           | `/sessions`             | List sessions; `archived=false` by default            |
-| `GET`           | `/sessions/:id`         | Get session metadata                                  |
-| `PATCH`         | `/sessions/:id`         | Patch `{ data }` or archive with `{ archived: true }` |
-| `POST`          | `/sessions/:id/entries` | Append `{ data }`                                     |
-| `GET`           | `/sessions/:id/entries` | Stream entries (`json`, `jsonl`, or `markdown`)       |
-| `PATCH`         | `/sessions/:id/entries` | Patch `{ createdAt, data }`                           |
-| `/credentials*` | admin routes            | Manage client credentials                             |
+| Method          | Path                    | Purpose                                                |
+| --------------- | ----------------------- | ------------------------------------------------------ |
+| `POST`          | `/sessions`             | Create `{ id, parentSessionId, agent, version }`       |
+| `GET`           | `/sessions`             | List sessions; supports archive and inactivity filters |
+| `GET`           | `/sessions/:id`         | Get session metadata                                   |
+| `PATCH`         | `/sessions/:id`         | Patch `{ data }` or archive with `{ archived: true }`  |
+| `POST`          | `/sessions/:id/entries` | Append `{ data }`                                      |
+| `GET`           | `/sessions/:id/entries` | Stream entries (`json`, `jsonl`, or `markdown`)        |
+| `PATCH`         | `/sessions/:id/entries` | Patch `{ createdAt, data }`                            |
+| `/credentials*` | admin routes            | Manage client credentials                              |
 
 ## Authentication
 

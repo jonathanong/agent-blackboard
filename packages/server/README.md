@@ -51,20 +51,21 @@ default `agent-blackboard` stack name.
 
 ## Environment
 
-| Variable                             | Meaning                                   |
-| ------------------------------------ | ----------------------------------------- |
-| `AGENT_BLACKBOARD_TABLE`             | DynamoDB table; default `AgentBlackboard` |
-| `AGENT_BLACKBOARD_TTL_DAYS`          | Entry retention; default 90 days          |
-| `AGENT_BLACKBOARD_ADMIN_CREDENTIALS` | Base64 JSON `[{ "name", "token" }]`       |
-| `AGENT_BLACKBOARD_STORE=memory`      | Use memory storage locally                |
-| `PORT`                               | Local port; default 3000                  |
+| Variable                             | Meaning                                            |
+| ------------------------------------ | -------------------------------------------------- |
+| `AGENT_BLACKBOARD_TABLE`             | DynamoDB table; default `AgentBlackboard`          |
+| `AGENT_BLACKBOARD_TTL_DAYS`          | Per-entry retention from creation; default 90 days |
+| `AGENT_BLACKBOARD_ADMIN_CREDENTIALS` | Base64 JSON `[{ "name", "token" }]`                |
+| `AGENT_BLACKBOARD_STORE=memory`      | Use memory storage locally                         |
+| `PORT`                               | Local port; default 3000                           |
 
 ## Storage
 
 The table contains separate session, entry, and credential items. A session item owns
-`parentSessionId`, `agent`, `version`, `data`, and `archivedAt`; every entry has its own item and composite public identity
-`(sessionId, createdAt)`. DynamoDB transactions enforce active-session conditions while creating
-children and writing entries.
+`parentSessionId`, `agent`, `version`, `data`, `lastEntryAt`, and `archivedAt`; every entry has its
+own item and composite public identity `(sessionId, createdAt)`. Entry transactions update
+`lastEntryAt` and store an age-based TTL. Session metadata never expires; archived parents accept
+children and archived sessions continue accepting entries.
 
 The Lambda IAM role needs `GetItem`, `PutItem`, `Query`, `UpdateItem`, `DeleteItem`,
 `ConditionCheckItem`, and `TransactWriteItems` on this table, plus `Query` on the

@@ -10,6 +10,7 @@ describe('public API', () => {
       agent: 'test',
       version: '1',
       createdAt: 'now',
+      lastEntryAt: null,
       archivedAt: null,
       data: {},
     }

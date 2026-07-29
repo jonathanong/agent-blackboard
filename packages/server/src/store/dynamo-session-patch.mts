@@ -43,6 +43,9 @@ export async function dynamoPatchSession(
     if (!session) {
       throw new SessionStoreError('session_not_found', `session not found: ${patch.sessionId}`)
     }
-    throw new SessionStoreError('session_archived', `session is archived: ${patch.sessionId}`)
+    throw new SessionStoreError(
+      'session_archived',
+      `session is archived; create a new session to change metadata: ${patch.sessionId}`,
+    )
   }
 }
