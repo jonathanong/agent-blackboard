@@ -43,23 +43,25 @@ function parseSessionSearchArgs(args: Record<string, unknown>): SessionSearchArg
   }
 }
 
+function matchesData(session: Session, data: Record<string, unknown> | undefined): boolean {
+  if (data === undefined) return true
+  return Object.entries(data).every(([key, value]) => isDeepStrictEqual(session.data[key], value))
+}
+
+function isInactiveFor(session: Session, hours: number | undefined, now: Date): boolean {
+  if (hours === undefined) return true
+  if (session.lastEntryAt === null) return false
+  const cutoff = now.getTime() - hours * 60 * 60 * 1000
+  return Date.parse(session.lastEntryAt) < cutoff
+}
+
 /** Whether a single directly-fetched session satisfies every supplied `session_search` filter. */
 function matchesDirectSession(session: Session, parsed: SessionSearchArgs, now: Date): boolean {
   if ((session.archivedAt !== null) !== parsed.archived) return false
   if (parsed.hasParent && session.parentSessionId !== parsed.parentSessionId) return false
   if (parsed.agent !== undefined && session.agent !== parsed.agent) return false
   if (parsed.version !== undefined && session.version !== parsed.version) return false
-  if (parsed.data !== undefined) {
-    for (const [key, value] of Object.entries(parsed.data)) {
-      if (!isDeepStrictEqual(session.data[key], value)) return false
-    }
-  }
-  if (parsed.inactiveForHours !== undefined) {
-    if (session.lastEntryAt === null) return false
-    const cutoff = now.getTime() - parsed.inactiveForHours * 60 * 60 * 1000
-    if (Date.parse(session.lastEntryAt) >= cutoff) return false
-  }
-  return true
+  return matchesData(session, parsed.data) && isInactiveFor(session, parsed.inactiveForHours, now)
 }
 
 /**

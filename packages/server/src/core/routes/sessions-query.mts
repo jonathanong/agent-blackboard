@@ -33,6 +33,27 @@ function parseInactiveForHours(raw: string): FieldResult<number> {
   return { ok: true, value: hours }
 }
 
+function addDataFilter(query: QueryMap, result: ListSessionsQuery): string | undefined {
+  if (query.data === undefined) return
+  const parsed = parseDataParam(query.data)
+  if (!parsed.ok) return 'data must be a JSON object'
+  result.data = parsed.value
+}
+
+function addInactivityFilter(query: QueryMap, result: ListSessionsQuery): string | undefined {
+  if (query.inactiveForHours === undefined) return
+  const hours = parseInactiveForHours(query.inactiveForHours)
+  if (!hours.ok) return 'inactiveForHours must be a positive number'
+  result.inactiveForHours = hours.value
+}
+
+function addLimit(query: QueryMap, result: ListSessionsQuery): string | undefined {
+  if (query.limit === undefined) return
+  const limit = parseLimitParam(query.limit)
+  if (!limit.ok) return `limit must be an integer between 1 and ${MAX_SESSIONS_LIMIT}`
+  result.limit = limit.value
+}
+
 /**
  * Parses `GET /sessions` query params into a `ListSessionsQuery`. A bare
  * request (no `archived` param) defaults to `archived: false` — this must
@@ -56,26 +77,13 @@ export function parseListSessionsQuery(query: QueryMap): ListSessionsQueryResult
     result.parentSessionId = raw === undefined || raw === '' ? null : raw
   }
 
-  if (query.data !== undefined) {
-    const parsed = parseDataParam(query.data)
-    if (!parsed.ok) return { ok: false, error: 'data must be a JSON object' }
-    result.data = parsed.value
-  }
-
-  if (query.inactiveForHours !== undefined) {
-    const hours = parseInactiveForHours(query.inactiveForHours)
-    if (!hours.ok) {
-      return { ok: false, error: 'inactiveForHours must be a positive number' }
-    }
-    result.inactiveForHours = hours.value
-  }
-
-  if (query.limit !== undefined) {
-    const limit = parseLimitParam(query.limit)
-    if (!limit.ok) {
-      return { ok: false, error: `limit must be an integer between 1 and ${MAX_SESSIONS_LIMIT}` }
-    }
-    result.limit = limit.value
+  const filterErrors = [
+    addDataFilter(query, result),
+    addInactivityFilter(query, result),
+    addLimit(query, result),
+  ]
+  for (const error of filterErrors) {
+    if (error !== undefined) return { ok: false, error }
   }
 
   if (query.cursor !== undefined) result.cursor = query.cursor

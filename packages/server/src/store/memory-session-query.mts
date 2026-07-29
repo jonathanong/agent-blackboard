@@ -29,6 +29,20 @@ export function resumeIndex(sorted: Session[], key: SessionCursorKey): number {
   })
 }
 
+function matchesData(session: Session, data: Record<string, unknown> | undefined): boolean {
+  if (data === undefined) return true
+  return Object.entries(data).every(([dataKey, value]) =>
+    isDeepStrictEqual(session.data[dataKey], value),
+  )
+}
+
+function matchesInactivity(session: Session, hours: number | undefined, now: Date): boolean {
+  if (hours === undefined) return true
+  if (session.lastEntryAt === null) return false
+  const cutoff = now.getTime() - hours * 60 * 60 * 1000
+  return Date.parse(session.lastEntryAt) < cutoff
+}
+
 export function matchesListFilter(
   session: Session,
   query: ListSessionsQuery,
@@ -42,15 +56,5 @@ export function matchesListFilter(
   if (query.parentSessionId !== undefined && session.parentSessionId !== query.parentSessionId) {
     return false
   }
-  if (query.data) {
-    for (const [dataKey, value] of Object.entries(query.data)) {
-      if (!isDeepStrictEqual(session.data[dataKey], value)) return false
-    }
-  }
-  if (query.inactiveForHours !== undefined) {
-    if (session.lastEntryAt === null) return false
-    const cutoff = now.getTime() - query.inactiveForHours * 60 * 60 * 1000
-    if (Date.parse(session.lastEntryAt) >= cutoff) return false
-  }
-  return true
+  return matchesData(session, query.data) && matchesInactivity(session, query.inactiveForHours, now)
 }
