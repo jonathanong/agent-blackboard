@@ -94,6 +94,11 @@ Resources:
                   - dynamodb:ConditionCheckItem
                   - dynamodb:TransactWriteItems
                 Resource: !GetAtt AgentBlackboardTable.Arn
+              # DynamoDB authorizes GSI queries against the index ARN, not
+              # the base table ARN covered by the statement above.
+              - Effect: Allow
+                Action: dynamodb:Query
+                Resource: !Sub '${AgentBlackboardTable.Arn}/index/SessionsByCreatedAt'
         - PolicyName: AgentBlackboardFunctionLogs
           PolicyDocument:
             Version: '2012-10-17'

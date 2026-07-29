@@ -67,4 +67,5 @@ The table contains separate session, entry, and credential items. A session item
 children and writing entries.
 
 The Lambda IAM role needs `GetItem`, `PutItem`, `Query`, `UpdateItem`, `DeleteItem`,
-`ConditionCheckItem`, and `TransactWriteItems` on this table.
+`ConditionCheckItem`, and `TransactWriteItems` on this table, plus `Query` on the
+`SessionsByCreatedAt` index ARN.
