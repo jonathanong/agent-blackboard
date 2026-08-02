@@ -22,7 +22,7 @@ jobs:
         ports:
           - 8000:8000
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271
         with:
           version: 11.1.2
@@ -54,7 +54,7 @@ jobs:
     runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271
         with:
           version: 11.1.2
@@ -69,7 +69,7 @@ jobs:
     runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
           args: --config lychee.toml '**/*.md' '**/*.json'
