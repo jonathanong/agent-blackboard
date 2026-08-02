@@ -36,6 +36,7 @@ it('runs every session command and validates subcommands', async () => {
       ['list'],
       ['list', '--archived', 'true'],
       ['list', '--inactive-for-hours', '8'],
+      ['list', '--limit', '1'],
       ['get', 's'],
       ['patch', 's', '--data', '{"branch":"main"}'],
       ['archive', 's'],
@@ -63,6 +64,10 @@ it('runs every session command and validates subcommands', async () => {
         'positive number',
       )
     }
+    for (const limit of ['0', '-1', '1.5', 'nope']) {
+      await expect(runSessions(['list', '--limit', limit], ctx)).rejects.toThrow('positive integer')
+    }
+    await expect(runSessions(['list', '--limit'], ctx)).rejects.toThrow('--limit requires <n>')
     await expect(runSessions(['patch', 's'], ctx)).rejects.toThrow('--data')
     for (const data of ['bad', '[]', '{}']) {
       await expect(runSessions(['patch', 's', '--data', data], ctx)).rejects.toThrow()
@@ -106,6 +111,35 @@ it('drains every page of sessions list into a single flat JSON array', async () 
     expect(ctx.stdoutLines).toHaveLength(1)
     expect(JSON.parse(ctx.stdoutLines[0]!)).toEqual([pageOne, pageTwo])
     expect(fixture.requests[1]!.url).toContain('cursor=cursor-1')
+  } finally {
+    await fixture.close()
+  }
+})
+
+it('sessions list --limit fetches a single bounded page without draining further', async () => {
+  const pageOne = {
+    id: 'a',
+    parentSessionId: null,
+    agent: 'test-agent',
+    version: '1.0.0',
+    createdAt: 'now',
+    lastEntryAt: null,
+    archivedAt: null,
+    data: {},
+  }
+  let calls = 0
+  const fixture = await startHttpFixture((_req, res) => {
+    calls += 1
+    sendJson(res, 200, { sessions: [pageOne], nextCursor: 'cursor-1' })
+  })
+  try {
+    const env = { AGENT_BLACKBOARD_URL: fixture.baseUrl, AGENT_BLACKBOARD_TOKEN: 't' }
+    const ctx = createFakeContext({ env })
+    await runSessions(['list', '--limit', '1'], ctx)
+    expect(calls).toBe(1)
+    expect(ctx.stdoutLines).toHaveLength(1)
+    expect(JSON.parse(ctx.stdoutLines[0]!)).toEqual([pageOne])
+    expect(fixture.requests[0]!.url).toContain('limit=1')
   } finally {
     await fixture.close()
   }
