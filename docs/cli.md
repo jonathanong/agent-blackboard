@@ -25,9 +25,11 @@ generated. `sessions patch` shallow-merges a non-empty JSON object into session 
 defaults to undistilled sessions; use `--archived true` to list archived sessions. Use
 `--inactive-for-hours <hours>` to keep only sessions whose last entry is strictly older than the
 cutoff; sessions without entries are excluded. Use `--limit <n>` to fetch a single bounded page
-instead of draining every page — when the flag is omitted, it drains the full result set into one
-flat JSON array, so `--limit` is the cheap option for callers that only need an existence or count
-check. Archived session metadata cannot be patched, but entries may still be appended and children
+instead of draining every page (the flag omitted otherwise drains the full result set into one flat
+JSON array). The store applies filters after the page limit, so a `--limit` page can be shorter than
+`n` (even empty) while more matching sessions exist further in the table; use it for a cheap
+connectivity probe, not a reliable existence or count check. Archived session metadata cannot be
+patched, but entries may still be appended and children
 may reference an archived parent.
 
 ## Entries

@@ -67,6 +67,7 @@ it('runs every session command and validates subcommands', async () => {
     for (const limit of ['0', '-1', '1.5', 'nope']) {
       await expect(runSessions(['list', '--limit', limit], ctx)).rejects.toThrow('positive integer')
     }
+    await expect(runSessions(['list', '--limit'], ctx)).rejects.toThrow('--limit requires <n>')
     await expect(runSessions(['patch', 's'], ctx)).rejects.toThrow('--data')
     for (const data of ['bad', '[]', '{}']) {
       await expect(runSessions(['patch', 's', '--data', data], ctx)).rejects.toThrow()

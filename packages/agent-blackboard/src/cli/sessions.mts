@@ -43,6 +43,9 @@ export async function runSessions(argv: string[], ctx: CliContext): Promise<void
       throw new CliError('sessions list --inactive-for-hours must be a positive number.')
     }
     const limitFlag = stringFlag(flags, 'limit')
+    if (Object.hasOwn(flags, 'limit') && limitFlag === undefined) {
+      throw new CliError('sessions list --limit requires <n>.')
+    }
     const limit = limitFlag === undefined ? undefined : Number(limitFlag)
     if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) {
       throw new CliError('sessions list --limit must be a positive integer.')
@@ -53,8 +56,11 @@ export async function runSessions(argv: string[], ctx: CliContext): Promise<void
     }
     if (limit !== undefined) {
       // `--limit` fetches a single bounded page instead of the full drain below —
-      // callers that only need a cheap existence check (e.g. a health probe) shouldn't
-      // pay for scanning every session in the table.
+      // for a cheap connectivity probe (e.g. a health check) that only needs to
+      // confirm the call succeeds. The store applies filters after the page limit,
+      // so this page can be shorter than `n` (even empty) while more matching
+      // sessions exist further in the table — do not treat this as a reliable
+      // existence or count check.
       const page = await sessions.list({ ...query, limit })
       writeLine(ctx.stdout, JSON.stringify(page.sessions))
       return
