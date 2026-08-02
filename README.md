@@ -25,6 +25,16 @@ flowchart LR
     click B "https://en.wikipedia.org/wiki/Blackboard_(design_pattern)" "Blackboard design pattern"
 ```
 
+## In-Session Telemetry
+
+`agent-blackboard` is designed to run within an agent session.
+There are two main reasons:
+
+1. In most agentic tools, thinking is not returned to the user and saved to the session logs. If you run retrospectives by reading session logs, you might miss a lot of the thought process, which is something you'd want to improve (e.g. improve the harness so less thinking is required).
+2. In-session, the session logs are already cached whereas re-reading session logs will not be cached. Sure, you can use a cheaper agent to search, but again, thinking will not be included.
+
+Of course, you can read the session logs as part of the distill process or as part of the in-session retrospective. It's all up to you, but out of scope for `agent-blackboard`.
+
 ## Architecture
 
 - `packages/server` — Lambda + DynamoDB service deployed with CloudFormation.
@@ -37,6 +47,10 @@ Entries are never stored in a nested array. Session metadata tracks `lastEntryAt
 expires relative to its own `createdAt`, while session metadata never expires. Archival is stored
 as `archivedAt` and means the session was distilled exactly once. Archived metadata is immutable,
 but entries remain appendable and children may reference archived parents.
+
+## Cost
+
+Since everything runs serverless, expect costs to be < $10 per year per engineer.
 
 ## Quick start
 
