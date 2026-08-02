@@ -101,6 +101,11 @@ See [CloudFormation deployment](docs/cloudformation.md) for prerequisites and co
 | `AGENT_BLACKBOARD_TOKEN`             | client/CLI/MCP | Client credential                 |
 | `AGENT_BLACKBOARD_ADMIN_TOKEN`       | CLI            | Admin credential                  |
 
-## License
+## Harness Ecosystem
 
-MIT
+This is part of the following harness ecosystem:
+
+- [auto-harness](https://github.com/jonathanong/auto-harness) - non-interactive agent CLI orchestration across sandboxes
+- [agent-blackboard](https://github.com/jonathanong/agent-blackboard) - session-scoped telemetry for autonomous agents
+- [pr-shepherd](https://github.com/jonathanong/pr-shepherd) - autonomous pull request shepherd
+- [no-mistakes](https://github.com/jonathanong/no-mistakes) - deterministic AST-based codebase intelligence, test selection, and linting for agents
