@@ -14,6 +14,7 @@ agent-blackboard sessions patch worker-456 --data '{"branch":"fix/retry"}'
 agent-blackboard sessions list
 agent-blackboard sessions list --archived true
 agent-blackboard sessions list --inactive-for-hours 8
+agent-blackboard sessions list --limit 1
 agent-blackboard sessions get worker-456
 agent-blackboard sessions archive worker-456
 ```
@@ -23,8 +24,11 @@ agent-blackboard sessions archive worker-456
 generated. `sessions patch` shallow-merges a non-empty JSON object into session `data`. Listing
 defaults to undistilled sessions; use `--archived true` to list archived sessions. Use
 `--inactive-for-hours <hours>` to keep only sessions whose last entry is strictly older than the
-cutoff; sessions without entries are excluded. Archived session metadata cannot be patched, but
-entries may still be appended and children may reference an archived parent.
+cutoff; sessions without entries are excluded. Use `--limit <n>` to fetch a single bounded page
+instead of draining every page — the flag omitted otherwise drains the full result set into one
+flat JSON array, so `--limit` is the cheap option for callers that only need an existence or count
+check. Archived session metadata cannot be patched, but entries may still be appended and children
+may reference an archived parent.
 
 ## Entries
 

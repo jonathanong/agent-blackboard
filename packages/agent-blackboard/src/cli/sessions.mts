@@ -42,9 +42,22 @@ export async function runSessions(argv: string[], ctx: CliContext): Promise<void
     ) {
       throw new CliError('sessions list --inactive-for-hours must be a positive number.')
     }
+    const limitFlag = stringFlag(flags, 'limit')
+    const limit = limitFlag === undefined ? undefined : Number(limitFlag)
+    if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) {
+      throw new CliError('sessions list --limit must be a positive integer.')
+    }
     const query: ListSessionsQuery = {
       ...(archivedFlag === undefined ? {} : { archived: archivedFlag === 'true' }),
       ...(inactiveForHours === undefined ? {} : { inactiveForHours }),
+    }
+    if (limit !== undefined) {
+      // `--limit` fetches a single bounded page instead of the full drain below —
+      // callers that only need a cheap existence check (e.g. a health probe) shouldn't
+      // pay for scanning every session in the table.
+      const page = await sessions.list({ ...query, limit })
+      writeLine(ctx.stdout, JSON.stringify(page.sessions))
+      return
     }
     // The CLI's stdout contract is a flat JSON array (pre-pagination shape) —
     // drain every page here rather than surfacing cursors, so scripts piping
