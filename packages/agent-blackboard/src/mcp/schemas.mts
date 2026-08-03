@@ -24,6 +24,25 @@ export const ENTRY_TOOLS: Tool[] = [
     },
   },
   {
+    name: 'session_ensure',
+    description:
+      'Idempotently creates a session: if it already exists, verifies parentSessionId/agent/version ' +
+      'match instead of erroring, returning status "created" or "exists" either way.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sessionId: SESSION_ID,
+        parentSessionId: {
+          type: ['string', 'null'],
+          description: 'Null for a root session; the direct parent session id for a subagent.',
+        },
+        agent: { type: 'string', description: 'Agent name, for example claude-code.' },
+        version: { type: 'string', description: 'Agent version, for example 1.0.13.' },
+      },
+      required: ['sessionId', 'parentSessionId', 'agent', 'version'],
+    },
+  },
+  {
     name: 'session_search',
     description:
       'Searches undistilled or archived sessions using exact metadata, data, and inactivity filters. Returns ' +

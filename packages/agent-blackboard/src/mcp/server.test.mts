@@ -16,7 +16,7 @@ function text(content: unknown): string {
   return (content as Array<{ text: string }>)[0]!.text
 }
 
-it('lists six tools and returns JSON text or MCP errors', async () => {
+it('lists seven tools and returns JSON text or MCP errors', async () => {
   const entry = { sessionId: 's', createdAt: 'now', data: {} }
   const fixture = await startHttpFixture((_req, res) => sendJson(res, 201, entry))
   try {
@@ -27,6 +27,7 @@ it('lists six tools and returns JSON text or MCP errors', async () => {
       'entry_get',
       'session_archive',
       'session_create',
+      'session_ensure',
       'session_patch',
       'session_search',
     ])

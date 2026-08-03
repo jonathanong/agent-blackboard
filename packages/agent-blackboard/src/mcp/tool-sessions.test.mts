@@ -4,6 +4,7 @@ import type { Session } from '../client/types.mjs'
 import {
   handleSessionArchive,
   handleSessionCreate,
+  handleSessionEnsure,
   handleSessionPatch,
   handleSessionSearch,
 } from './tool-sessions.mjs'
@@ -93,6 +94,54 @@ it('creates, patches, and archives explicit sessions', async () => {
     expect(() => handleSessionCreate({ sessionId: 's' }, config)).toThrow()
   } finally {
     await fixture.close()
+  }
+})
+
+it('session_ensure creates, resolves a matching 409, and rejects a mismatched 409', async () => {
+  const createFixture = await startSessionsFixture()
+  try {
+    const config = { baseUrl: createFixture.baseUrl, token: 't' }
+    expect(
+      await handleSessionEnsure(
+        { sessionId: 's', parentSessionId: null, agent: 'test', version: '1' },
+        config,
+      ),
+    ).toEqual({ status: 'created', session })
+    expect(() => handleSessionEnsure({ sessionId: 's' }, config)).toThrow()
+  } finally {
+    await createFixture.close()
+  }
+
+  const matchFixture = await startHttpFixture((req, res) => {
+    if (req.method === 'POST') return sendJson(res, 409, { error: 'session exists' })
+    sendJson(res, 200, session)
+  })
+  try {
+    const config = { baseUrl: matchFixture.baseUrl, token: 't' }
+    expect(
+      await handleSessionEnsure(
+        { sessionId: 's', parentSessionId: null, agent: 'test', version: '1' },
+        config,
+      ),
+    ).toEqual({ status: 'exists', session })
+  } finally {
+    await matchFixture.close()
+  }
+
+  const mismatchFixture = await startHttpFixture((req, res) => {
+    if (req.method === 'POST') return sendJson(res, 409, { error: 'session exists' })
+    sendJson(res, 200, { ...session, agent: 'other' })
+  })
+  try {
+    const config = { baseUrl: mismatchFixture.baseUrl, token: 't' }
+    await expect(
+      handleSessionEnsure(
+        { sessionId: 's', parentSessionId: null, agent: 'test', version: '1' },
+        config,
+      ),
+    ).rejects.toThrow('different fields')
+  } finally {
+    await mismatchFixture.close()
   }
 })
 

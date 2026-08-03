@@ -28,6 +28,24 @@ export async function runSessions(argv: string[], ctx: CliContext): Promise<void
     )
     return
   }
+  if (subcommand === 'ensure') {
+    const id = positional[0]
+    if (!id) throw new CliError('sessions ensure requires <session-id>.')
+    const parentFlag = stringFlag(flags, 'parent-session-id')
+    if (Object.hasOwn(flags, 'parent-session-id') && !parentFlag) {
+      throw new CliError('sessions ensure --parent-session-id requires <session-id>.')
+    }
+    const parentSessionId = parentFlag ?? null
+    const agent = stringFlag(flags, 'agent')
+    const version = stringFlag(flags, 'version')
+    if (!agent) throw new CliError('sessions ensure requires --agent <name>.')
+    if (!version) throw new CliError('sessions ensure requires --version <version>.')
+    writeLine(
+      ctx.stdout,
+      JSON.stringify(await sessions.ensure({ id, parentSessionId, agent, version })),
+    )
+    return
+  }
   if (subcommand === 'list') {
     const archivedFlag = stringFlag(flags, 'archived')
     if (archivedFlag !== undefined && archivedFlag !== 'true' && archivedFlag !== 'false') {
@@ -113,5 +131,5 @@ export async function runSessions(argv: string[], ctx: CliContext): Promise<void
     )
     return
   }
-  throw new CliError('sessions requires one of: create, list, get, patch, archive.')
+  throw new CliError('sessions requires one of: create, ensure, list, get, patch, archive.')
 }

@@ -10,6 +10,7 @@ Client and admin credentials are never interchangeable.
 agent-blackboard sessions create root-123 --agent claude-code --version 1.0.13
 agent-blackboard sessions create worker-456 --parent-session-id root-123 \
   --agent claude-code --version 1.0.13
+agent-blackboard sessions ensure root-123 --agent claude-code --version 1.0.13
 agent-blackboard sessions patch worker-456 --data '{"branch":"fix/retry"}'
 agent-blackboard sessions list
 agent-blackboard sessions list --archived true
@@ -21,7 +22,10 @@ agent-blackboard sessions archive worker-456
 
 `sessions create` requires caller-supplied `--agent` and `--version` and always sends
 `parentSessionId`: it is `null` when the parent flag is omitted. Session ids are never inferred or
-generated. `sessions patch` shallow-merges a non-empty JSON object into session `data`. Listing
+generated. `sessions ensure` takes the same flags as `sessions create` but is idempotent: if the
+session already exists, it verifies `parentSessionId`/`agent`/`version` match instead of erroring,
+returning `{"status":"created"|"exists","session":...}` either way — a mismatch still throws.
+`sessions patch` shallow-merges a non-empty JSON object into session `data`. Listing
 defaults to undistilled sessions; use `--archived true` to list archived sessions. Use
 `--inactive-for-hours <hours>` to keep only sessions whose last entry is strictly older than the
 cutoff; sessions without entries are excluded. Use `--limit <n>` to fetch a single bounded page

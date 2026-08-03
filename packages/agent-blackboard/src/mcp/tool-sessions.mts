@@ -9,6 +9,7 @@ import {
   requiredString,
 } from './validate.mjs'
 import type { ClientConfig, ListSessionsQuery, Session } from '../client/types.mjs'
+import type { EnsureSessionResult } from '../client/sessions.mjs'
 
 /** Parsed, validated `session_search` args, shared by the direct-get and list paths. */
 interface SessionSearchArgs {
@@ -114,6 +115,18 @@ export function handleSessionCreate(
   config: ClientConfig,
 ): Promise<Session> {
   return new Sessions(config).create({
+    id: requiredString(args.sessionId, 'sessionId'),
+    parentSessionId: nullableString(args.parentSessionId, 'parentSessionId'),
+    agent: requiredString(args.agent, 'agent'),
+    version: requiredString(args.version, 'version'),
+  })
+}
+
+export function handleSessionEnsure(
+  args: Record<string, unknown>,
+  config: ClientConfig,
+): Promise<EnsureSessionResult> {
+  return new Sessions(config).ensure({
     id: requiredString(args.sessionId, 'sessionId'),
     parentSessionId: nullableString(args.parentSessionId, 'parentSessionId'),
     agent: requiredString(args.agent, 'agent'),

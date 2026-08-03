@@ -33,6 +33,17 @@ it('runs every session command and validates subcommands', async () => {
         '--version',
         '1.0.0',
       ],
+      ['ensure', 's', '--agent', 'test-agent', '--version', '1.0.0'],
+      [
+        'ensure',
+        'child',
+        '--parent-session-id',
+        's',
+        '--agent',
+        'test-agent',
+        '--version',
+        '1.0.0',
+      ],
       ['list'],
       ['list', '--archived', 'true'],
       ['list', '--inactive-for-hours', '8'],
@@ -55,6 +66,18 @@ it('runs every session command and validates subcommands', async () => {
     await expect(
       runSessions(
         ['create', 's', '--parent-session-id=', '--agent', 'test', '--version', '1'],
+        ctx,
+      ),
+    ).rejects.toThrow('--parent-session-id')
+    await expect(runSessions(['ensure'], ctx)).rejects.toThrow()
+    await expect(runSessions(['ensure', 's'], ctx)).rejects.toThrow('--agent')
+    await expect(runSessions(['ensure', 's', '--agent', 'test'], ctx)).rejects.toThrow('--version')
+    await expect(
+      runSessions(['ensure', 's', '--agent', 'test', '--version', '1', '--parent-session-id'], ctx),
+    ).rejects.toThrow('--parent-session-id')
+    await expect(
+      runSessions(
+        ['ensure', 's', '--parent-session-id=', '--agent', 'test', '--version', '1'],
         ctx,
       ),
     ).rejects.toThrow('--parent-session-id')
@@ -142,5 +165,44 @@ it('sessions list --limit fetches a single bounded page without draining further
     expect(fixture.requests[0]!.url).toContain('limit=1')
   } finally {
     await fixture.close()
+  }
+})
+
+it('sessions ensure resolves a 409 to the existing session or reports mismatched fields', async () => {
+  const existing = {
+    id: 's',
+    parentSessionId: null,
+    agent: 'test-agent',
+    version: '1.0.0',
+    createdAt: 'now',
+    lastEntryAt: null,
+    archivedAt: null,
+    data: {},
+  }
+  const matchFixture = await startHttpFixture((req, res) => {
+    if (req.method === 'POST') return sendJson(res, 409, { error: 'session exists' })
+    sendJson(res, 200, existing)
+  })
+  try {
+    const env = { AGENT_BLACKBOARD_URL: matchFixture.baseUrl, AGENT_BLACKBOARD_TOKEN: 't' }
+    const ctx = createFakeContext({ env })
+    await runSessions(['ensure', 's', '--agent', 'test-agent', '--version', '1.0.0'], ctx)
+    expect(JSON.parse(ctx.stdoutLines[0]!)).toEqual({ status: 'exists', session: existing })
+  } finally {
+    await matchFixture.close()
+  }
+
+  const mismatchFixture = await startHttpFixture((req, res) => {
+    if (req.method === 'POST') return sendJson(res, 409, { error: 'session exists' })
+    sendJson(res, 200, { ...existing, version: '2.0.0' })
+  })
+  try {
+    const env = { AGENT_BLACKBOARD_URL: mismatchFixture.baseUrl, AGENT_BLACKBOARD_TOKEN: 't' }
+    const ctx = createFakeContext({ env })
+    await expect(
+      runSessions(['ensure', 's', '--agent', 'test-agent', '--version', '1.0.0'], ctx),
+    ).rejects.toThrow('different fields')
+  } finally {
+    await mismatchFixture.close()
   }
 })

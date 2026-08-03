@@ -72,9 +72,9 @@ agent-blackboard mcp
 
 ## MCP
 
-The stdio MCP server exposes `session_create`, `session_search`, `session_patch`, `session_archive`,
-`entry_append`, and `entry_get`. Every session and entry operation requires explicit session ids
-where applicable. Credential management remains CLI/admin-only.
+The stdio MCP server exposes `session_create`, `session_ensure`, `session_search`, `session_patch`,
+`session_archive`, `entry_append`, and `entry_get`. Every session and entry operation requires
+explicit session ids where applicable. Credential management remains CLI/admin-only.
 
 ## Configuration
 

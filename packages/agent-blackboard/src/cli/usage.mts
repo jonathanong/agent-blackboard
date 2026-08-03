@@ -2,6 +2,7 @@ export const USAGE = `agent-blackboard — an entry stream for autonomous agents
 
 Usage:
   agent-blackboard sessions create <id> --agent <name> --version <version> [--parent-session-id <id>]
+  agent-blackboard sessions ensure <id> --agent <name> --version <version> [--parent-session-id <id>]
   agent-blackboard sessions list [--archived true|false] [--inactive-for-hours <hours>]
   agent-blackboard sessions get <id>
   agent-blackboard sessions patch <id> --data <json>
