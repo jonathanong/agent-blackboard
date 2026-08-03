@@ -3,6 +3,7 @@ import { handleEntryGet } from './tool-get.mjs'
 import {
   handleSessionArchive,
   handleSessionCreate,
+  handleSessionEnsure,
   handleSessionPatch,
   handleSessionSearch,
 } from './tool-sessions.mjs'
@@ -16,6 +17,8 @@ export function dispatchTool(
   switch (name) {
     case 'session_create':
       return handleSessionCreate(args, config)
+    case 'session_ensure':
+      return handleSessionEnsure(args, config)
     case 'session_archive':
       return handleSessionArchive(args, config)
     case 'session_search':

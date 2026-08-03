@@ -1,31 +1,42 @@
 import { Sessions } from '../client/sessions.mjs'
-import type { ListSessionsQuery, Session } from '../client/types.mjs'
-import { parseArgs, stringFlag } from './args.mjs'
+import type { CreateSessionInput, ListSessionsQuery, Session } from '../client/types.mjs'
+import { parseArgs, stringFlag, type ParsedArgs } from './args.mjs'
 import type { CliContext } from './context.mjs'
 import { clientConfigFromEnv } from './env.mjs'
 import { CliError } from './errors.mjs'
 import { writeLine } from './output.mjs'
+
+/** Shared by `create` and `ensure`, which take identical flags. */
+function parseCreateSessionInput(
+  subcommand: string,
+  positional: string[],
+  flags: ParsedArgs['flags'],
+): CreateSessionInput {
+  const id = positional[0]
+  if (!id) throw new CliError(`sessions ${subcommand} requires <session-id>.`)
+  const parentFlag = stringFlag(flags, 'parent-session-id')
+  if (Object.hasOwn(flags, 'parent-session-id') && !parentFlag) {
+    throw new CliError(`sessions ${subcommand} --parent-session-id requires <session-id>.`)
+  }
+  const agent = stringFlag(flags, 'agent')
+  const version = stringFlag(flags, 'version')
+  if (!agent) throw new CliError(`sessions ${subcommand} requires --agent <name>.`)
+  if (!version) throw new CliError(`sessions ${subcommand} requires --version <version>.`)
+  return { id, parentSessionId: parentFlag ?? null, agent, version }
+}
 
 export async function runSessions(argv: string[], ctx: CliContext): Promise<void> {
   const [subcommand, ...rest] = argv
   const { positional, flags } = parseArgs(rest)
   const sessions = new Sessions(clientConfigFromEnv(ctx.env))
   if (subcommand === 'create') {
-    const id = positional[0]
-    if (!id) throw new CliError('sessions create requires <session-id>.')
-    const parentFlag = stringFlag(flags, 'parent-session-id')
-    if (Object.hasOwn(flags, 'parent-session-id') && !parentFlag) {
-      throw new CliError('sessions create --parent-session-id requires <session-id>.')
-    }
-    const parentSessionId = parentFlag ?? null
-    const agent = stringFlag(flags, 'agent')
-    const version = stringFlag(flags, 'version')
-    if (!agent) throw new CliError('sessions create requires --agent <name>.')
-    if (!version) throw new CliError('sessions create requires --version <version>.')
-    writeLine(
-      ctx.stdout,
-      JSON.stringify(await sessions.create({ id, parentSessionId, agent, version })),
-    )
+    const input = parseCreateSessionInput('create', positional, flags)
+    writeLine(ctx.stdout, JSON.stringify(await sessions.create(input)))
+    return
+  }
+  if (subcommand === 'ensure') {
+    const input = parseCreateSessionInput('ensure', positional, flags)
+    writeLine(ctx.stdout, JSON.stringify(await sessions.ensure(input)))
     return
   }
   if (subcommand === 'list') {
@@ -113,5 +124,5 @@ export async function runSessions(argv: string[], ctx: CliContext): Promise<void
     )
     return
   }
-  throw new CliError('sessions requires one of: create, list, get, patch, archive.')
+  throw new CliError('sessions requires one of: create, ensure, list, get, patch, archive.')
 }

@@ -32,6 +32,26 @@ For a subagent, pass its direct parent's id:
 The parent must exist under the same client credential; archived parents remain valid. Parent links
 are immutable.
 
+## `session_ensure`
+
+Idempotent `session_create`: takes the same arguments, but a session that already exists is verified
+instead of rejected.
+
+```json
+{
+  "sessionId": "root-123",
+  "parentSessionId": null,
+  "agent": "claude-code",
+  "version": "1.0.13"
+}
+```
+
+Returns `{ "status": "created" | "exists", "session": Session }`. If the session already exists, its
+`parentSessionId`/`agent`/`version` must match the call's arguments exactly (`status` is then
+`"exists"`); any mismatch throws instead of silently keeping the old values. Use this when a caller
+doesn't know whether the session was already created — for example a subagent resuming after a
+retry — and would otherwise have to call `session_search` first to avoid a `session_create` conflict.
+
 ## `session_search`
 
 Search undistilled sessions by default:

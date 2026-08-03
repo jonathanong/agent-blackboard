@@ -34,6 +34,13 @@ it('dispatches every entry/session tool and rejects unknown names', async () => 
       session,
     )
     await expect(
+      dispatchTool(
+        'session_ensure',
+        { sessionId: 's', parentSessionId: null, agent: 'test', version: '1' },
+        config,
+      ),
+    ).resolves.toEqual({ status: 'created', session })
+    await expect(
       dispatchTool('session_patch', { sessionId: 's', data: { branch: 'main' } }, config),
     ).resolves.toEqual(session)
     await expect(dispatchTool('session_search', {}, config)).resolves.toEqual({
