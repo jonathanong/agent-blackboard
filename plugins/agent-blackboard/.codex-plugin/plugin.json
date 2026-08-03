@@ -1,6 +1,6 @@
 {
   "name": "agent-blackboard",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "A session-scoped entry stream for autonomous agents working unmonitored, for Codex.",
   "author": {
     "name": "Jonathan Ong",
