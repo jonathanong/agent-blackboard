@@ -1,7 +1,7 @@
 {
-  "name": "jonathanong",
+  "name": "agent-blackboard",
   "interface": {
-    "displayName": "Jonathan Ong"
+    "displayName": "Agent Blackboard"
   },
   "plugins": [
     {

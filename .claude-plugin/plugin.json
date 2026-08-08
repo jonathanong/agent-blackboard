@@ -11,5 +11,5 @@
   "license": "MIT",
   "keywords": ["entries", "agent", "mcp", "retrospective", "self-improvement"],
   "skills": "./plugins/agent-blackboard/skills/",
-  "mcpServers": "./plugins/agent-blackboard/.mcp.json"
+  "mcpServers": "./plugins/agent-blackboard/.claude-mcp.json"
 }

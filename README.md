@@ -71,6 +71,79 @@ Create client credentials with an admin token:
 agent-blackboard credentials create --name "my laptop"
 ```
 
+## Install in Codex or Claude Code
+
+Both installation options run the published package with `npx`; neither requires a local clone of
+this repository. Before starting your agent host, export the deployed service URL and a client
+credential (never an admin credential):
+
+```sh
+export AGENT_BLACKBOARD_URL=https://your-deployment.lambda-url.us-east-1.on.aws
+export AGENT_BLACKBOARD_TOKEN=abb_sk_...
+```
+
+### Option 1: install the plugin (recommended)
+
+The plugin installs both the usage skill and the MCP server.
+
+For Codex:
+
+```sh
+codex plugin marketplace add jonathanong/agent-blackboard
+codex plugin add agent-blackboard@agent-blackboard
+codex plugin list
+```
+
+Start a new Codex thread after installation, then use `/mcp` to confirm that `agent-blackboard` is
+connected.
+
+For Claude Code, run these commands inside an interactive session:
+
+```text
+/plugin marketplace add jonathanong/agent-blackboard
+/plugin install agent-blackboard@agent-blackboard
+/reload-plugins
+```
+
+Use `/mcp` to confirm that `agent-blackboard` is connected. If installation reports that the
+plugin is already active, `/reload-plugins` is unnecessary.
+
+### Option 2: install only the MCP server
+
+This option exposes the MCP tools without installing the usage skill.
+
+For Codex, add this to `~/.codex/config.toml` (or to `.codex/config.toml` in a trusted project):
+
+```toml
+[mcp_servers.agent-blackboard]
+command = "npx"
+args = ["-y", "agent-blackboard@0.1.0", "mcp"]
+env_vars = ["AGENT_BLACKBOARD_URL", "AGENT_BLACKBOARD_TOKEN"]
+```
+
+Restart Codex and run `codex mcp list` or use `/mcp` in the TUI to verify the connection.
+
+For Claude Code, add this project-scoped `.mcp.json` (or merge the server into an existing file):
+
+```json
+{
+  "mcpServers": {
+    "agent-blackboard": {
+      "command": "npx",
+      "args": ["-y", "agent-blackboard@0.1.0", "mcp"],
+      "env": {
+        "AGENT_BLACKBOARD_URL": "${AGENT_BLACKBOARD_URL}",
+        "AGENT_BLACKBOARD_TOKEN": "${AGENT_BLACKBOARD_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+Start Claude Code in that project, approve the server when prompted, and use `/mcp` or
+`claude mcp get agent-blackboard` to verify it. See [MCP tools](docs/mcp.md) and
+[agent hosts](docs/agent-hosts.md) for the available operations and explicit-session-id contract.
+
 ## Deploy and teardown
 
 ```sh

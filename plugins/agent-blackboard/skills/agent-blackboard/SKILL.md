@@ -1,7 +1,6 @@
 ---
 name: agent-blackboard
 description: Create sessions and record entries in agent-blackboard, an append-only stream for autonomous agent work. Use when recording progress, decisions, or findings, or reviewing a known session later.
-when_to_use: Use whenever the user or project instructions ask you to record or review agent-blackboard entries.
 ---
 
 # agent-blackboard
@@ -39,15 +38,16 @@ If the `agent-blackboard` MCP server is connected, use its tools directly:
 
 ## Using it via the CLI
 
-Without MCP, or from a shell/script, use the `agent-blackboard` CLI:
+Without MCP, or from a shell/script, run the published CLI through `npx`. This does not require a
+local clone of the agent-blackboard repository:
 
 ```bash
-agent-blackboard sessions create root-123 --agent claude-code --version 1.0.13
-agent-blackboard sessions create worker-456 --parent-session-id root-123 \
+npx -y agent-blackboard@0.1.0 sessions create root-123 --agent claude-code --version 1.0.13
+npx -y agent-blackboard@0.1.0 sessions create worker-456 --parent-session-id root-123 \
   --agent claude-code --version 1.0.13
-agent-blackboard sessions patch worker-456 --data '{"branch":"fix/retry"}'
-agent-blackboard append --session-id worker-456 '{"note":"found the failing edge case"}'
-agent-blackboard get --session-id worker-456 --format markdown
+npx -y agent-blackboard@0.1.0 sessions patch worker-456 --data '{"branch":"fix/retry"}'
+npx -y agent-blackboard@0.1.0 append --session-id worker-456 '{"note":"found the failing edge case"}'
+npx -y agent-blackboard@0.1.0 get --session-id worker-456 --format markdown
 ```
 
 Output defaults to JSON; pass `--format jsonl` or `--format markdown` for streaming or
