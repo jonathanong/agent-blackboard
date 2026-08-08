@@ -2,7 +2,7 @@
   "mcpServers": {
     "agent-blackboard": {
       "command": "npx",
-      "args": ["-y", "agent-blackboard", "mcp"],
+      "args": ["-y", "agent-blackboard@0.1.0", "mcp"],
       "env": {
         "AGENT_BLACKBOARD_URL": "${AGENT_BLACKBOARD_URL}",
         "AGENT_BLACKBOARD_TOKEN": "${AGENT_BLACKBOARD_TOKEN}"
