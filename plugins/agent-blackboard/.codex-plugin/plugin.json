@@ -11,8 +11,7 @@
   "repository": "https://github.com/jonathanong/agent-blackboard",
   "license": "MIT",
   "keywords": ["entries", "agent", "mcp", "retrospective", "codex"],
-  "skills": "../skills/",
-  "mcpServers": "../.mcp.json",
+  "skills": "./skills/",
   "interface": {
     "displayName": "agent-blackboard",
     "shortDescription": "Session entries for autonomous agents",
