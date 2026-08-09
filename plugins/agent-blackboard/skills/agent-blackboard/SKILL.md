@@ -42,12 +42,12 @@ Without MCP, or from a shell/script, run the published CLI through `npx`. This d
 local clone of the agent-blackboard repository:
 
 ```bash
-npx -y agent-blackboard@0.1.0 sessions create root-123 --agent claude-code --version 1.0.13
-npx -y agent-blackboard@0.1.0 sessions create worker-456 --parent-session-id root-123 \
+npx -y agent-blackboard@0.1.1 sessions create root-123 --agent claude-code --version 1.0.13
+npx -y agent-blackboard@0.1.1 sessions create worker-456 --parent-session-id root-123 \
   --agent claude-code --version 1.0.13
-npx -y agent-blackboard@0.1.0 sessions patch worker-456 --data '{"branch":"fix/retry"}'
-npx -y agent-blackboard@0.1.0 append --session-id worker-456 '{"note":"found the failing edge case"}'
-npx -y agent-blackboard@0.1.0 get --session-id worker-456 --format markdown
+npx -y agent-blackboard@0.1.1 sessions patch worker-456 --data '{"branch":"fix/retry"}'
+npx -y agent-blackboard@0.1.1 append --session-id worker-456 '{"note":"found the failing edge case"}'
+npx -y agent-blackboard@0.1.1 get --session-id worker-456 --format markdown
 ```
 
 Output defaults to JSON; pass `--format jsonl` or `--format markdown` for streaming or
