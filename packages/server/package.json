@@ -12,12 +12,12 @@
     "teardown": "node infra/teardown.mjs"
   },
   "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.1099.0",
-    "@aws-sdk/lib-dynamodb": "^3.1099.0"
+    "@aws-sdk/client-dynamodb": "^3.1105.0",
+    "@aws-sdk/lib-dynamodb": "^3.1105.0"
   },
   "devDependencies": {
     "esbuild": "^0.28.1",
-    "tsx": "^4.22.1"
+    "tsx": "^4.23.9"
   },
   "engines": {
     "node": ">=24.0.0"
