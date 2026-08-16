@@ -48,4 +48,33 @@ describe('handleRequest', () => {
     const response = await handleRequest(request({ path: '/credentials' }), deps())
     expect(response.status).toBe(401)
   })
+
+  it('decodes a percent-encoded session id before it reaches the store', async () => {
+    // Mirrors what a real adapter hands in: url.pathname preserves
+    // percent-encoding rather than decoding it, so a client that
+    // encodeURIComponent()s an id containing ':' arrives here as '%3A'.
+    const store = new MemoryBlackboardStore()
+    const { token } = await store.createCredential('test')
+    const credId = (await store.listCredentials())[0]!.id
+    await store.createSession({
+      credId,
+      id: 'abc:def',
+      parentSessionId: null,
+      agent: 'claude-code',
+      version: '1.0.0',
+    })
+    const headers = { authorization: `Bearer ${token}` }
+
+    const sessionResponse = await handleRequest(
+      request({ path: '/sessions/abc%3Adef', headers }),
+      deps({ store }),
+    )
+    expect(sessionResponse.status).toBe(200)
+
+    const entriesResponse = await handleRequest(
+      request({ path: '/sessions/abc%3Adef/entries', headers }),
+      deps({ store }),
+    )
+    expect(entriesResponse.status).toBe(200)
+  })
 })

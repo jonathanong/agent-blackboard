@@ -68,9 +68,16 @@ export async function handleRequest(
   const path = normalizePath(request.path)
   if (path === '/credentials') return handleCredentialsRoute(request, deps.store, deps.env)
   if (path === '/sessions') return handleSessionsRoute(request, deps.store)
+  // `request.path` is `url.pathname` (see local-server.mts/handler.mts): the
+  // WHATWG URL parser preserves percent-encoding in `.pathname` rather than
+  // decoding it, so a client-side `encodeURIComponent(sessionId)` (needed for
+  // ids containing e.g. `:`) survives verbatim into the captured segment.
+  // Decode it here, once, before it reaches route handlers or the store.
   const sessionMatch = /^\/sessions\/([^/]+)$/.exec(path)
-  if (sessionMatch) return handleSessionsRoute(request, deps.store, sessionMatch[1]!)
+  if (sessionMatch)
+    return handleSessionsRoute(request, deps.store, decodeURIComponent(sessionMatch[1]!))
   const entriesMatch = /^\/sessions\/([^/]+)\/entries$/.exec(path)
-  if (entriesMatch) return handleEntriesRoute(request, deps.store, entriesMatch[1]!)
+  if (entriesMatch)
+    return handleEntriesRoute(request, deps.store, decodeURIComponent(entriesMatch[1]!))
   return notFoundResponse()
 }
