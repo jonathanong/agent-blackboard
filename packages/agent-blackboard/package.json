@@ -1,6 +1,6 @@
 {
   "name": "agent-blackboard",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Client library, CLI, and MCP server for Agent Blackboard session entries.",
   "homepage": "https://github.com/jonathanong/agent-blackboard#readme",
   "bugs": {
