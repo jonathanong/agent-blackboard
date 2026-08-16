@@ -61,6 +61,22 @@ function normalizePath(path: string): string {
   return path
 }
 
+// `request.path` is `url.pathname` (see local-server.mts/handler.mts): the
+// WHATWG URL parser preserves percent-encoding in `.pathname` rather than
+// decoding it, so a client-side `encodeURIComponent(sessionId)` (needed for
+// ids containing e.g. `:`) survives verbatim into a captured route segment.
+// Decode it here, once, before it reaches route handlers or the store. A
+// malformed escape (e.g. a bare `%`) makes decodeURIComponent throw; treat
+// that the same as any other id no route/store will ever match: `null`,
+// signalling the caller to 404 rather than let the URIError become a 500.
+function decodeSegment(segment: string): string | null {
+  try {
+    return decodeURIComponent(segment)
+  } catch {
+    return null
+  }
+}
+
 export async function handleRequest(
   request: HandlerRequest,
   deps: HandleRequestDeps,
@@ -68,16 +84,19 @@ export async function handleRequest(
   const path = normalizePath(request.path)
   if (path === '/credentials') return handleCredentialsRoute(request, deps.store, deps.env)
   if (path === '/sessions') return handleSessionsRoute(request, deps.store)
-  // `request.path` is `url.pathname` (see local-server.mts/handler.mts): the
-  // WHATWG URL parser preserves percent-encoding in `.pathname` rather than
-  // decoding it, so a client-side `encodeURIComponent(sessionId)` (needed for
-  // ids containing e.g. `:`) survives verbatim into the captured segment.
-  // Decode it here, once, before it reaches route handlers or the store.
   const sessionMatch = /^\/sessions\/([^/]+)$/.exec(path)
-  if (sessionMatch)
-    return handleSessionsRoute(request, deps.store, decodeURIComponent(sessionMatch[1]!))
+  if (sessionMatch) {
+    const sessionId = decodeSegment(sessionMatch[1]!)
+    return sessionId === null
+      ? notFoundResponse()
+      : handleSessionsRoute(request, deps.store, sessionId)
+  }
   const entriesMatch = /^\/sessions\/([^/]+)\/entries$/.exec(path)
-  if (entriesMatch)
-    return handleEntriesRoute(request, deps.store, decodeURIComponent(entriesMatch[1]!))
+  if (entriesMatch) {
+    const sessionId = decodeSegment(entriesMatch[1]!)
+    return sessionId === null
+      ? notFoundResponse()
+      : handleEntriesRoute(request, deps.store, sessionId)
+  }
   return notFoundResponse()
 }

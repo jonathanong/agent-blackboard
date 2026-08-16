@@ -77,4 +77,11 @@ describe('handleRequest', () => {
     )
     expect(entriesResponse.status).toBe(200)
   })
+
+  it('404s a session id with a malformed percent-escape instead of throwing', async () => {
+    // decodeURIComponent('%') throws URIError; a route no store lookup could
+    // ever match anyway should 404 like any other unmatched id, not 500.
+    expect((await handleRequest(request({ path: '/sessions/%' }), deps())).status).toBe(404)
+    expect((await handleRequest(request({ path: '/sessions/%/entries' }), deps())).status).toBe(404)
+  })
 })
