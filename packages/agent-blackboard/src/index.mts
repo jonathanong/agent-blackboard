@@ -13,6 +13,7 @@ export { Auth } from './client/auth.mjs'
 export type { AuthOptions } from './client/auth.mjs'
 export { AgentBlackboardError } from './client/errors.mjs'
 export { Entries } from './client/entries.mjs'
+export { formatError } from './format-error.mjs'
 export { Sessions } from './client/sessions.mjs'
 export type {
   AppendEntryInput,

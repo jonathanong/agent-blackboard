@@ -51,7 +51,10 @@ await auth.createCredentials({ name: 'ci-bot' })
 All session ids, agent names, and versions are caller-provided. `parentSessionId` is required and
 nullable. The service generates `createdAt`/`lastEntryAt`/`archivedAt` timestamps.
 `Entries.get()` returns an `AsyncIterable<SessionEntry>` and uses incremental JSONL by default.
-Non-2xx responses throw `AgentBlackboardError`.
+Non-2xx responses throw `AgentBlackboardError`. Use the root `formatError(error)` export when
+rendering a caught value for users; it includes an `AgentBlackboardError` response body when present
+and safely handles any value JavaScript can throw. Unserializable response bodies and unprintable
+thrown values use deterministic fallback text instead of throwing while reporting the error.
 
 ## CLI
 
