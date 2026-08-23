@@ -11,6 +11,7 @@ import {
   AgentBlackboardError,
   Auth,
   Entries,
+  formatError,
   Sessions,
   type ClientConfig,
   type Session,
@@ -314,7 +315,24 @@ Network failures, invalid JSON responses, and stream parse failures are native p
 `fetch`, or middleware options; integrations should apply retry policy around individual calls and
 must not retry non-idempotent appends blindly.
 
-## Exported types
+### `formatError(error): string`
+
+Use `formatError` when displaying a caught value in a CLI, MCP server, or other user-facing surface.
+It returns an `Error` message, or stringifies a non-`Error` thrown value. For an
+`AgentBlackboardError`, it appends the parsed response body when one exists:
+
+```ts
+import { formatError } from 'agent-blackboard'
+
+console.error(formatError(new Error('connection failed')))
+// connection failed
+```
+
+An `Error` with a `cause` still formats as its own message. If a response body cannot be serialized,
+the message is preserved with `[unserializable error body]`; an otherwise unprintable thrown value
+formats as `[unprintable error]`. `formatError` never throws while handling an error.
+
+## Exported API
 
 The package root exports:
 
@@ -323,6 +341,7 @@ The package root exports:
 - entries: `SessionEntry`, `AppendEntryInput`, `GetEntriesQuery`, `GetRawEntriesQuery`,
   `EntryWireFormat`, `StructuredEntryFormat`;
 - credentials: `CredentialCreated`, `CredentialSummary`.
+- errors: `AgentBlackboardError`, `formatError`.
 
 The package is currently version `0.0.0`. Tooling should pin an exact version until a stable
 compatibility policy is published.
