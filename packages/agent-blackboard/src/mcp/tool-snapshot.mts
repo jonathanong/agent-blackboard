@@ -7,14 +7,20 @@ import {
 } from './validate.mjs'
 import type { ClientConfig, SnapshotSelection } from '../client/types.mjs'
 
+function parentSessionId(value: unknown): string | null {
+  const id = nullableString(value, 'parentSessionId')
+  if (id !== null && !/^[A-Za-z0-9._:-]+$/.test(id)) {
+    throw new Error('"parentSessionId" is invalid.')
+  }
+  return id
+}
+
 function selectionFrom(args: Record<string, unknown>): SnapshotSelection {
   const hasParent = Object.hasOwn(args, 'parentSessionId')
   return {
     ...(args.agent === undefined ? {} : { agent: requiredString(args.agent, 'agent') }),
     ...(args.version === undefined ? {} : { version: requiredString(args.version, 'version') }),
-    ...(hasParent
-      ? { parentSessionId: nullableString(args.parentSessionId, 'parentSessionId') }
-      : {}),
+    ...(hasParent ? { parentSessionId: parentSessionId(args.parentSessionId) } : {}),
     ...(args.data === undefined ? {} : { data: expectObject(args.data, 'data') }),
     ...(args.inactiveForHours === undefined
       ? {}

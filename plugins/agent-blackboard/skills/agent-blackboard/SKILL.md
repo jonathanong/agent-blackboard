@@ -51,7 +51,7 @@ npx -y agent-blackboard@0.2.0 sessions create worker-456 --parent-session-id roo
 npx -y agent-blackboard@0.2.0 sessions patch worker-456 --data '{"branch":"fix/retry"}'
 npx -y agent-blackboard@0.2.0 append --session-id worker-456 '{"note":"found the failing edge case"}'
 npx -y agent-blackboard@0.2.0 get --session-id worker-456 --format markdown
-agent-blackboard snapshot export --root-only --inactive-for-hours 8
+npx -y agent-blackboard snapshot export --root-only --inactive-for-hours 8
 ```
 
 Output defaults to JSON; pass `--format jsonl` or `--format markdown` for streaming or

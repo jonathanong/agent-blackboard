@@ -84,12 +84,16 @@ it('exports a filtered root-only snapshot and emits only its compact result', as
 it('rejects invalid snapshot command arguments before making an HTTP request', async () => {
   const ctx = createFakeContext({ env: {} })
   await expect(runSnapshot(['nope'], ctx)).rejects.toThrow('requires: export')
+  await expect(runSnapshot(['export'], ctx)).rejects.toThrow('AGENT_BLACKBOARD_URL')
   await expect(
     runSnapshot(['export', '--root-only', '--parent-session-id', 'p'], ctx),
   ).rejects.toThrow('cannot be combined')
   await expect(runSnapshot(['export', '--data', '[]'], ctx)).rejects.toThrow('JSON object')
   await expect(runSnapshot(['export', '--agent'], ctx)).rejects.toThrow('requires a value')
   await expect(runSnapshot(['export', 'extra'], ctx)).rejects.toThrow('accepts flags only')
+  await expect(runSnapshot(['export', '--parent-session-id', 'invalid/id'], ctx)).rejects.toThrow(
+    'parent-session-id is invalid',
+  )
   await expect(runSnapshot(['export', '--inactive-for-hours', '0'], ctx)).rejects.toThrow(
     'positive number',
   )

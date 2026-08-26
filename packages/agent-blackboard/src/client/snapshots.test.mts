@@ -2,7 +2,7 @@ import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promise
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { sendNdjson, startHttpFixture } from '../__tests__/http-fixture.mjs'
 import { Snapshots } from './snapshots.mjs'
 
@@ -189,6 +189,36 @@ it('removes malformed, incomplete, and semantically invalid snapshots', async ()
           type: 'manifest',
           manifest: {
             ...records()[2]!.manifest,
+            completedAt: null,
+            selection: { archived: false },
+            counts: { sessions: 1, entries: 0, records: 2 },
+          },
+        },
+      ],
+      error: 'terminal manifest',
+    },
+    {
+      records: [
+        { type: 'session', session },
+        {
+          type: 'manifest',
+          manifest: {
+            ...records()[2]!.manifest,
+            createdAt: 1,
+            selection: { archived: false },
+            counts: { sessions: 1, entries: 0, records: 2 },
+          },
+        },
+      ],
+      error: 'terminal manifest',
+    },
+    {
+      records: [
+        { type: 'session', session },
+        {
+          type: 'manifest',
+          manifest: {
+            ...records()[2]!.manifest,
             selection: { archived: false, agent: 'other' },
             counts: { sessions: 1, entries: 0, records: 2 },
           },
@@ -281,6 +311,28 @@ it('accepts a terminal manifest without a trailing newline and rejects a bodyles
   } finally {
     await fixture.close()
     await bodyless.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+it('cancels the response stream when incremental validation fails', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'abb-snapshot-test-'))
+  const destination = join(directory, 'invalid.jsonl')
+  const cancel = vi.fn()
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('{bad}\n'))
+    },
+    cancel,
+  })
+  vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response(body)))
+  try {
+    await expect(
+      new Snapshots({ baseUrl: 'http://example.test', token: 't' }).export({ path: destination }),
+    ).rejects.toThrow('invalid JSONL')
+    expect(cancel).toHaveBeenCalledOnce()
+  } finally {
+    vi.unstubAllGlobals()
     await rm(directory, { recursive: true, force: true })
   }
 })

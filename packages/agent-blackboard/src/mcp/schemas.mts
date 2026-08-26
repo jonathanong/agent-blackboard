@@ -18,6 +18,7 @@ export const ENTRY_TOOLS: Tool[] = [
         version: { type: 'string', description: 'Exact agent version to include.' },
         parentSessionId: {
           type: ['string', 'null'],
+          pattern: '^[A-Za-z0-9._:-]+$',
           description: 'Exact parent id; null selects root sessions.',
         },
         data: { type: 'object', description: 'Top-level session data fields to match exactly.' },

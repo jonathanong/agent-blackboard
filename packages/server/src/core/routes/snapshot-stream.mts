@@ -32,6 +32,7 @@ type SnapshotRecord =
   | { type: 'entry'; entry: SessionEntry }
   | { type: 'manifest'; manifest: SnapshotManifest }
   | { type: 'error'; error: { code: 'snapshot_too_large'; limitBytes: number } }
+type Emit = (value: string, reserveError?: boolean) => boolean
 
 function line(record: SnapshotRecord): string {
   return `${JSON.stringify(record)}\n`
@@ -43,6 +44,33 @@ function byteLength(value: string): number {
 
 function query(selection: SnapshotSelection, cursor?: string): ListSessionsQuery {
   return { ...selection, limit: MAX_SESSIONS_LIMIT, ...(cursor === undefined ? {} : { cursor }) }
+}
+
+async function* sessionBlock(
+  store: BlackboardStore,
+  credId: string,
+  session: Session,
+  tooLarge: string,
+  emit: Emit,
+): AsyncGenerator<string, number | undefined> {
+  const sessionLine = line({ type: 'session', session })
+  if (!emit(sessionLine, true)) {
+    if (emit(tooLarge)) yield tooLarge
+    return undefined
+  }
+  yield sessionLine
+
+  let entries = 0
+  for await (const entry of store.getEntries(credId, session.id)) {
+    const entryLine = line({ type: 'entry', entry })
+    if (!emit(entryLine, true)) {
+      yield tooLarge
+      return undefined
+    }
+    entries += 1
+    yield entryLine
+  }
+  return entries
 }
 
 async function* snapshotRecords(
@@ -73,25 +101,11 @@ async function* snapshotRecords(
   while (true) {
     const page = await store.listSessions(credId, query(selection, cursor))
     for (const session of page.sessions) {
-      const sessionLine = line({ type: 'session', session })
-      if (!emit(sessionLine, true)) {
-        if (emit(tooLarge)) yield tooLarge
-        return
-      }
-      records += 1
+      const sessionEntries = yield* sessionBlock(store, credId, session, tooLarge, emit)
+      if (sessionEntries === undefined) return
       sessions += 1
-      yield sessionLine
-
-      for await (const entry of store.getEntries(credId, session.id)) {
-        const entryLine = line({ type: 'entry', entry })
-        if (!emit(entryLine, true)) {
-          yield tooLarge
-          return
-        }
-        records += 1
-        entries += 1
-        yield entryLine
-      }
+      entries += sessionEntries
+      records += sessionEntries + 1
     }
     if (page.nextCursor === null) break
     cursor = page.nextCursor

@@ -73,6 +73,13 @@ it('exports compact snapshot metadata without exposing JSONL through MCP', async
     expect(() =>
       dispatchTool('snapshot_export', { data: [] }, { baseUrl: fixture.baseUrl, token: 't' }),
     ).toThrow('data')
+    expect(() =>
+      dispatchTool(
+        'snapshot_export',
+        { parentSessionId: 'invalid/id' },
+        { baseUrl: fixture.baseUrl, token: 't' },
+      ),
+    ).toThrow('parentSessionId')
   } finally {
     await fixture.close()
     await rm(directory, { recursive: true, force: true })

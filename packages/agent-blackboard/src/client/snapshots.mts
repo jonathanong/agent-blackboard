@@ -152,6 +152,7 @@ export class Snapshots {
       const decoder = new TextDecoder('utf-8', { fatal: true })
       const reader = response.body.getReader()
       let pending = ''
+      let bodyComplete = false
       try {
         for (;;) {
           const { done, value } = await reader.read()
@@ -166,7 +167,9 @@ export class Snapshots {
           if (done) break
         }
         pending += decoder.decode()
+        bodyComplete = true
       } finally {
+        if (!bodyComplete) await reader.cancel()
         reader.releaseLock()
       }
       if (pending) validateRecord(parseLine(pending), state)

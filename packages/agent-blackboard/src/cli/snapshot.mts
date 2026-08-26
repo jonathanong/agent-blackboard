@@ -13,40 +13,53 @@ function optionalString(flags: Record<string, string | boolean>, key: string): s
   return value
 }
 
-function selectionFrom(flags: Record<string, string | boolean>): SnapshotSelection {
-  const agent = optionalString(flags, 'agent')
-  const version = optionalString(flags, 'version')
+function parentSelection(
+  flags: Record<string, string | boolean>,
+): Pick<SnapshotSelection, 'parentSessionId'> {
   const parentSessionId = optionalString(flags, 'parent-session-id')
   if (flags['root-only'] !== undefined && parentSessionId !== undefined) {
     throw new CliError('snapshot export --root-only cannot be combined with --parent-session-id.')
   }
-  const rawData = optionalString(flags, 'data')
-  let data: Record<string, unknown> | undefined
-  if (rawData !== undefined) {
-    try {
-      const parsed: unknown = JSON.parse(rawData)
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error()
-      data = parsed as Record<string, unknown>
-    } catch {
-      throw new CliError('snapshot export --data must be a JSON object.')
-    }
+  if (parentSessionId !== undefined && !/^[A-Za-z0-9._:-]+$/.test(parentSessionId)) {
+    throw new CliError('snapshot export --parent-session-id is invalid.')
   }
+  if (flags['root-only'] !== undefined) return { parentSessionId: null }
+  return parentSessionId === undefined ? {} : { parentSessionId }
+}
+
+function dataSelection(
+  flags: Record<string, string | boolean>,
+): Record<string, unknown> | undefined {
+  const rawData = optionalString(flags, 'data')
+  if (rawData === undefined) return undefined
+  try {
+    const parsed: unknown = JSON.parse(rawData)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error()
+    return parsed as Record<string, unknown>
+  } catch {
+    throw new CliError('snapshot export --data must be a JSON object.')
+  }
+}
+
+function inactivitySelection(flags: Record<string, string | boolean>): number | undefined {
   const rawHours = optionalString(flags, 'inactive-for-hours')
-  const inactiveForHours = rawHours === undefined ? undefined : Number(rawHours)
-  if (
-    inactiveForHours !== undefined &&
-    (!Number.isFinite(inactiveForHours) || inactiveForHours <= 0)
-  ) {
+  if (rawHours === undefined) return undefined
+  const hours = Number(rawHours)
+  if (!Number.isFinite(hours) || hours <= 0) {
     throw new CliError('snapshot export --inactive-for-hours must be a positive number.')
   }
+  return hours
+}
+
+function selectionFrom(flags: Record<string, string | boolean>): SnapshotSelection {
+  const agent = optionalString(flags, 'agent')
+  const version = optionalString(flags, 'version')
+  const data = dataSelection(flags)
+  const inactiveForHours = inactivitySelection(flags)
   return {
     ...(agent === undefined ? {} : { agent }),
     ...(version === undefined ? {} : { version }),
-    ...(flags['root-only'] === undefined
-      ? parentSessionId === undefined
-        ? {}
-        : { parentSessionId }
-      : { parentSessionId: null }),
+    ...parentSelection(flags),
     ...(data === undefined ? {} : { data }),
     ...(inactiveForHours === undefined ? {} : { inactiveForHours }),
   }
