@@ -88,7 +88,7 @@ A single CloudFormation stack:
 - **`AgentBlackboardTable`** (`AWS::DynamoDB::Table`) — `PK`/`SK` string keys,
   `PAY_PER_REQUEST` billing, TTL enabled on `ttl`.
 - **`AgentBlackboardFunction`** (`AWS::Lambda::Function`) — runtime `nodejs24.x`,
-  `MemorySize: 256`, `Timeout: 60`, `ReservedConcurrentExecutions: 20` (a DoS
+  `MemorySize: 256`, `Timeout: 300`, `ReservedConcurrentExecutions: 20` (a DoS
   backstop for the public endpoint — raise it if you expect more concurrent
   traffic; on a fresh/restricted AWS account with little unreserved
   concurrency, deploy can fail here specifically).

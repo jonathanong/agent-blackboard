@@ -1,5 +1,6 @@
 import { handleEntryAppend } from './tool-append.mjs'
 import { handleEntryGet } from './tool-get.mjs'
+import { handleSnapshotExport } from './tool-snapshot.mjs'
 import {
   handleSessionArchive,
   handleSessionCreate,
@@ -29,6 +30,8 @@ export function dispatchTool(
       return handleEntryAppend(args, config)
     case 'entry_get':
       return handleEntryGet(args, config)
+    case 'snapshot_export':
+      return handleSnapshotExport(args, config)
     default:
       throw new Error(`Unknown tool: ${name}`)
   }

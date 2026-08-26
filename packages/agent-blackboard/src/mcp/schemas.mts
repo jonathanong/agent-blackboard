@@ -7,6 +7,29 @@ const SESSION_ID = {
 
 export const ENTRY_TOOLS: Tool[] = [
   {
+    name: 'snapshot_export',
+    description:
+      'Streams an immutable non-archived snapshot into a local private JSONL file and returns only its path, counts, checksum, and manifest.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Optional new absolute destination path.' },
+        agent: { type: 'string', description: 'Exact agent name to include.' },
+        version: { type: 'string', description: 'Exact agent version to include.' },
+        parentSessionId: {
+          type: ['string', 'null'],
+          description: 'Exact parent id; null selects root sessions.',
+        },
+        data: { type: 'object', description: 'Top-level session data fields to match exactly.' },
+        inactiveForHours: {
+          type: 'number',
+          exclusiveMinimum: 0,
+          description: 'Only sessions inactive for this many hours.',
+        },
+      },
+    },
+  },
+  {
     name: 'session_create',
     description: 'Creates a root or subagent session before entries are appended.',
     inputSchema: {

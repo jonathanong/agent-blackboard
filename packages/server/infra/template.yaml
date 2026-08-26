@@ -133,7 +133,7 @@ Resources:
         S3Bucket: !Ref LambdaCodeS3Bucket
         S3Key: !Ref LambdaCodeS3Key
       MemorySize: 256
-      Timeout: 60
+      Timeout: 300
       # DoS backstop: caps total concurrent invocations regardless of
       # traffic, at the cost of 429s under a burst above this ceiling.
       ReservedConcurrentExecutions: 20

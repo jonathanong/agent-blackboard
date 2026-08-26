@@ -98,16 +98,17 @@ DynamoDB transactions combine the session metadata update with each entry write,
 
 ## HTTP API
 
-| Method          | Path                    | Purpose                                                |
-| --------------- | ----------------------- | ------------------------------------------------------ |
-| `POST`          | `/sessions`             | Create `{ id, parentSessionId, agent, version }`       |
-| `GET`           | `/sessions`             | List sessions; supports archive and inactivity filters |
-| `GET`           | `/sessions/:id`         | Get session metadata                                   |
-| `PATCH`         | `/sessions/:id`         | Patch `{ data }` or archive with `{ archived: true }`  |
-| `POST`          | `/sessions/:id/entries` | Append `{ data }`                                      |
-| `GET`           | `/sessions/:id/entries` | Stream entries (`json`, `jsonl`, or `markdown`)        |
-| `PATCH`         | `/sessions/:id/entries` | Patch `{ createdAt, data }`                            |
-| `/credentials*` | admin routes            | Manage client credentials                              |
+| Method          | Path                    | Purpose                                                  |
+| --------------- | ----------------------- | -------------------------------------------------------- |
+| `POST`          | `/sessions`             | Create `{ id, parentSessionId, agent, version }`         |
+| `GET`           | `/sessions`             | List sessions; supports archive and inactivity filters   |
+| `GET`           | `/sessions/:id`         | Get session metadata                                     |
+| `PATCH`         | `/sessions/:id`         | Patch `{ data }` or archive with `{ archived: true }`    |
+| `POST`          | `/sessions/:id/entries` | Append `{ data }`                                        |
+| `GET`           | `/sessions/:id/entries` | Stream entries (`json`, `jsonl`, or `markdown`)          |
+| `PATCH`         | `/sessions/:id/entries` | Patch `{ createdAt, data }`                              |
+| `GET`           | `/snapshot`             | Stream all selected active sessions and entries as JSONL |
+| `/credentials*` | admin routes            | Manage client credentials                                |
 
 ## Authentication
 
@@ -121,3 +122,9 @@ routes; admin tokens cannot access session or entry routes.
 The store exposes entries as an `AsyncIterable`. The HTTP layer can emit JSON arrays, JSONL, or
 Markdown without loading a session's entire entry history. The library defaults to incremental
 JSONL parsing; the CLI relays response bytes directly.
+
+`GET /snapshot` streams each selected active session followed by its entries and ends with a
+terminal manifest. Session blocks are ordered by `(createdAt, id)` and entries by `createdAt`
+within their session. The snapshot is best-effort rather than transactional: appends concurrent
+with the scan may or may not appear. The response is capped at 190 MiB; an oversized stream ends
+with a `snapshot_too_large` error record instead of a complete manifest.

@@ -83,3 +83,44 @@ export interface CredentialSummary {
 export interface CredentialCreated extends CredentialSummary {
   token: string
 }
+
+/** Exact filters accepted by the immutable bulk snapshot endpoint. */
+export interface SnapshotSelection {
+  agent?: string
+  version?: string
+  parentSessionId?: string | null
+  data?: Record<string, unknown>
+  inactiveForHours?: number
+}
+
+export interface SnapshotCounts {
+  sessions: number
+  entries: number
+  records: number
+  bytes: number
+}
+
+/** Terminal record emitted by a completed `GET /snapshot` export. */
+export interface SnapshotManifest {
+  schemaVersion: 1
+  status: 'complete'
+  createdAt: string
+  completedAt: string
+  selection: SnapshotSelection & { archived: false }
+  counts: Omit<SnapshotCounts, 'bytes'>
+  ordering: { sessions: 'createdAt,id ascending'; entries: 'createdAt ascending within session' }
+  consistency: 'best-effort'
+}
+
+export interface SnapshotExportOptions {
+  /** New absolute destination; omitted creates a private file under the system temp directory. */
+  path?: string
+  selection?: SnapshotSelection
+}
+
+export interface SnapshotExportResult {
+  path: string
+  counts: SnapshotCounts
+  checksum: { algorithm: 'sha256'; value: string }
+  manifest: SnapshotManifest
+}
