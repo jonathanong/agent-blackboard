@@ -5,14 +5,10 @@ import { AGENT, createTestSession, expectValidTimestamp } from './helpers.mjs'
 
 /**
  * Session ids are deliberately ordered literals (`'s1' < 's2'`), not
- * `randomUUID()`. `listSessions` orders ascending by `(createdAt, id)` — the
- * `SessionsByCreatedAt` GSI's range key (Dynamo) and an equivalent in-memory
- * sort (memory store) both use this pair, tiebreaking on id (code-point
- * order) when timestamps collide, e.g. under a frozen test clock. These
- * fixture ids are chosen so id order also matches creation order, keeping
- * this test's plain equality assertion valid without pinning an ordering
- * guarantee beyond what both backends actually provide. See
- * `session-pagination.mts` for pagination/filter-specific conformance.
+ * `randomUUID()`. `listSessions` guarantees creation-time ordering, but the
+ * Dynamo index has no secondary order for timestamp ties. This test therefore
+ * treats its result as a set. See `session-pagination.mts` for
+ * pagination/filter-specific conformance.
  */
 const ROOT_ID = 's1'
 const CHILD_ID = 's2'
@@ -40,7 +36,9 @@ export function runSessionsConformance(makeStore: () => BlackboardStore): void {
       expect(await store.getSession(credId, CHILD_ID)).toEqual(child)
       expect(await store.getSession(credId, `missing-${randomUUID()}`)).toBeUndefined()
 
-      expect((await store.listSessions(credId)).sessions).toEqual([root, child])
+      expect(new Set((await store.listSessions(credId)).sessions.map(({ id }) => id))).toEqual(
+        new Set([root.id, child.id]),
+      )
       expect((await store.listSessions(randomUUID())).sessions).toEqual([])
     })
   })

@@ -1,6 +1,8 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryBlackboardStore } from '../../store/memory.mjs'
-import type { HandlerRequest } from '../types.mjs'
+import type { BlackboardStore } from '../../store/store.mjs'
+import type { HandlerRequest, Session, SessionEntry } from '../types.mjs'
+import { closePrefetched, type PrefetchedSession } from './snapshot-prefetch.mjs'
 import { handleSnapshotRoute } from './snapshot.mjs'
 import { streamSnapshot } from './snapshot-stream.mjs'
 
@@ -92,7 +94,7 @@ describe('snapshot route', () => {
         selection: { archived: false },
         counts: { sessions: 1, entries: 1, records: 3 },
         ordering: {
-          sessions: 'createdAt,id ascending',
+          sessions: 'createdAt ascending',
           entries: 'createdAt ascending within session',
         },
         consistency: 'best-effort',
@@ -140,6 +142,100 @@ describe('snapshot route', () => {
       parentSessionId: null,
       data: { branch: 'main' },
     })
+  })
+
+  it('skips a session that was archived after an eventually consistent listing', async () => {
+    const active = await store.createSession({
+      credId,
+      id: 'archived-after-list',
+      parentSessionId: null,
+      agent: 'luna',
+      version: '1',
+    })
+    await store.archiveSession(credId, active.id)
+    vi.spyOn(store, 'listSessions').mockResolvedValueOnce({
+      sessions: [active],
+      nextCursor: null,
+    })
+
+    const records = (await collect(streamSnapshot(store, credId, { archived: false }, () => NOW)))
+      .trim()
+      .split('\n')
+      .map((value) => JSON.parse(value))
+
+    expect(records).toHaveLength(1)
+    expect(records[0].manifest.counts).toEqual({ sessions: 0, entries: 0, records: 1 })
+  })
+
+  it('prefetches bounded first entries concurrently while keeping session groups ordered', async () => {
+    const sessions: Session[] = Array.from({ length: 9 }, (_, index) => ({
+      id: `session-${index}`,
+      parentSessionId: null,
+      agent: 'luna',
+      version: '1',
+      createdAt: NOW.toISOString(),
+      lastEntryAt: null,
+      archivedAt: null,
+      data: {},
+    }))
+    const initialIds = sessions.slice(0, 8).map(({ id }) => id)
+    const started: string[] = []
+    let release = (): void => undefined
+    const firstReads = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const fakeStore = {
+      listSessions: async () => ({ sessions, nextCursor: null }),
+      getSession: async (_credId: string, sessionId: string) =>
+        sessions.find(({ id }) => id === sessionId),
+      getEntries: (_credId: string, sessionId: string): AsyncIterable<SessionEntry> =>
+        (async function* (): AsyncGenerator<SessionEntry> {
+          started.push(sessionId)
+          if (started.length === initialIds.length) release()
+          await firstReads
+          if (sessionId === initialIds[0]) expect(started).toEqual(initialIds)
+          yield { sessionId, createdAt: NOW.toISOString(), data: {} }
+        })(),
+    } as unknown as BlackboardStore
+
+    const records = (
+      await collect(streamSnapshot(fakeStore, 'cred', { archived: false }, () => NOW))
+    )
+      .trim()
+      .split('\n')
+      .map((value) => JSON.parse(value))
+
+    expect(records.filter(({ type }) => type !== 'manifest')).toEqual(
+      sessions.flatMap(({ id }) => [
+        expect.objectContaining({ type: 'session', session: expect.objectContaining({ id }) }),
+        expect.objectContaining({
+          type: 'entry',
+          entry: expect.objectContaining({ sessionId: id }),
+        }),
+      ]),
+    )
+    expect(started).toEqual(sessions.map(({ id }) => id))
+  })
+
+  it('closes prefetched iterators only when they support early return', async () => {
+    const session = await store.createSession({
+      credId,
+      id: 'prefetched',
+      parentSessionId: null,
+      agent: 'luna',
+      version: '1',
+    })
+    const close = vi.fn(async () => ({ done: true, value: undefined }) as const)
+    const first = { done: true, value: undefined } as const
+    const iterator = { next: async () => first }
+    const prefetched: PrefetchedSession[] = [
+      { session, entries: iterator, first },
+      { session, entries: { ...iterator, return: close }, first },
+    ]
+
+    await closePrefetched(prefetched)
+
+    expect(close).toHaveBeenCalledOnce()
   })
 
   it('continues after an empty filtered page while the cursor is non-null', async () => {

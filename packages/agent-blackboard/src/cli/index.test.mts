@@ -69,7 +69,7 @@ describe('runCli', () => {
             selection: { archived: false },
             counts: { sessions: 1, entries: 0, records: 2 },
             ordering: {
-              sessions: 'createdAt,id ascending',
+              sessions: 'createdAt ascending',
               entries: 'createdAt ascending within session',
             },
             consistency: 'best-effort',

@@ -108,7 +108,7 @@ export interface SnapshotManifest {
   completedAt: string
   selection: SnapshotSelection & { archived: false }
   counts: Omit<SnapshotCounts, 'bytes'>
-  ordering: { sessions: 'createdAt,id ascending'; entries: 'createdAt ascending within session' }
+  ordering: { sessions: 'createdAt ascending'; entries: 'createdAt ascending within session' }
   consistency: 'best-effort'
 }
 

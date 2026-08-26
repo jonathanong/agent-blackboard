@@ -124,7 +124,7 @@ Markdown without loading a session's entire entry history. The library defaults 
 JSONL parsing; the CLI relays response bytes directly.
 
 `GET /snapshot` streams each selected active session followed by its entries and ends with a
-terminal manifest. Session blocks are ordered by `(createdAt, id)` and entries by `createdAt`
-within their session. The snapshot is best-effort rather than transactional: appends concurrent
+terminal manifest. Session blocks are ordered by `createdAt` (ties have no further ordering
+guarantee), and entries by `createdAt` within their session. The snapshot is best-effort rather than transactional: appends concurrent
 with the scan may or may not appear. The response is capped at 190 MiB; an oversized stream ends
 with a `snapshot_too_large` error record instead of a complete manifest.

@@ -4,8 +4,10 @@ import {
   type BlackboardStore,
   type ListSessionsQuery,
 } from '../../store/store.mjs'
+import { closePrefetched, prefetchSessions, type PrefetchedSession } from './snapshot-prefetch.mjs'
 
 const SNAPSHOT_MAX_BYTES = 190 * 1024 * 1024
+const PREFETCH_SESSIONS = 8
 
 export interface SnapshotSelection {
   archived: false
@@ -47,12 +49,11 @@ function query(selection: SnapshotSelection, cursor?: string): ListSessionsQuery
 }
 
 async function* sessionBlock(
-  store: BlackboardStore,
-  credId: string,
-  session: Session,
+  prefetched: PrefetchedSession,
   tooLarge: string,
   emit: Emit,
 ): AsyncGenerator<string, number | undefined> {
+  const { session, entries: iterator } = prefetched
   const sessionLine = line({ type: 'session', session })
   if (!emit(sessionLine, true)) {
     if (emit(tooLarge)) yield tooLarge
@@ -61,7 +62,9 @@ async function* sessionBlock(
   yield sessionLine
 
   let entries = 0
-  for await (const entry of store.getEntries(credId, session.id)) {
+  let next = prefetched.first
+  while (!next.done) {
+    const entry = next.value
     const entryLine = line({ type: 'entry', entry })
     if (!emit(entryLine, true)) {
       yield tooLarge
@@ -69,6 +72,7 @@ async function* sessionBlock(
     }
     entries += 1
     yield entryLine
+    next = await iterator.next()
   }
   return entries
 }
@@ -100,12 +104,25 @@ async function* snapshotRecords(
 
   while (true) {
     const page = await store.listSessions(credId, query(selection, cursor))
-    for (const session of page.sessions) {
-      const sessionEntries = yield* sessionBlock(store, credId, session, tooLarge, emit)
-      if (sessionEntries === undefined) return
-      sessions += 1
-      entries += sessionEntries
-      records += sessionEntries + 1
+    for (let start = 0; start < page.sessions.length; start += PREFETCH_SESSIONS) {
+      const prefetched = await prefetchSessions(
+        store,
+        credId,
+        page.sessions.slice(start, start + PREFETCH_SESSIONS),
+      )
+      let emitted = false
+      try {
+        for (const session of prefetched) {
+          const sessionEntries = yield* sessionBlock(session, tooLarge, emit)
+          if (sessionEntries === undefined) return
+          sessions += 1
+          entries += sessionEntries
+          records += sessionEntries + 1
+        }
+        emitted = true
+      } finally {
+        if (!emitted) await closePrefetched(prefetched)
+      }
     }
     if (page.nextCursor === null) break
     cursor = page.nextCursor
@@ -119,7 +136,7 @@ async function* snapshotRecords(
     selection,
     counts: { sessions, entries, records: records + 1 },
     ordering: {
-      sessions: 'createdAt,id ascending',
+      sessions: 'createdAt ascending',
       entries: 'createdAt ascending within session',
     },
     consistency: 'best-effort',

@@ -132,8 +132,12 @@ export class MemoryBlackboardStore implements BlackboardStore {
     return entry
   }
 
-  async *getEntries(credId: string, sessionId: string): AsyncIterable<SessionEntry> {
-    if (!this.#sessions.has(this.#sessionKey(credId, sessionId))) {
+  async *getEntries(
+    credId: string,
+    sessionId: string,
+    options: { sessionVerified?: boolean } = {},
+  ): AsyncIterable<SessionEntry> {
+    if (!options.sessionVerified && !this.#sessions.has(this.#sessionKey(credId, sessionId))) {
       throw new SessionStoreError('session_not_found', `session not found: ${sessionId}`)
     }
     const prefix = `${credId} ${sessionId} `

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdtemp, open, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
@@ -42,7 +42,7 @@ function records() {
         },
         counts: { sessions: 1, entries: 1, records: 3 },
         ordering: {
-          sessions: 'createdAt,id ascending',
+          sessions: 'createdAt ascending',
           entries: 'createdAt ascending within session',
         },
         consistency: 'best-effort',
@@ -276,6 +276,37 @@ it('ignores blank JSONL records between valid records', async () => {
   }
 })
 
+it('compares the manifest selection after JSON wire serialization', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'abb-snapshot-test-'))
+  const destination = join(directory, 'wire-selection.jsonl')
+  const since = new Date('2026-01-01T00:00:00.000Z')
+  const base = records()
+  const fixture = await startHttpFixture((_req, response) =>
+    sendNdjson(response, [
+      base[0],
+      base[1],
+      {
+        ...base[2],
+        manifest: {
+          ...base[2]!.manifest,
+          selection: { archived: false, data: { since: since.toJSON() } },
+        },
+      },
+    ]),
+  )
+  try {
+    await expect(
+      new Snapshots({ baseUrl: fixture.baseUrl, token: 't' }).export({
+        path: destination,
+        selection: { data: { since } },
+      }),
+    ).resolves.toMatchObject({ path: destination })
+  } finally {
+    await fixture.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 it('accepts a terminal manifest without a trailing newline and rejects a bodyless response', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'abb-snapshot-test-'))
   const destination = join(directory, 'no-newline.jsonl')
@@ -315,9 +346,29 @@ it('accepts a terminal manifest without a trailing newline and rejects a bodyles
   }
 })
 
-it('cancels the response stream when incremental validation fails', async () => {
+it('rejects a final record validation failure', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'abb-snapshot-test-'))
   const destination = join(directory, 'invalid.jsonl')
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('{bad}'))
+      controller.close()
+    },
+  })
+  vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response(body)))
+  try {
+    await expect(
+      new Snapshots({ baseUrl: 'http://example.test', token: 't' }).export({ path: destination }),
+    ).rejects.toThrow('invalid JSONL')
+  } finally {
+    vi.unstubAllGlobals()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+it('cancels the response stream when an incremental record validation fails', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'abb-snapshot-test-'))
+  const destination = join(directory, 'invalid-record.jsonl')
   const cancel = vi.fn()
   const body = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -332,6 +383,34 @@ it('cancels the response stream when incremental validation fails', async () => 
     ).rejects.toThrow('invalid JSONL')
     expect(cancel).toHaveBeenCalledOnce()
   } finally {
+    vi.unstubAllGlobals()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+it('cancels the response stream when writing the local file fails', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'abb-snapshot-test-'))
+  const destination = join(directory, 'write-error.jsonl')
+  const probe = await open(join(directory, 'probe'), 'w')
+  const write = vi
+    .spyOn(Object.getPrototypeOf(probe), 'write')
+    .mockRejectedValueOnce(new Error('disk full'))
+  await probe.close()
+  const cancel = vi.fn()
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('{"type":"session"}\n'))
+    },
+    cancel,
+  })
+  vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response(body)))
+  try {
+    await expect(
+      new Snapshots({ baseUrl: 'http://example.test', token: 't' }).export({ path: destination }),
+    ).rejects.toThrow('disk full')
+    expect(cancel).toHaveBeenCalledOnce()
+  } finally {
+    write.mockRestore()
     vi.unstubAllGlobals()
     await rm(directory, { recursive: true, force: true })
   }
