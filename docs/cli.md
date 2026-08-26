@@ -56,6 +56,26 @@ full response.
 For `append --file`, `.json` files must contain a JSON object. `.md` and `.markdown` files are sent
 as `{ "markdown": "..." }`; `.txt` files are sent as `{ "text": "..." }`.
 
+## Snapshots
+
+```sh
+agent-blackboard snapshot export
+agent-blackboard snapshot export --path /absolute/path/evidence.jsonl
+agent-blackboard snapshot export --root-only --inactive-for-hours 8
+agent-blackboard snapshot export --agent codex --version 1.0.0 \
+  --data '{"repository":"example/tooling"}'
+```
+
+The command streams every matching unarchived session and entry into a newly created private file.
+If `--path` is omitted, it creates a unique file under the system temporary directory. A supplied
+path must be absolute and must not already exist. On success the file is changed to read-only mode
+and stdout contains only its path, session/entry/record/byte counts, SHA-256 checksum, and terminal
+manifest. Partial or invalid snapshots are deleted.
+
+Use `--parent-session-id <id>` for exact children or `--root-only` for roots; the two flags are
+mutually exclusive. `--agent`, `--version`, `--data`, and `--inactive-for-hours` apply the same
+exact filters as session listing. The export always excludes archived sessions.
+
 ## Credentials
 
 ```sh

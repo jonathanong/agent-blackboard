@@ -18,8 +18,14 @@ At the end of a session:
 For periodic distillation, use
 [`retrospective-distill`](../.agent/skills/retrospective-distill/SKILL.md) to read relevant sessions
 explicitly and turn blackboard evidence into concrete tickets, documentation, lint rules, tests, or
-workflow improvements. There is no cross-session entry query and no per-entry archival; callers do
-this fan-out client-side, then archive each session exactly once after its evidence is distilled.
+workflow improvements. For a large pass, `snapshot_export` writes all selected active sessions and
+entries to an immutable JSONL file and returns only compact metadata. Callers can partition that
+file into bounded whole-session groups, let read-only subagents inspect those files, merge compact
+disposition summaries in the root agent, and then remove all snapshot and partition files. The
+server does not decide readiness, partitioning, disposition, or cleanup policy.
+
+There is no per-entry archival; callers archive each session exactly once only after its evidence
+has a completed disposition.
 Use the optional `inactiveForHours` session-search filter (for example, `8`) when a distillation
 pass should ignore recently-written sessions. Archived sessions may still accept entries for
 inspection, but those later entries are intentionally not retrospectively synthesized or

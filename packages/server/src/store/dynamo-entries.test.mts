@@ -178,4 +178,16 @@ describe('DynamoDB entries', () => {
       ),
     ).toEqual([])
   })
+
+  it('avoids a duplicate session lookup when the caller already verified it', async () => {
+    const seen: string[] = []
+    const doc = client((command) => {
+      seen.push(command.constructor.name)
+      return {}
+    })
+    await expect(
+      collect(dynamoGetEntries(doc, 'T', 'c', 's', { sessionVerified: true })),
+    ).resolves.toEqual([])
+    expect(seen).toEqual(['QueryCommand'])
+  })
 })

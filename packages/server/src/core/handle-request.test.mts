@@ -49,6 +49,11 @@ describe('handleRequest', () => {
     expect(response.status).toBe(401)
   })
 
+  it('routes /snapshot to the snapshot handler', async () => {
+    const response = await handleRequest(request({ path: '/snapshot' }), deps())
+    expect(response.status).toBe(401)
+  })
+
   it('decodes a percent-encoded session id before it reaches the store', async () => {
     // Mirrors what a real adapter hands in: url.pathname preserves
     // percent-encoding rather than decoding it, so a client that

@@ -13,4 +13,9 @@ describe('CloudFormation template', () => {
                 Action: dynamodb:Query
                 Resource: !Sub '\${AgentBlackboardTable.Arn}/index/SessionsByCreatedAt'`)
   })
+
+  it('allows long-running response-stream snapshot exports', async () => {
+    const template = await readFile(new URL('../infra/template.yaml', import.meta.url), 'utf8')
+    expect(template).toContain('      Timeout: 300')
+  })
 })

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { sendJson, startHttpFixture } from './__tests__/http-fixture.mjs'
-import { AgentBlackboardError, Auth, Entries, formatError, Sessions } from './index.mjs'
+import { AgentBlackboardError, Auth, Entries, formatError, Sessions, Snapshots } from './index.mjs'
 
 describe('public API', () => {
-  it('exports Sessions, Entries, Auth, AgentBlackboardError, and formatError', async () => {
+  it('exports Sessions, Entries, Snapshots, Auth, AgentBlackboardError, and formatError', async () => {
     const session = {
       id: 's',
       parentSessionId: null,
@@ -28,6 +28,7 @@ describe('public API', () => {
         }),
       ).toEqual(session)
       expect(new Entries({ baseUrl: fixture.baseUrl, token: 't' })).toBeInstanceOf(Entries)
+      expect(new Snapshots({ baseUrl: fixture.baseUrl, token: 't' })).toBeInstanceOf(Snapshots)
       await expect(
         new Auth({ baseUrl: fixture.baseUrl, adminToken: 'admin' }).listCredentials(),
       ).rejects.toBeInstanceOf(AgentBlackboardError)

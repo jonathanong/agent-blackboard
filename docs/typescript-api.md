@@ -13,6 +13,7 @@ import {
   Entries,
   formatError,
   Sessions,
+  Snapshots,
   type ClientConfig,
   type Session,
   type SessionEntry,
@@ -50,6 +51,7 @@ const config = {
 
 const sessions = new Sessions(config)
 const entries = new Entries(config)
+const snapshots = new Snapshots(config)
 ```
 
 `baseUrl` may include or omit a trailing slash. Keep tokens out of source control and logs.
@@ -233,6 +235,30 @@ Markdown bytes.
 Entries are append-only: there is no method to modify an entry's `data` in place. To record an
 update, append a new entry.
 
+## `Snapshots`
+
+Create one instance with `new Snapshots(config: ClientConfig)`.
+
+### `export(options?): Promise<SnapshotExportResult>`
+
+```ts
+const result = await snapshots.export({
+  path: '/absolute/path/evidence.jsonl',
+  selection: { parentSessionId: null, inactiveForHours: 8 },
+})
+```
+
+Streams each selected unarchived session and its entries directly to a new file. Omit `path` to
+create a unique file under the system temporary directory. A supplied path must be absolute and
+must not exist. `selection` supports exact `agent`, `version`, `parentSessionId`, and shallow
+`data` filters plus positive `inactiveForHours`.
+
+The method incrementally validates the JSONL records and terminal manifest, computes a SHA-256
+checksum over the exact file bytes, syncs the file, and changes it from private writable mode to
+read-only mode. It deletes incomplete output on any failure. The returned object contains only the
+path, session/entry/record/byte counts, checksum, and manifest; it never buffers or returns all
+snapshot evidence.
+
 ### `SessionEntry`
 
 ```ts
@@ -341,6 +367,8 @@ The package root exports:
 - entries: `SessionEntry`, `AppendEntryInput`, `GetEntriesQuery`, `GetRawEntriesQuery`,
   `EntryWireFormat`, `StructuredEntryFormat`;
 - credentials: `CredentialCreated`, `CredentialSummary`.
+- snapshots: `Snapshots`, `SnapshotSelection`, `SnapshotManifest`, `SnapshotCounts`,
+  `SnapshotExportOptions`, `SnapshotExportResult`;
 - errors: `AgentBlackboardError`, `formatError`.
 
 The package is currently version `0.0.0`. Tooling should pin an exact version until a stable

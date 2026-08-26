@@ -35,9 +35,14 @@ local server started with `AGENT_BLACKBOARD_STORE=memory pnpm --dir packages/ser
 > 8. Verify CLI `sessions list` excludes the child by default and `sessions list --archived true`
 >    includes it with a non-null `archivedAt`. Verify MCP `session_search` behaves the same way:
 >    `archived: 0` excludes the child and `archived: 1` finds it.
-> 9. Across CLI and MCP, verify omitted session id, parent id, agent, or version is rejected. Verify
->    appending to a never-created session is rejected and no id was silently generated.
-> 10. Report every command/tool call, returned session/entry shape, and invariant failure. Do not
+> 9. Use CLI `snapshot export` with an absolute temporary path and filters matching the root. Verify
+>    stdout contains only path/counts/checksum/manifest, the JSONL file ends in a complete manifest,
+>    counts and checksum match its bytes, and the file is read-only. Use MCP `snapshot_export`
+>    without a path and verify the same compact result, that archived sessions are absent, and no
+>    entry records crossed MCP. Remove both snapshot files.
+> 10. Across CLI and MCP, verify omitted session id, parent id, agent, or version is rejected. Verify
+>     appending to a never-created session is rejected and no id was silently generated.
+> 11. Report every command/tool call, returned session/entry shape, and invariant failure. Do not
 >     modify repository files.
 
 The smoke passes only if both interfaces agree, root and child sessions remain separate, the child

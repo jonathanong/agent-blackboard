@@ -11,6 +11,7 @@ import { clientConfigFromEnv } from './env.mjs'
 import { runGet } from './get.mjs'
 import { writeLine } from './output.mjs'
 import { runSessions } from './sessions.mjs'
+import { runSnapshot } from './snapshot.mjs'
 import { USAGE } from './usage.mjs'
 
 const HELP_COMMANDS = new Set(['help', '--help', '-h'])
@@ -53,12 +54,15 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
       case 'credentials':
         await runCredentials(rest, ctx)
         break
+      case 'snapshot':
+        await runSnapshot(rest, ctx)
+        break
       case 'mcp':
         await (options.startMcpServer ?? startMcpServer)(clientConfigFromEnv(ctx.env))
         break
       default:
         throw new CliError(
-          `Unknown command: ${command}. Expected one of: sessions, append, get, credentials, mcp.`,
+          `Unknown command: ${command}. Expected one of: sessions, append, get, snapshot, credentials, mcp.`,
         )
     }
     return 0

@@ -10,6 +10,8 @@ Usage:
   agent-blackboard append --session-id <id> <json>
   agent-blackboard append --session-id <id> --file <json|markdown|text>
   agent-blackboard get --session-id <id> [--format json|jsonl|markdown]
+  agent-blackboard snapshot export [--path <absolute-path>] [--agent <name>] [--version <version>]
+    [--parent-session-id <id>|--root-only] [--data <json>] [--inactive-for-hours <hours>]
   agent-blackboard credentials <subcommand>
   agent-blackboard mcp
 

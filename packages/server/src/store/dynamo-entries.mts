@@ -4,7 +4,7 @@ import type { Session, SessionEntry } from '../core/types.mjs'
 import { entrySk, entriesPk, sessionSk, sessionsPk } from './dynamo-keys.mjs'
 import { dynamoGetSession } from './dynamo-sessions.mjs'
 import { SessionStoreError } from './errors.mjs'
-import type { NewSessionEntry } from './store.mjs'
+import type { GetEntriesOptions, NewSessionEntry } from './store.mjs'
 
 const QUERY_PAGE_LIMIT = 100
 const TIMESTAMP_RETRIES = 100
@@ -91,8 +91,9 @@ export async function* dynamoGetEntries(
   tableName: string,
   credId: string,
   sessionId: string,
+  options: GetEntriesOptions = {},
 ): AsyncGenerator<SessionEntry> {
-  await requireSession(doc, tableName, credId, sessionId)
+  if (!options.sessionVerified) await requireSession(doc, tableName, credId, sessionId)
   let exclusiveStartKey: Record<string, unknown> | undefined
   do {
     const page = await doc.send(

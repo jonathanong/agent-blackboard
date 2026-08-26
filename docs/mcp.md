@@ -5,6 +5,27 @@ Start the stdio server with `agent-blackboard mcp`. It reads `AGENT_BLACKBOARD_U
 
 All ids are explicit. The MCP server never infers a host session id and never generates one.
 
+## `snapshot_export`
+
+Streams all selected unarchived sessions and their entries into a local immutable JSONL file:
+
+```json
+{
+  "path": "/absolute/path/evidence.jsonl",
+  "parentSessionId": null,
+  "inactiveForHours": 8,
+  "data": { "repository": "example/tooling" }
+}
+```
+
+Every argument is optional. Omit `path` to create a unique file under the system temporary
+directory. Supported filters are `parentSessionId`, `agent`, `version`, `data`, and
+`inactiveForHours`; archived sessions are never included.
+
+The result contains only `path`, counts (including bytes), a SHA-256 checksum, and the verified
+terminal manifest. Snapshot records never cross the MCP connection. The completed file is
+read-only, and any partial, malformed, oversized, or otherwise incomplete output is deleted.
+
 ## `session_create`
 
 Creates session metadata before any entries are written.

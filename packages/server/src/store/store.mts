@@ -47,6 +47,11 @@ export interface SessionPatch {
   data: Record<string, unknown>
 }
 
+export interface GetEntriesOptions {
+  /** The caller obtained this session through an immediately preceding `getSession` lookup. */
+  sessionVerified?: boolean
+}
+
 export interface CredentialIdOrName {
   id?: string
   name?: string
@@ -67,7 +72,11 @@ export interface BlackboardStore {
   archiveSession(credId: string, sessionId: string): Promise<Session>
 
   appendEntry(entry: NewSessionEntry): Promise<SessionEntry>
-  getEntries(credId: string, sessionId: string): AsyncIterable<SessionEntry>
+  getEntries(
+    credId: string,
+    sessionId: string,
+    options?: GetEntriesOptions,
+  ): AsyncIterable<SessionEntry>
 
   createCredential(name: string): Promise<{ record: CredentialRecord; token: string }>
 

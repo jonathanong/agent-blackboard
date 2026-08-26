@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createFakeContext } from '../__tests__/cli-context.mjs'
-import { sendJson, startHttpFixture } from '../__tests__/http-fixture.mjs'
+import { sendJson, sendNdjson, startHttpFixture } from '../__tests__/http-fixture.mjs'
 import { runCli } from './index.mjs'
 
 describe('runCli', () => {
@@ -41,6 +41,54 @@ describe('runCli', () => {
     })
     expect(await runCli(['mcp'], { ...ctx, startMcpServer })).toBe(0)
     expect(startMcpServer).toHaveBeenCalledWith({ baseUrl: 'http://h', token: 't' })
+  })
+
+  it('dispatches snapshot export', async () => {
+    const fixture = await startHttpFixture((_req, res) =>
+      sendNdjson(res, [
+        {
+          type: 'session',
+          session: {
+            id: 's',
+            parentSessionId: null,
+            agent: 'a',
+            version: '1',
+            createdAt: 'now',
+            lastEntryAt: null,
+            archivedAt: null,
+            data: {},
+          },
+        },
+        {
+          type: 'manifest',
+          manifest: {
+            schemaVersion: 1,
+            status: 'complete',
+            createdAt: 'now',
+            completedAt: 'now',
+            selection: { archived: false },
+            counts: { sessions: 1, entries: 0, records: 2 },
+            ordering: {
+              sessions: 'createdAt ascending',
+              entries: 'createdAt ascending within session',
+            },
+            consistency: 'best-effort',
+          },
+        },
+      ]),
+    )
+    try {
+      const ctx = createFakeContext({
+        env: { AGENT_BLACKBOARD_URL: fixture.baseUrl, AGENT_BLACKBOARD_TOKEN: 't' },
+      })
+      expect(await runCli(['snapshot', 'export'], ctx)).toBe(0)
+      const result = JSON.parse(ctx.stdoutLines[0]!) as { path: string }
+      expect(result.path).toContain('agent-blackboard-snapshot-')
+      const { rm } = await import('node:fs/promises')
+      await rm(result.path, { force: true })
+    } finally {
+      await fixture.close()
+    }
   })
 
   it('prints help and formats command/server errors', async () => {

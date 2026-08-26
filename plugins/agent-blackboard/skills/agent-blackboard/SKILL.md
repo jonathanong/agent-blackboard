@@ -35,6 +35,9 @@ If the `agent-blackboard` MCP server is connected, use its tools directly:
   immutable.
 - `entry_append` — append `data` to any existing session, including an archived one.
 - `entry_get` — read entries from one explicit session.
+- `snapshot_export` — stream all selected active sessions and entries to a private read-only JSONL
+  file, returning only its path, counts, checksum, and manifest. Use this for bounded multi-session
+  retrieval; the caller remains responsible for partitioning, disposition, archival, and cleanup.
 
 ## Using it via the CLI
 
@@ -48,6 +51,7 @@ npx -y agent-blackboard@0.2.0 sessions create worker-456 --parent-session-id roo
 npx -y agent-blackboard@0.2.0 sessions patch worker-456 --data '{"branch":"fix/retry"}'
 npx -y agent-blackboard@0.2.0 append --session-id worker-456 '{"note":"found the failing edge case"}'
 npx -y agent-blackboard@0.2.0 get --session-id worker-456 --format markdown
+npx -y agent-blackboard snapshot export --root-only --inactive-for-hours 8
 ```
 
 Output defaults to JSON; pass `--format jsonl` or `--format markdown` for streaming or

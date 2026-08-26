@@ -14,6 +14,7 @@ import { dynamoArchiveSession, dynamoCreateSession, dynamoGetSession } from './d
 import type {
   BlackboardStore,
   CredentialIdOrName,
+  GetEntriesOptions,
   ListSessionsQuery,
   ListSessionsResult,
   NewSession,
@@ -45,8 +46,12 @@ export function createDynamoStore(options: DynamoStoreOptions = {}): BlackboardS
     appendEntry(entry: NewSessionEntry): Promise<SessionEntry> {
       return dynamoAppendEntry(doc, tableName, ttlDays, now, entry)
     },
-    getEntries(credId: string, sessionId: string): AsyncIterable<SessionEntry> {
-      return dynamoGetEntries(doc, tableName, credId, sessionId)
+    getEntries(
+      credId: string,
+      sessionId: string,
+      options?: GetEntriesOptions,
+    ): AsyncIterable<SessionEntry> {
+      return dynamoGetEntries(doc, tableName, credId, sessionId, options)
     },
     createCredential(name: string): Promise<{ record: CredentialRecord; token: string }> {
       return dynamoCreateCredential(doc, tableName, now, name)

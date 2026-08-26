@@ -48,6 +48,7 @@ import { notFoundResponse } from './response.mjs'
 import { handleCredentialsRoute } from './routes/credentials.mjs'
 import { handleEntriesRoute } from './routes/entries.mjs'
 import { handleSessionsRoute } from './routes/sessions.mjs'
+import { handleSnapshotRoute } from './routes/snapshot.mjs'
 import type { HandlerRequest, HandlerResponse } from './types.mjs'
 
 export interface HandleRequestDeps {
@@ -83,6 +84,7 @@ export async function handleRequest(
 ): Promise<HandlerResponse> {
   const path = normalizePath(request.path)
   if (path === '/credentials') return handleCredentialsRoute(request, deps.store, deps.env)
+  if (path === '/snapshot') return handleSnapshotRoute(request, deps.store, deps.now)
   if (path === '/sessions') return handleSessionsRoute(request, deps.store)
   const sessionMatch = /^\/sessions\/([^/]+)$/.exec(path)
   if (sessionMatch) {
