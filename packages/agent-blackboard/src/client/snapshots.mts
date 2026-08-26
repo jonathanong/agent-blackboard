@@ -101,6 +101,9 @@ function validateManifest(
   if (!manifest || manifest.status !== 'complete' || manifest.schemaVersion !== 1) {
     throw new Error('snapshot is missing a complete terminal manifest')
   }
+  if (typeof manifest.createdAt !== 'string' || typeof manifest.completedAt !== 'string') {
+    throw new Error('snapshot terminal manifest is invalid')
+  }
   const counts = manifest.counts
   if (
     counts.sessions !== state.sessions ||
