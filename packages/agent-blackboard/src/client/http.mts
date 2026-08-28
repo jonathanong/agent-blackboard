@@ -1,5 +1,10 @@
 import { AgentBlackboardError } from './errors.mjs'
-import type { ClientConfig, EntryWireFormat } from './types.mjs'
+import type { ClientConfig, EntryWireFormat, ReadRetryOptions } from './types.mjs'
+
+const DEFAULT_READ_RETRY = { maxRetries: 2, initialDelayMs: 100, maxDelayMs: 1000 }
+const MAX_READ_RETRIES = 10
+const MAX_READ_DELAY_MS = 60_000
+const RETRYABLE_READ_STATUSES = new Set([408, 429, 500, 502, 503, 504])
 
 /** Query params as they go on the wire — every value is a string. */
 type WireQuery = Record<string, string>
@@ -48,6 +53,44 @@ interface RequestOptions {
   query?: WireQuery
 }
 
+type NormalizedReadRetry = Required<ReadRetryOptions>
+
+function readRetry(config: ClientConfig, method: string): NormalizedReadRetry | undefined {
+  if (method !== 'GET' || config.readRetry === undefined) return undefined
+  if (typeof config.readRetry !== 'object' || config.readRetry === null)
+    throw new TypeError('readRetry must be an object')
+  const options = { ...DEFAULT_READ_RETRY, ...config.readRetry }
+  for (const [name, value, maximum] of [
+    ['maxRetries', options.maxRetries, MAX_READ_RETRIES],
+    ['initialDelayMs', options.initialDelayMs, MAX_READ_DELAY_MS],
+    ['maxDelayMs', options.maxDelayMs, MAX_READ_DELAY_MS],
+  ] as const) {
+    if (!Number.isSafeInteger(value) || value < 0 || value > maximum)
+      throw new RangeError(`${name} must be a non-negative integer no greater than ${maximum}`)
+  }
+  return options
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds))
+}
+
+function retryDelay(options: NormalizedReadRetry, attempt: number): number {
+  return Math.min(options.initialDelayMs * 2 ** attempt, options.maxDelayMs)
+}
+
+async function errorFor(response: Response, method: string, path: string): Promise<never> {
+  throw new AgentBlackboardError(
+    `agent-blackboard request failed: ${method} ${path} -> ${response.status}`,
+    response.status,
+    await parseErrorBody(response),
+  )
+}
+
+async function discard(response: Response): Promise<void> {
+  await response.body?.cancel().catch(() => undefined)
+}
+
 /**
  * Issues an authenticated HTTP request and returns the raw `Response`,
  * throwing `AgentBlackboardError` on any non-2xx status. Callers that need the
@@ -63,16 +106,22 @@ export async function rawRequest(
   headers.set('authorization', `Bearer ${config.token}`)
   const init: RequestInit = { method: options.method, headers }
   if (options.body !== undefined) init.body = options.body
-  const response = await fetch(url, init)
-  if (!response.ok) {
-    const body = await parseErrorBody(response)
-    throw new AgentBlackboardError(
-      `agent-blackboard request failed: ${options.method} ${path} -> ${response.status}`,
-      response.status,
-      body,
-    )
+  const retry = readRetry(config, options.method)
+  for (let attempt = 0; ; attempt++) {
+    let response: Response
+    try {
+      response = await fetch(url, init)
+    } catch (error) {
+      if (!retry || attempt === retry.maxRetries) throw error
+      await delay(retryDelay(retry, attempt))
+      continue
+    }
+    if (response.ok) return response
+    if (!retry || attempt === retry.maxRetries || !RETRYABLE_READ_STATUSES.has(response.status))
+      return errorFor(response, options.method, path)
+    await discard(response)
+    await delay(retryDelay(retry, attempt))
   }
-  return response
 }
 
 /** Issues an authenticated HTTP request and parses the response body as JSON. */

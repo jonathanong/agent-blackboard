@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { sendJson, startHttpFixture } from '../__tests__/http-fixture.mjs'
 import { AgentBlackboardError } from './errors.mjs'
 import { acceptHeaderFor, buildEntriesQuery, rawRequest, requestJson } from './http.mjs'
@@ -19,6 +19,46 @@ describe('acceptHeaderFor', () => {
 })
 
 describe('rawRequest', () => {
+  it('makes one request by default when fetch rejects', async () => {
+    const failure = new TypeError('fetch failed')
+    const fetchMock = vi.fn<typeof fetch>().mockRejectedValue(failure)
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      await expect(
+        rawRequest({ baseUrl: 'http://example.test', token: 't' }, '/sessions/s1', {
+          method: 'GET',
+        }),
+      ).rejects.toBe(failure)
+      expect(fetchMock).toHaveBeenCalledOnce()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('uses default retry settings when readRetry is empty', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(new TypeError('fetch failed'))
+      .mockResolvedValueOnce(new Response('ok'))
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      const response = rawRequest(
+        { baseUrl: 'http://example.test', token: 't', readRetry: {} },
+        '/sessions/s1',
+        { method: 'GET' },
+      )
+      await vi.advanceTimersByTimeAsync(99)
+      expect(fetchMock).toHaveBeenCalledOnce()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      await expect(response).resolves.toBeInstanceOf(Response)
+    } finally {
+      vi.unstubAllGlobals()
+      vi.useRealTimers()
+    }
+  })
+
   it('sends the bearer token, method, query, and body; returns the raw response', async () => {
     const fixture = await startHttpFixture((_req, res) => {
       sendJson(res, 200, { ok: true })
@@ -119,6 +159,206 @@ describe('rawRequest', () => {
     } finally {
       await fixture.close()
     }
+  })
+
+  it('retries configured transient responses, discarding the intermediate body', async () => {
+    const cancel = vi.fn().mockRejectedValue(new Error('cancel failed'))
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('temporary'))
+      },
+      cancel,
+    })
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(body, { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ ok: true })))
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      await expect(
+        requestJson<{ ok: boolean }>(
+          {
+            baseUrl: 'http://example.test',
+            token: 't',
+            readRetry: { initialDelayMs: 0, maxDelayMs: 0 },
+          },
+          '/sessions/s1',
+          { method: 'GET' },
+        ),
+      ).resolves.toEqual({ ok: true })
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(cancel).toHaveBeenCalledOnce()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it.each([408, 429, 500, 502, 504])('retries configured HTTP %i responses', async (status) => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response('', { status }))
+      .mockResolvedValueOnce(new Response('ok'))
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      await expect(
+        rawRequest(
+          {
+            baseUrl: 'http://example.test',
+            token: 't',
+            readRetry: { initialDelayMs: 0, maxDelayMs: 0 },
+          },
+          '/sessions/s1',
+          { method: 'GET' },
+        ),
+      ).resolves.toBeInstanceOf(Response)
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('uses capped exponential retry delays', async () => {
+    vi.useFakeTimers()
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(new TypeError('first failed'))
+      .mockRejectedValueOnce(new TypeError('second failed'))
+      .mockResolvedValueOnce(new Response('ok'))
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      const response = rawRequest(
+        {
+          baseUrl: 'http://example.test',
+          token: 't',
+          readRetry: { maxRetries: 2, initialDelayMs: 20, maxDelayMs: 25 },
+        },
+        '/sessions/s1',
+        { method: 'GET' },
+      )
+      await vi.advanceTimersByTimeAsync(19)
+      expect(fetchMock).toHaveBeenCalledOnce()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      await vi.advanceTimersByTimeAsync(24)
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(fetchMock).toHaveBeenCalledTimes(3)
+      await expect(response).resolves.toBeInstanceOf(Response)
+    } finally {
+      vi.unstubAllGlobals()
+      vi.useRealTimers()
+    }
+  })
+
+  it('rethrows an exhausted fetch rejection unchanged', async () => {
+    const failure = new TypeError('fetch failed')
+    const fetchMock = vi.fn<typeof fetch>().mockRejectedValue(failure)
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      await expect(
+        rawRequest(
+          {
+            baseUrl: 'http://example.test',
+            token: 't',
+            readRetry: { initialDelayMs: 0, maxDelayMs: 0 },
+          },
+          '/sessions/s1',
+          { method: 'GET' },
+        ),
+      ).rejects.toBe(failure)
+      expect(fetchMock).toHaveBeenCalledTimes(3)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('preserves AgentBlackboardError after exhausting transient HTTP responses', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockImplementation(() => Promise.resolve(new Response('unavailable', { status: 503 })))
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      await expect(
+        rawRequest(
+          {
+            baseUrl: 'http://example.test',
+            token: 't',
+            readRetry: { initialDelayMs: 0, maxDelayMs: 0 },
+          },
+          '/sessions/s1',
+          { method: 'GET' },
+        ),
+      ).rejects.toMatchObject({ status: 503, body: 'unavailable' })
+      expect(fetchMock).toHaveBeenCalledTimes(3)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it.each([401, 404])('does not retry configured HTTP %i responses', async (status) => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response('', { status }))
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      await expect(
+        rawRequest(
+          {
+            baseUrl: 'http://example.test',
+            token: 't',
+            readRetry: { initialDelayMs: 0, maxDelayMs: 0 },
+          },
+          '/sessions/s1',
+          { method: 'GET' },
+        ),
+      ).rejects.toMatchObject({ status })
+      expect(fetchMock).toHaveBeenCalledOnce()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('does not retry writes even when read retries are configured', async () => {
+    const failure = new TypeError('fetch failed')
+    const fetchMock = vi.fn<typeof fetch>().mockRejectedValue(failure)
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      await expect(
+        rawRequest(
+          {
+            baseUrl: 'http://example.test',
+            token: 't',
+            readRetry: { initialDelayMs: 0, maxDelayMs: 0 },
+          },
+          '/sessions/s1/entries',
+          { method: 'POST', body: '{}' },
+        ),
+      ).rejects.toBe(failure)
+      expect(fetchMock).toHaveBeenCalledOnce()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('rejects a non-object read retry configuration', async () => {
+    await expect(
+      rawRequest(
+        { baseUrl: 'http://example.test', token: 't', readRetry: null as never },
+        '/sessions/s1',
+        { method: 'GET' },
+      ),
+    ).rejects.toThrow('readRetry must be an object')
+  })
+
+  it.each([
+    { readRetry: { maxRetries: -1 }, message: 'maxRetries' },
+    { readRetry: { maxRetries: 11 }, message: 'maxRetries' },
+    { readRetry: { initialDelayMs: -1 }, message: 'initialDelayMs' },
+    { readRetry: { maxDelayMs: 60_001 }, message: 'maxDelayMs' },
+  ])('rejects invalid read retry options', async ({ readRetry, message }) => {
+    await expect(
+      rawRequest({ baseUrl: 'http://example.test', token: 't', readRetry }, '/sessions/s1', {
+        method: 'GET',
+      }),
+    ).rejects.toThrow(message)
   })
 })
 
