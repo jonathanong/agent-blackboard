@@ -28,6 +28,7 @@ export type {
   GetRawEntriesQuery,
   ListSessionsQuery,
   PatchSessionInput,
+  ReadRetryOptions,
   Session,
   SessionEntry,
   StructuredEntryFormat,

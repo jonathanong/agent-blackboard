@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { sendJson, sendNdjson, startHttpFixture } from '../__tests__/http-fixture.mjs'
 import {
   getEntriesRaw,
@@ -81,6 +81,32 @@ describe('entry reads', () => {
       ).toEqual([A])
     } finally {
       await json.close()
+    }
+  })
+
+  it('does not restart a response stream after it has started', async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(`${JSON.stringify(A)}\n`))
+        setTimeout(() => controller.error(new Error('stream interrupted')), 0)
+      },
+    })
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(body))
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      const iterator = streamEntries(
+        {
+          baseUrl: 'https://example.test',
+          token: 't',
+          readRetry: { initialDelayMs: 0, maxDelayMs: 0 },
+        },
+        { sessionId: 's' },
+      )[Symbol.asyncIterator]()
+      await expect(iterator.next()).resolves.toEqual({ done: false, value: A })
+      await expect(iterator.next()).rejects.toThrow('stream interrupted')
+      expect(fetchMock).toHaveBeenCalledOnce()
+    } finally {
+      vi.unstubAllGlobals()
     }
   })
 })

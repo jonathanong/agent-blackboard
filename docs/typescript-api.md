@@ -15,6 +15,7 @@ import {
   Sessions,
   Snapshots,
   type ClientConfig,
+  type ReadRetryOptions,
   type Session,
   type SessionEntry,
 } from 'agent-blackboard'
@@ -40,6 +41,13 @@ Session and entry clients accept a client credential:
 interface ClientConfig {
   baseUrl: string
   token: string // abb_sk_<credentialId>_<secret>
+  readRetry?: ReadRetryOptions
+}
+
+interface ReadRetryOptions {
+  maxRetries?: number // defaults to 2
+  initialDelayMs?: number // defaults to 100
+  maxDelayMs?: number // defaults to 1000
 }
 ```
 
@@ -55,6 +63,12 @@ const snapshots = new Snapshots(config)
 ```
 
 `baseUrl` may include or omit a trailing slash. Keep tokens out of source control and logs.
+
+Set `readRetry` to opt in to bounded retries for GET requests. The client retries a fetch that
+fails before it receives a response, and HTTP 408, 429, 500, 502, 503, and 504. It never retries
+writes, other HTTP failures, or an interrupted response stream. Omit `readRetry` to make one
+request, preserving the default behavior. All values are non-negative integers; retries are capped
+at 10 and delays at 60 seconds.
 
 ## Complete example
 
@@ -337,9 +351,10 @@ class AgentBlackboardError extends Error {
 ```
 
 Network failures, invalid JSON responses, and stream parse failures are native platform errors, not
-`AgentBlackboardError`. The client does not currently expose retry, timeout, abort-signal, custom
-`fetch`, or middleware options; integrations should apply retry policy around individual calls and
-must not retry non-idempotent appends blindly.
+`AgentBlackboardError`. The client does not expose timeout, abort-signal, custom `fetch`, or
+middleware options. Its optional `readRetry` policy retries only safe GET transport failures and
+selected transient responses; integrations must not retry non-idempotent appends blindly. Remote
+client URLs must use HTTPS; HTTP is accepted only for local loopback development servers.
 
 ### `formatError(error): string`
 
@@ -362,7 +377,7 @@ formats as `[unprintable error]`. `formatError` never throws while handling an e
 
 The package root exports:
 
-- configuration: `ClientConfig`, `AuthOptions`;
+- configuration: `ClientConfig`, `ReadRetryOptions`, `AuthOptions`;
 - sessions: `Session`, `CreateSessionInput`, `PatchSessionInput`, `ListSessionsQuery`;
 - entries: `SessionEntry`, `AppendEntryInput`, `GetEntriesQuery`, `GetRawEntriesQuery`,
   `EntryWireFormat`, `StructuredEntryFormat`;

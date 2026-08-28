@@ -1,6 +1,18 @@
 export interface ClientConfig {
   baseUrl: string
   token: string
+  /** Opt in to bounded retries for safe GET requests. */
+  readRetry?: ReadRetryOptions
+}
+
+/** Bounded retry settings for GET requests that fail before a response or transiently. */
+export interface ReadRetryOptions {
+  /** Retries after the initial request. Defaults to 2. */
+  maxRetries?: number
+  /** First retry delay in milliseconds. Defaults to 100. */
+  initialDelayMs?: number
+  /** Maximum retry delay in milliseconds. Defaults to 1000. */
+  maxDelayMs?: number
 }
 
 export interface Session {
