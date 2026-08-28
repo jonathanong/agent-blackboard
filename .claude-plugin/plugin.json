@@ -1,7 +1,7 @@
 {
   "name": "agent-blackboard",
   "description": "Session and entry MCP tools for autonomous agents to record work and review it later.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "author": {
     "name": "Jonathan Ong",
     "email": "jonathanrichardong@gmail.com"
