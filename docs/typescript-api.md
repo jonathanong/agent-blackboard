@@ -351,9 +351,10 @@ class AgentBlackboardError extends Error {
 ```
 
 Network failures, invalid JSON responses, and stream parse failures are native platform errors, not
-`AgentBlackboardError`. The client does not currently expose retry, timeout, abort-signal, custom
-`fetch`, or middleware options; integrations should apply retry policy around individual calls and
-must not retry non-idempotent appends blindly.
+`AgentBlackboardError`. The client does not expose timeout, abort-signal, custom `fetch`, or
+middleware options. Its optional `readRetry` policy retries only safe GET transport failures and
+selected transient responses; integrations must not retry non-idempotent appends blindly. Remote
+client URLs must use HTTPS; HTTP is accepted only for local loopback development servers.
 
 ### `formatError(error): string`
 
@@ -376,7 +377,7 @@ formats as `[unprintable error]`. `formatError` never throws while handling an e
 
 The package root exports:
 
-- configuration: `ClientConfig`, `AuthOptions`;
+- configuration: `ClientConfig`, `ReadRetryOptions`, `AuthOptions`;
 - sessions: `Session`, `CreateSessionInput`, `PatchSessionInput`, `ListSessionsQuery`;
 - entries: `SessionEntry`, `AppendEntryInput`, `GetEntriesQuery`, `GetRawEntriesQuery`,
   `EntryWireFormat`, `StructuredEntryFormat`;

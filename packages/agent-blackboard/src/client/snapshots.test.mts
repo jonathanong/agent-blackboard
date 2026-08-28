@@ -358,7 +358,7 @@ it('rejects a final record validation failure', async () => {
   vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response(body)))
   try {
     await expect(
-      new Snapshots({ baseUrl: 'http://example.test', token: 't' }).export({ path: destination }),
+      new Snapshots({ baseUrl: 'https://example.test', token: 't' }).export({ path: destination }),
     ).rejects.toThrow('invalid JSONL')
   } finally {
     vi.unstubAllGlobals()
@@ -379,7 +379,7 @@ it('cancels the response stream when an incremental record validation fails', as
   vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response(body)))
   try {
     await expect(
-      new Snapshots({ baseUrl: 'http://example.test', token: 't' }).export({ path: destination }),
+      new Snapshots({ baseUrl: 'https://example.test', token: 't' }).export({ path: destination }),
     ).rejects.toThrow('invalid JSONL')
     expect(cancel).toHaveBeenCalledOnce()
   } finally {
@@ -406,7 +406,7 @@ it('cancels the response stream when writing the local file fails', async () => 
   vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockResolvedValue(new Response(body)))
   try {
     await expect(
-      new Snapshots({ baseUrl: 'http://example.test', token: 't' }).export({ path: destination }),
+      new Snapshots({ baseUrl: 'https://example.test', token: 't' }).export({ path: destination }),
     ).rejects.toThrow('disk full')
     expect(cancel).toHaveBeenCalledOnce()
   } finally {

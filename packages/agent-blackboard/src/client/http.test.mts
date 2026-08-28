@@ -19,13 +19,28 @@ describe('acceptHeaderFor', () => {
 })
 
 describe('rawRequest', () => {
+  it('rejects remote HTTP URLs before constructing an authorization header', async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      await expect(
+        rawRequest({ baseUrl: 'http://example.test', token: 'secret' }, '/sessions/s1', {
+          method: 'GET',
+        }),
+      ).rejects.toThrow('baseUrl must use HTTPS')
+      expect(fetchMock).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('makes one request by default when fetch rejects', async () => {
     const failure = new TypeError('fetch failed')
     const fetchMock = vi.fn<typeof fetch>().mockRejectedValue(failure)
     vi.stubGlobal('fetch', fetchMock)
     try {
       await expect(
-        rawRequest({ baseUrl: 'http://example.test', token: 't' }, '/sessions/s1', {
+        rawRequest({ baseUrl: 'https://example.test', token: 't' }, '/sessions/s1', {
           method: 'GET',
         }),
       ).rejects.toBe(failure)
@@ -44,7 +59,7 @@ describe('rawRequest', () => {
     vi.stubGlobal('fetch', fetchMock)
     try {
       const response = rawRequest(
-        { baseUrl: 'http://example.test', token: 't', readRetry: {} },
+        { baseUrl: 'https://example.test', token: 't', readRetry: {} },
         '/sessions/s1',
         { method: 'GET' },
       )
@@ -178,7 +193,7 @@ describe('rawRequest', () => {
       await expect(
         requestJson<{ ok: boolean }>(
           {
-            baseUrl: 'http://example.test',
+            baseUrl: 'https://example.test',
             token: 't',
             readRetry: { initialDelayMs: 0, maxDelayMs: 0 },
           },
@@ -203,7 +218,7 @@ describe('rawRequest', () => {
       await expect(
         rawRequest(
           {
-            baseUrl: 'http://example.test',
+            baseUrl: 'https://example.test',
             token: 't',
             readRetry: { initialDelayMs: 0, maxDelayMs: 0 },
           },
@@ -228,7 +243,7 @@ describe('rawRequest', () => {
     try {
       const response = rawRequest(
         {
-          baseUrl: 'http://example.test',
+          baseUrl: 'https://example.test',
           token: 't',
           readRetry: { maxRetries: 2, initialDelayMs: 20, maxDelayMs: 25 },
         },
@@ -258,7 +273,7 @@ describe('rawRequest', () => {
       await expect(
         rawRequest(
           {
-            baseUrl: 'http://example.test',
+            baseUrl: 'https://example.test',
             token: 't',
             readRetry: { initialDelayMs: 0, maxDelayMs: 0 },
           },
@@ -281,7 +296,7 @@ describe('rawRequest', () => {
       await expect(
         rawRequest(
           {
-            baseUrl: 'http://example.test',
+            baseUrl: 'https://example.test',
             token: 't',
             readRetry: { initialDelayMs: 0, maxDelayMs: 0 },
           },
@@ -302,7 +317,7 @@ describe('rawRequest', () => {
       await expect(
         rawRequest(
           {
-            baseUrl: 'http://example.test',
+            baseUrl: 'https://example.test',
             token: 't',
             readRetry: { initialDelayMs: 0, maxDelayMs: 0 },
           },
@@ -324,7 +339,7 @@ describe('rawRequest', () => {
       await expect(
         rawRequest(
           {
-            baseUrl: 'http://example.test',
+            baseUrl: 'https://example.test',
             token: 't',
             readRetry: { initialDelayMs: 0, maxDelayMs: 0 },
           },
@@ -341,7 +356,7 @@ describe('rawRequest', () => {
   it('rejects a non-object read retry configuration', async () => {
     await expect(
       rawRequest(
-        { baseUrl: 'http://example.test', token: 't', readRetry: null as never },
+        { baseUrl: 'https://example.test', token: 't', readRetry: null as never },
         '/sessions/s1',
         { method: 'GET' },
       ),
@@ -355,7 +370,7 @@ describe('rawRequest', () => {
     { readRetry: { maxDelayMs: 60_001 }, message: 'maxDelayMs' },
   ])('rejects invalid read retry options', async ({ readRetry, message }) => {
     await expect(
-      rawRequest({ baseUrl: 'http://example.test', token: 't', readRetry }, '/sessions/s1', {
+      rawRequest({ baseUrl: 'https://example.test', token: 't', readRetry }, '/sessions/s1', {
         method: 'GET',
       }),
     ).rejects.toThrow(message)

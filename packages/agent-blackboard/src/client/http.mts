@@ -36,6 +36,16 @@ function buildUrl(baseUrl: string, path: string, query: WireQuery): URL {
   return url
 }
 
+function assertSecureUrl(url: URL): void {
+  if (url.protocol === 'https:') return
+  if (
+    url.protocol === 'http:' &&
+    (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]')
+  )
+    return
+  throw new TypeError('baseUrl must use HTTPS; HTTP is allowed only for local loopback servers')
+}
+
 async function parseErrorBody(response: Response): Promise<unknown> {
   const text = await response.text()
   if (!text) return undefined
@@ -102,6 +112,7 @@ export async function rawRequest(
   options: RequestOptions,
 ): Promise<Response> {
   const url = buildUrl(config.baseUrl, path, options.query ?? {})
+  assertSecureUrl(url)
   const headers = new Headers(options.headers)
   headers.set('authorization', `Bearer ${config.token}`)
   const init: RequestInit = { method: options.method, headers }

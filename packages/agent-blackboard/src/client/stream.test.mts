@@ -96,7 +96,7 @@ describe('entry reads', () => {
     try {
       const iterator = streamEntries(
         {
-          baseUrl: 'http://example.test',
+          baseUrl: 'https://example.test',
           token: 't',
           readRetry: { initialDelayMs: 0, maxDelayMs: 0 },
         },
