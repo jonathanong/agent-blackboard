@@ -44,16 +44,16 @@ Without MCP, or from a shell/script, run the published CLI through `npx`. This d
 local clone of the agent-blackboard repository:
 
 ```bash
-npx -y agent-blackboard@0.4.0 sessions create root-123 --agent claude-code --version 1.0.13
-npx -y agent-blackboard@0.4.0 sessions create worker-456 --parent-session-id root-123 \
+npx -y agent-blackboard@0.5.0 sessions create root-123 --agent claude-code --version 1.0.13
+npx -y agent-blackboard@0.5.0 sessions create worker-456 --parent-session-id root-123 \
   --agent claude-code --version 1.0.13
-npx -y agent-blackboard@0.4.0 sessions patch worker-456 --data '{"branch":"fix/retry"}'
-npx -y agent-blackboard@0.4.0 append --session-id worker-456 '{"note":"found the failing edge case"}'
-npx -y agent-blackboard@0.4.0 get --session-id worker-456 --format markdown
-npx -y agent-blackboard@0.4.0 snapshot export --root-only --inactive-for-hours 8
-npx -y agent-blackboard@0.4.0 snapshot partition --path /tmp/agent-blackboard-snapshot-<uuid>.jsonl \
+npx -y agent-blackboard@0.5.0 sessions patch worker-456 --data '{"branch":"fix/retry"}'
+npx -y agent-blackboard@0.5.0 append --session-id worker-456 '{"note":"found the failing edge case"}'
+npx -y agent-blackboard@0.5.0 get --session-id worker-456 --format markdown
+npx -y agent-blackboard@0.5.0 snapshot export --root-only --inactive-for-hours 8
+npx -y agent-blackboard@0.5.0 snapshot partition --path /tmp/agent-blackboard-snapshot-<uuid>.jsonl \
   --cleanup-token <cleanup-token>
-npx -y agent-blackboard@0.4.0 snapshot cleanup --path /tmp/agent-blackboard-snapshot-<uuid>.jsonl \
+npx -y agent-blackboard@0.5.0 snapshot cleanup --path /tmp/agent-blackboard-snapshot-<uuid>.jsonl \
   --directory /tmp/agent-blackboard-partitions-<suffix> --cleanup-token <cleanup-token>
 ```
 
