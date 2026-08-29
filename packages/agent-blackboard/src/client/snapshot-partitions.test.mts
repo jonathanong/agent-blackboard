@@ -407,7 +407,7 @@ it('validates generated paths, record structure, limits, and cleanup targets', a
     await snapshots.cleanup({ directory: smallFirst.directory })
     await rm(largePath, { force: true })
     await expect(snapshots.cleanup({ directory: notDirectory })).rejects.toThrow(
-      'not a generated directory',
+      'temporary partition directory',
     )
     const notFile = join(tmpdir(), `agent-blackboard-snapshot-${randomUUID()}.jsonl`)
     await mkdir(notFile)
