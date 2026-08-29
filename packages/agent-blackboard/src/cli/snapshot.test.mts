@@ -16,7 +16,7 @@ const records = [
       parentSessionId: null,
       agent: 'a',
       version: '1',
-      createdAt: 'now',
+      createdAt: '2026-01-01T00:00:00.000Z',
       lastEntryAt: null,
       archivedAt: null,
       data: {},
@@ -27,8 +27,8 @@ const records = [
     manifest: {
       schemaVersion: 1,
       status: 'complete',
-      createdAt: 'now',
-      completedAt: 'now',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      completedAt: '2026-01-01T00:01:00.000Z',
       selection: {
         archived: false,
         parentSessionId: null,
@@ -90,6 +90,9 @@ it('rejects invalid snapshot command arguments before making an HTTP request', a
   await expect(
     runSnapshot(['export', '--root-only', '--parent-session-id', 'p'], ctx),
   ).rejects.toThrow('cannot be combined')
+  await expect(runSnapshot(['export', '--root-only=not-a-boolean'], ctx)).rejects.toThrow(
+    'does not accept a value',
+  )
   await expect(runSnapshot(['export', '--data', '[]'], ctx)).rejects.toThrow('JSON object')
   await expect(runSnapshot(['export', '--agent'], ctx)).rejects.toThrow('requires a value')
   await expect(runSnapshot(['export', 'extra'], ctx)).rejects.toThrow('accepts flags only')
@@ -165,6 +168,7 @@ it('partitions and cleans up only generated temporary snapshots without server c
     const defaults = createFakeContext({ env: {} })
     await runSnapshot(['partition', '--path', path, '--max-bytes', '10000'], defaults)
     const defaultResult = JSON.parse(defaults.stdoutLines[0]!) as { directory: string }
+    await runSnapshot(['cleanup', '--path', path], defaults)
     await runSnapshot(['cleanup', '--directory', defaultResult.directory], defaults)
     await expect(
       runSnapshot(['partition', '--path', path, '--max-bytes', 'no'], ctx),
@@ -189,7 +193,17 @@ it('validates partition and cleanup arguments before operating on the filesystem
   await expect(
     runSnapshot(['partition', '--path', '/tmp/a', '--entries', '-1'], ctx),
   ).rejects.toThrow('non-negative integer')
-  await expect(runSnapshot(['cleanup'], ctx)).rejects.toThrow('requires --directory')
+  await expect(
+    runSnapshot(['partition', '--path', '/tmp/a', '--checksumn', 'x'], ctx),
+  ).rejects.toThrow('does not accept --checksumn')
+  await expect(runSnapshot(['cleanup', '--checksumn', 'x'], ctx)).rejects.toThrow(
+    'does not accept --checksumn',
+  )
+  await expect(runSnapshot(['export', '--checksumn', 'x'], ctx)).rejects.toThrow(
+    'does not accept --checksumn',
+  )
+  await expect(runSnapshot(['cleanup'], ctx)).rejects.toThrow('requires --path or --directory')
+  await expect(runSnapshot(['cleanup', '--path'], ctx)).rejects.toThrow('snapshot cleanup --path')
   await expect(runSnapshot(['cleanup', 'extra', '--directory', '/tmp/a'], ctx)).rejects.toThrow(
     'accepts flags only',
   )

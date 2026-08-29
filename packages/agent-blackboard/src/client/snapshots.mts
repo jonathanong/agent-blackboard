@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import { rawRequest } from './http.mjs'
 import { readSnapshot } from './snapshot-response.mjs'
-import { cleanupSnapshotPartitions, partitionSnapshot } from './snapshot-partitions.mjs'
+import { cleanupSnapshotPartitions } from './snapshot-partition-cleanup.mjs'
+import { partitionSnapshot } from './snapshot-partitions.mjs'
 import type {
   ClientConfig,
   SnapshotExportOptions,

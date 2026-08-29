@@ -50,9 +50,10 @@ npx -y agent-blackboard@0.3.1 sessions create worker-456 --parent-session-id roo
 npx -y agent-blackboard@0.3.1 sessions patch worker-456 --data '{"branch":"fix/retry"}'
 npx -y agent-blackboard@0.3.1 append --session-id worker-456 '{"note":"found the failing edge case"}'
 npx -y agent-blackboard@0.3.1 get --session-id worker-456 --format markdown
-npx -y agent-blackboard snapshot export --root-only --inactive-for-hours 8
-npx -y agent-blackboard snapshot partition --path /tmp/agent-blackboard-snapshot-<uuid>.jsonl
-npx -y agent-blackboard snapshot cleanup --directory /tmp/agent-blackboard-partitions-<suffix>
+npx -y agent-blackboard@0.3.1 snapshot export --root-only --inactive-for-hours 8
+npx -y agent-blackboard@0.3.1 snapshot partition --path /tmp/agent-blackboard-snapshot-<uuid>.jsonl
+npx -y agent-blackboard@0.3.1 snapshot cleanup --path /tmp/agent-blackboard-snapshot-<uuid>.jsonl \
+  --directory /tmp/agent-blackboard-partitions-<suffix>
 ```
 
 Output defaults to JSON; pass `--format jsonl` or `--format markdown` for streaming or
@@ -60,9 +61,9 @@ human-readable reads.
 
 `snapshot partition` accepts only a generated temporary export path, preserves whole sessions and
 their entry order, and creates private read-only partition files. It defaults to 25 sessions or
-1 MiB per partition. `snapshot cleanup` likewise accepts only the generated partition directory;
-use it when the bounded evidence is no longer needed. Explicit `snapshot export --path` destinations
-remain available for caller-controlled export, but cannot be partitioned or cleaned up by these commands.
+1 MiB per partition. `snapshot cleanup` accepts either generated artifact or both; use it when the
+bounded evidence is no longer needed. Explicit `snapshot export --path` destinations remain available
+for caller-controlled export, but cannot be partitioned or cleaned up by these commands.
 
 ## What this skill does not do
 

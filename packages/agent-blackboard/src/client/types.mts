@@ -170,6 +170,8 @@ export interface SnapshotPartitionResult {
 }
 
 export interface SnapshotCleanupOptions {
+  /** A generated temporary snapshot returned by `Snapshots.export` without `path`. */
+  path?: string
   /** A generated temporary partition directory returned by `Snapshots.partition`. */
-  directory: string
+  directory?: string
 }

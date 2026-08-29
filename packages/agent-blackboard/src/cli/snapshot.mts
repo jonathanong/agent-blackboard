@@ -1,30 +1,42 @@
 import { Snapshots } from '../client/snapshots.mjs'
-import { cleanupSnapshotPartitions, partitionSnapshot } from '../client/snapshot-partitions.mjs'
+import { cleanupSnapshotPartitions } from '../client/snapshot-partition-cleanup.mjs'
+import { partitionSnapshot } from '../client/snapshot-partitions.mjs'
 import type { SnapshotSelection } from '../client/types.mjs'
 import { parseArgs, stringFlag } from './args.mjs'
 import type { CliContext } from './context.mjs'
 import { clientConfigFromEnv } from './env.mjs'
 import { CliError } from './errors.mjs'
 import { writeLine } from './output.mjs'
-
-function optionalString(flags: Record<string, string | boolean>, key: string): string | undefined {
+function optionalString(
+  flags: Record<string, string | boolean>,
+  key: string,
+  command = 'snapshot export',
+): string | undefined {
   const value = stringFlag(flags, key)
   if (Object.hasOwn(flags, key) && !value)
-    throw new CliError(`snapshot export --${key} requires a value.`)
+    throw new CliError(`${command} --${key} requires a value.`)
   return value
+}
+
+function bareFlag(flags: Record<string, string | boolean>, key: string, command: string): boolean {
+  const value = flags[key]
+  if (value === undefined) return false
+  if (value !== true) throw new CliError(`${command} --${key} does not accept a value.`)
+  return true
 }
 
 function parentSelection(
   flags: Record<string, string | boolean>,
 ): Pick<SnapshotSelection, 'parentSessionId'> {
   const parentSessionId = optionalString(flags, 'parent-session-id')
-  if (flags['root-only'] !== undefined && parentSessionId !== undefined) {
+  const rootOnly = bareFlag(flags, 'root-only', 'snapshot export')
+  if (rootOnly && parentSessionId !== undefined) {
     throw new CliError('snapshot export --root-only cannot be combined with --parent-session-id.')
   }
   if (parentSessionId !== undefined && !/^[A-Za-z0-9._:-]+$/.test(parentSessionId)) {
     throw new CliError('snapshot export --parent-session-id is invalid.')
   }
-  if (flags['root-only'] !== undefined) return { parentSessionId: null }
+  if (rootOnly) return { parentSessionId: null }
   return parentSessionId === undefined ? {} : { parentSessionId }
 }
 
@@ -123,11 +135,22 @@ function partitionCounts(flags: Record<string, string | boolean>) {
   return undefined
 }
 
+function only(flags: Record<string, string | boolean>, allowed: string[], command: string): void {
+  for (const key of Object.keys(flags)) {
+    if (!allowed.includes(key)) throw new CliError(`${command} does not accept --${key}.`)
+  }
+}
+
 /** Runs `snapshot export`, keeping JSONL evidence off stdout. */
 export async function runSnapshot(argv: string[], ctx: CliContext): Promise<void> {
   const [subcommand, ...rest] = argv
   const { positional, flags } = parseArgs(rest)
   if (subcommand === 'partition') {
+    only(
+      flags,
+      ['path', 'max-sessions', 'max-bytes', 'checksum', 'sessions', 'entries', 'records', 'bytes'],
+      'snapshot partition',
+    )
     if (positional.length > 0) throw new CliError('snapshot partition accepts flags only.')
     const maxSessions = positiveInteger(flags, 'max-sessions')
     const maxBytes = positiveInteger(flags, 'max-bytes')
@@ -147,15 +170,25 @@ export async function runSnapshot(argv: string[], ctx: CliContext): Promise<void
     return
   }
   if (subcommand === 'cleanup') {
+    only(flags, ['path', 'directory'], 'snapshot cleanup')
     if (positional.length > 0) throw new CliError('snapshot cleanup accepts flags only.')
+    const path = optionalString(flags, 'path', 'snapshot cleanup')
+    const directory = optionalString(flags, 'directory', 'snapshot cleanup')
+    if (!path && !directory) throw new CliError('snapshot cleanup requires --path or --directory.')
     await cleanupSnapshotPartitions({
-      directory: requiredString(flags, 'directory', 'snapshot cleanup'),
+      ...(path === undefined ? {} : { path }),
+      ...(directory === undefined ? {} : { directory }),
     })
     writeLine(ctx.stdout, JSON.stringify({ removed: true }))
     return
   }
   if (subcommand !== 'export')
     throw new CliError('snapshot requires: export, partition, or cleanup.')
+  only(
+    flags,
+    ['path', 'agent', 'version', 'parent-session-id', 'root-only', 'data', 'inactive-for-hours'],
+    'snapshot export',
+  )
   if (positional.length > 0) throw new CliError('snapshot export accepts flags only.')
   const path = optionalString(flags, 'path')
   const selection = selectionFrom(flags)

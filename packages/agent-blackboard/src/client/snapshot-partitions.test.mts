@@ -1,5 +1,15 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { chmod, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import {
+  chmod,
+  link,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
@@ -89,8 +99,9 @@ it('partitions a generated snapshot by complete session and emits private termin
       expect(lines.filter((line) => line.type === 'session')).toHaveLength(1)
       expect((await stat(partition.path)).mode & 0o777).toBe(0o400)
     }
-    await snapshots.cleanup({ directory: result.directory })
+    await snapshots.cleanup({ path, directory: result.directory })
     await expect(readdir(result.directory)).rejects.toThrow()
+    await expect(readFile(path)).rejects.toThrow()
     await expect(snapshots.cleanup({ directory: result.directory })).resolves.toBeUndefined()
   } finally {
     await rm(path, { force: true })
@@ -107,9 +118,7 @@ it('rejects user-chosen sources, invalid manifests, bad verification, and oversi
     await expect(snapshots.partition({ path: outside })).rejects.toThrow(
       'generated temporary snapshot',
     )
-    await expect(snapshots.partition({ path: invalid })).rejects.toThrow(
-      'complete terminal manifest',
-    )
+    await expect(snapshots.partition({ path: invalid })).rejects.toThrow('unsupported record')
     await expect(
       snapshots.partition({ path: valid, checksum: { algorithm: 'sha256', value: 'wrong' } }),
     ).rejects.toThrow('checksum')
@@ -129,6 +138,15 @@ it('validates generated paths, record structure, limits, and cleanup targets', a
   const originalManifest = sourceRecords().at(-1) as { manifest: Record<string, unknown> }
   const valid = await snapshot()
   const malformed = await snapshot([{ type: 'entry', entry: { sessionId: 'one' } }])
+  const entryBeforeSession = await snapshot([
+    {
+      type: 'entry',
+      entry: { sessionId: 'one', createdAt: '2026-01-01T00:00:00.000Z', data: {} },
+    },
+  ])
+  const noManifest = await snapshot(sourceRecords().slice(0, -1))
+  const blank = join(tmpdir(), `agent-blackboard-snapshot-${randomUUID()}.jsonl`)
+  await writeFile(blank, '\n', { mode: 0o400 })
   const afterManifest = await snapshot([
     ...sourceRecords(),
     { type: 'session', session: { id: 'three' } },
@@ -153,6 +171,11 @@ it('validates generated paths, record structure, limits, and cleanup targets', a
   try {
     await expect(snapshots.partition({ path: 'relative' })).rejects.toThrow('absolute')
     await expect(snapshots.partition({ path: malformed })).rejects.toThrow('unsupported record')
+    await expect(snapshots.partition({ path: entryBeforeSession })).rejects.toThrow(
+      'entries must follow',
+    )
+    await expect(snapshots.partition({ path: noManifest })).rejects.toThrow('complete terminal')
+    await expect(snapshots.partition({ path: blank })).rejects.toThrow('blank JSONL')
     await expect(snapshots.partition({ path: afterManifest })).rejects.toThrow('after its manifest')
     await expect(snapshots.partition({ path: invalidJson })).rejects.toThrow('invalid JSONL')
     const mismatched = structuredClone(sourceRecords()) as Array<Record<string, unknown>>
@@ -206,16 +229,87 @@ it('validates generated paths, record structure, limits, and cleanup targets', a
     ).rejects.toThrow('too large')
     await snapshots.cleanup({ directory: smallFirst.directory })
     await rm(largePath, { force: true })
-    await expect(snapshots.cleanup({ directory: notDirectory })).rejects.toThrow('not a directory')
+    await expect(snapshots.cleanup({ directory: notDirectory })).rejects.toThrow(
+      'not a generated directory',
+    )
+    const hardlink = join(tmpdir(), `agent-blackboard-snapshot-${randomUUID()}.jsonl`)
+    await link(valid, hardlink)
+    await expect(snapshots.partition({ path: hardlink })).rejects.toThrow(
+      'unlinked generated regular file',
+    )
+    await rm(hardlink, { force: true })
+    const symlinked = join(tmpdir(), `agent-blackboard-snapshot-${randomUUID()}.jsonl`)
+    await symlink(valid, symlinked)
+    await expect(snapshots.partition({ path: symlinked })).rejects.toThrow(
+      'unlinked generated regular file',
+    )
+    await rm(symlinked, { force: true })
     await expect(snapshots.cleanup({ directory: 'relative' })).rejects.toThrow(
       'generated temporary',
     )
   } finally {
     await rm(valid, { force: true })
     await rm(malformed, { force: true })
+    await rm(entryBeforeSession, { force: true })
+    await rm(noManifest, { force: true })
+    await rm(blank, { force: true })
     await rm(afterManifest, { force: true })
     await rm(invalidJson, { force: true })
     await rm(empty, { force: true })
     await rm(notDirectory, { force: true })
+  }
+})
+
+it('streams many session blocks through private staging and cleans each requested artifact', async () => {
+  const snapshots = new Snapshots({ baseUrl: 'http://unused', token: 'unused' })
+  const sessions = Array.from({ length: 130 }, (_, index) => ({
+    type: 'session',
+    session: {
+      id: `stream-${index}`,
+      parentSessionId: null,
+      agent: 'agent',
+      version: '1',
+      createdAt: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
+      lastEntryAt: null,
+      archivedAt: null,
+      data: { index },
+    },
+  }))
+  const source = await snapshot([
+    ...sessions,
+    {
+      type: 'manifest',
+      manifest: {
+        ...(sourceRecords().at(-1) as { manifest: Record<string, unknown> }).manifest,
+        counts: { sessions: sessions.length, entries: 0, records: sessions.length + 1 },
+      },
+    },
+  ])
+  const first = await snapshots.partition({ path: source, maxSessions: 25 })
+  expect(first.partitions).toHaveLength(6)
+  await snapshots.cleanup({ path: source })
+  await expect(readFile(source)).rejects.toThrow()
+  await expect(readdir(first.directory)).resolves.toHaveLength(6)
+  await snapshots.cleanup({ directory: first.directory })
+  await expect(readdir(first.directory)).rejects.toThrow()
+})
+
+it('attempts both cleanup targets and aggregates an unsafe target failure', async () => {
+  const snapshots = new Snapshots({ baseUrl: 'http://unused', token: 'unused' })
+  await expect(snapshots.cleanup({})).rejects.toThrow('requires a snapshot path')
+  const path = await snapshot()
+  const unsafeDirectory = join(
+    tmpdir(),
+    `agent-blackboard-partitions-${randomUUID().replaceAll('-', '')}`,
+  )
+  await writeFile(unsafeDirectory, 'not a directory')
+  try {
+    await expect(snapshots.cleanup({ path, directory: unsafeDirectory })).rejects.toThrow(
+      'snapshot cleanup failed',
+    )
+    await expect(readFile(path)).rejects.toThrow()
+    await expect(readFile(unsafeDirectory, 'utf8')).resolves.toBe('not a directory')
+  } finally {
+    await rm(unsafeDirectory, { force: true })
   }
 })

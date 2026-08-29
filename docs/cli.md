@@ -65,7 +65,8 @@ agent-blackboard snapshot export --root-only --inactive-for-hours 8
 agent-blackboard snapshot export --agent codex --version 1.0.0 \
   --data '{"repository":"example/tooling"}'
 agent-blackboard snapshot partition --path /tmp/agent-blackboard-snapshot-<uuid>.jsonl
-agent-blackboard snapshot cleanup --directory /tmp/agent-blackboard-partitions-<suffix>
+agent-blackboard snapshot cleanup --path /tmp/agent-blackboard-snapshot-<uuid>.jsonl \
+  --directory /tmp/agent-blackboard-partitions-<suffix>
 ```
 
 The command streams every matching unarchived session and entry into a newly created private file.
@@ -83,7 +84,7 @@ exact filters as session listing. The export always excludes archived sessions.
 `--checksum <sha256>` plus all four `--sessions`, `--entries`, `--records`, and `--bytes` counts.
 It preserves each contiguous session and its ordered entries, defaults to 25 sessions or 1 MiB per
 read-only partition, and rejects an oversize session instead of splitting it. `snapshot cleanup`
-accepts only the generated partition directory and removes it safely.
+accepts either generated path, or both, and attempts all requested cleanup safely.
 
 ## Credentials
 

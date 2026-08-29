@@ -49,7 +49,7 @@ await sessions.archive('worker-456')
 const snapshot = await snapshots.export({ selection: { agent: 'claude-code' } })
 console.log(snapshot.path, snapshot.checksum.value)
 const partitions = await snapshots.partition({ path: snapshot.path, checksum: snapshot.checksum })
-await snapshots.cleanup({ directory: partitions.directory })
+await snapshots.cleanup({ path: snapshot.path, directory: partitions.directory })
 
 const auth = new Auth({ baseUrl, adminToken })
 await auth.createCredentials({ name: 'ci-bot' })
@@ -79,13 +79,14 @@ agent-blackboard get --session-id worker-456 --format jsonl
 agent-blackboard sessions archive worker-456
 agent-blackboard snapshot export --root-only --inactive-for-hours 8
 agent-blackboard snapshot partition --path /tmp/agent-blackboard-snapshot-<uuid>.jsonl
-agent-blackboard snapshot cleanup --directory /tmp/agent-blackboard-partitions-<suffix>
+agent-blackboard snapshot cleanup --path /tmp/agent-blackboard-snapshot-<uuid>.jsonl \
+  --directory /tmp/agent-blackboard-partitions-<suffix>
 agent-blackboard mcp
 ```
 
 `partition` only accepts a generated temporary snapshot, preserves each session and its ordered
 entries as a single unit, and defaults to 25 sessions or 1 MiB per read-only partition. It can
-verify the export checksum and counts. `cleanup` only removes the generated partition directory.
+verify the export checksum and counts. `cleanup` removes either generated temporary artifact, or both.
 An explicit absolute `snapshot export --path` destination remains caller-owned and is never accepted
 by either command.
 
