@@ -5,6 +5,31 @@ import type { FileHandle } from 'node:fs/promises'
 import type { SnapshotBlock } from './snapshot-partition-format.mjs'
 import { writeAll } from './snapshot-partition-io.mjs'
 
+type ExactFileStats = {
+  isFile(): boolean
+  nlink: bigint
+  dev: bigint
+  ino: bigint
+  size: bigint
+}
+
+export type ExactFileIdentity = { dev: bigint; ino: bigint; size: bigint }
+
+export function assertExactFile(
+  stats: ExactFileStats,
+  expected: ExactFileIdentity,
+  message: string,
+): void {
+  if (
+    !stats.isFile() ||
+    stats.nlink !== 1n ||
+    stats.dev !== expected.dev ||
+    stats.ino !== expected.ino ||
+    stats.size !== expected.size
+  )
+    throw new Error(message)
+}
+
 export async function copyBlock(
   block: SnapshotBlock,
   output: FileHandle,
@@ -13,29 +38,41 @@ export async function copyBlock(
   const input = await open(block.path, constants.O_RDONLY | constants.O_NOFOLLOW)
   const buffer = Buffer.allocUnsafe(64 * 1024)
   try {
-    let identity: { dev: bigint; ino: bigint }
+    let identity: ExactFileIdentity
     try {
-      identity = { dev: BigInt(block.identity.dev), ino: BigInt(block.identity.ino) }
+      if (!Number.isSafeInteger(block.bytes) || block.bytes < 0)
+        throw new Error('staged snapshot block has an invalid size')
+      identity = {
+        dev: BigInt(block.identity.dev),
+        ino: BigInt(block.identity.ino),
+        size: BigInt(block.bytes),
+      }
     } catch {
       throw new Error('staged snapshot block has an invalid identity')
     }
     const opened = await input.stat({ bigint: true })
-    /* v8 ignore start -- a staged output replacement between identity checks is race-only */
-    if (
-      !opened.isFile() ||
-      opened.nlink !== 1n ||
-      opened.dev !== identity.dev ||
-      opened.ino !== identity.ino
-    )
-      throw new Error('staged snapshot block changed before publication')
-    /* v8 ignore stop */
+    assertExactFile(opened, identity, 'staged snapshot block changed before publication')
+    let copied = 0n
     for (;;) {
-      const { bytesRead } = await input.read(buffer)
-      if (!bytesRead) return
+      const remaining = identity.size - copied
+      if (remaining === 0n) {
+        const { bytesRead } = await input.read(buffer, 0, 1)
+        if (bytesRead) throw new Error('staged snapshot block changed before publication')
+        break
+      }
+      const { bytesRead } = await input.read(
+        buffer,
+        0,
+        Number(remaining > buffer.length ? buffer.length : remaining),
+      )
+      if (!bytesRead) throw new Error('staged snapshot block changed before publication')
       const bytes = buffer.subarray(0, bytesRead)
       hash.update(bytes)
       await writeAll(output, bytes)
+      copied += BigInt(bytesRead)
     }
+    const completed = await input.stat({ bigint: true })
+    assertExactFile(completed, identity, 'staged snapshot block changed before publication')
   } finally {
     await input.close()
   }

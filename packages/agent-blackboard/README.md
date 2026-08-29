@@ -101,6 +101,11 @@ removes either generated temporary artifact, or both.
 An explicit absolute `snapshot export --path` destination remains caller-owned and is never accepted
 by either command.
 
+Generated names, private modes, capabilities, and identity checks reject substitutions visible at
+operation boundaries. The pure-Node package does not defend against a malicious concurrent process
+with the same operating-system user identity that swaps a pathname between those checks, so keep
+snapshot artifacts out of mutually untrusted same-UID process environments.
+
 The published package includes the canonical provider plugin at `dist/plugin`; it is copied during
 the package build from this repository's `plugins/agent-blackboard` source, so no second tracked
 skill copy can drift.

@@ -299,6 +299,11 @@ destinations stay caller-owned and cannot be partitioned or cleaned up. The clea
 required for cross-process CLI use; library calls in the same process may reuse the generated
 artifact's tracked capability.
 
+The generated names, private modes, capability, and identity checks reject substitutions visible at
+each operation boundary. This pure-Node implementation cannot defend against a malicious concurrent
+process running as the same operating-system user that swaps a pathname between those checks; do not
+use these temporary artifacts across mutually untrusted same-UID processes.
+
 ### `SessionEntry`
 
 ```ts
