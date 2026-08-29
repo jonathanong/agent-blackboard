@@ -41,6 +41,23 @@ it('strictly validates snapshot record and terminal manifest shapes', () => {
       },
     },
     { type: 'entry', entry: { sessionId: 's' } },
+    {
+      type: 'session',
+      session: {
+        id: 'bad/id',
+        parentSessionId: null,
+        agent: 'agent',
+        version: '1',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        lastEntryAt: null,
+        archivedAt: null,
+        data: {},
+      },
+    },
+    {
+      type: 'entry',
+      entry: { sessionId: 'bad id', createdAt: '2026-01-01T00:00:00.000Z', data: {} },
+    },
     { type: 'manifest', manifest: [] },
   ]) {
     expect(() => parseSnapshotRecord(JSON.stringify(record))).toThrow('unsupported')
@@ -50,6 +67,7 @@ it('strictly validates snapshot record and terminal manifest shapes', () => {
     { selection: { archived: false, agent: 1 } },
     { selection: { archived: false, version: 1 } },
     { selection: { archived: false, parentSessionId: 1 } },
+    { selection: { archived: false, parentSessionId: 'bad/id' } },
     { selection: { archived: false, data: [] } },
     { selection: { archived: false, inactiveForHours: 0 } },
     { createdAt: 'bad' },
@@ -108,6 +126,25 @@ it('requires contiguous ordered session and entry records', () => {
     consumeSnapshotRecord(
       { ...entry, entry: { ...entry.entry, createdAt: '2026-01-01T00:00:00.000Z' } },
       checked,
+    ),
+  ).toThrow('entries are not ordered')
+  expect(() =>
+    consumeSnapshotRecord(
+      { ...session, session: { ...session.session, createdAt: '2026-01-02T00:30:00+02:00' } },
+      checked,
+    ),
+  ).toThrow('sessions are not ordered')
+  const laterEntryState: SnapshotState = {
+    sessions: 1,
+    entries: 1,
+    records: 2,
+    currentSessionId: 's',
+    lastEntryCreatedAt: Date.parse('2026-01-02T00:00:00Z'),
+  }
+  expect(() =>
+    consumeSnapshotRecord(
+      { ...entry, entry: { ...entry.entry, createdAt: '2026-01-02T00:30:00+02:00' } },
+      laterEntryState,
     ),
   ).toThrow('entries are not ordered')
 })

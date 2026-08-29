@@ -15,10 +15,12 @@ export type SnapshotState = {
   sessions: number
   entries: number
   records: number
-  lastSessionCreatedAt?: string
-  lastEntryCreatedAt?: string
+  lastSessionCreatedAt?: number
+  lastEntryCreatedAt?: number
   currentSessionId?: string
 }
+
+const SESSION_ID = /^[A-Za-z0-9._:-]+$/
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -39,7 +41,7 @@ function isSelection(value: unknown): boolean {
   if (
     value.parentSessionId !== undefined &&
     value.parentSessionId !== null &&
-    typeof value.parentSessionId !== 'string'
+    (typeof value.parentSessionId !== 'string' || !SESSION_ID.test(value.parentSessionId))
   )
     return false
   if (value.data !== undefined && !isObject(value.data)) return false
@@ -79,8 +81,9 @@ function isSession(value: unknown): value is Record<string, unknown> {
   return (
     isObject(value) &&
     typeof value.id === 'string' &&
-    value.id.length > 0 &&
-    (value.parentSessionId === null || typeof value.parentSessionId === 'string') &&
+    SESSION_ID.test(value.id) &&
+    (value.parentSessionId === null ||
+      (typeof value.parentSessionId === 'string' && SESSION_ID.test(value.parentSessionId))) &&
     typeof value.agent === 'string' &&
     typeof value.version === 'string' &&
     isTimestamp(value.createdAt) &&
@@ -94,7 +97,7 @@ function isEntry(value: unknown): value is Record<string, unknown> {
   return (
     isObject(value) &&
     typeof value.sessionId === 'string' &&
-    value.sessionId.length > 0 &&
+    SESSION_ID.test(value.sessionId) &&
     isTimestamp(value.createdAt) &&
     isObject(value.data)
   )
@@ -147,23 +150,25 @@ export function consumeSnapshotRecord(record: SnapshotRecord, state: SnapshotSta
   if (record.type === 'manifest') return
   if (record.type === 'session') {
     const createdAt = record.session.createdAt as string
-    if (state.lastSessionCreatedAt && createdAt < state.lastSessionCreatedAt)
+    const createdAtInstant = Date.parse(createdAt)
+    if (state.lastSessionCreatedAt !== undefined && createdAtInstant < state.lastSessionCreatedAt)
       throw new Error('snapshot sessions are not ordered')
     state.sessions += 1
     state.records += 1
-    state.lastSessionCreatedAt = createdAt
+    state.lastSessionCreatedAt = createdAtInstant
     delete state.lastEntryCreatedAt
     state.currentSessionId = record.session.id as string
     return
   }
   const createdAt = record.entry.createdAt as string
+  const createdAtInstant = Date.parse(createdAt)
   if (state.currentSessionId !== record.entry.sessionId)
     throw new Error('snapshot entries must follow their session')
-  if (state.lastEntryCreatedAt && createdAt < state.lastEntryCreatedAt)
+  if (state.lastEntryCreatedAt !== undefined && createdAtInstant < state.lastEntryCreatedAt)
     throw new Error('snapshot entries are not ordered')
   state.entries += 1
   state.records += 1
-  state.lastEntryCreatedAt = createdAt
+  state.lastEntryCreatedAt = createdAtInstant
 }
 
 export function assertManifest(manifest: SnapshotManifest, state: SnapshotState): void {

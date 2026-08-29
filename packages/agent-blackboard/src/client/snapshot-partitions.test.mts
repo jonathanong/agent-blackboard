@@ -1,8 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto'
+import fileSystem from 'node:fs/promises'
 import {
   appendFile,
   chmod,
   link,
+  mkdir,
   mkdtemp,
   open,
   readFile,
@@ -14,7 +16,7 @@ import {
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { Snapshots } from './snapshots.mjs'
 
 const snapshotsToRemove = new Set<string>()
@@ -120,6 +122,39 @@ async function appendAfterSourceEof(path: string): Promise<() => void> {
   }
 }
 
+async function mutateAfterSourceEof(path: string): Promise<() => void> {
+  const probe = await open(path, 'r')
+  const expected = await probe.stat()
+  const prototype = Object.getPrototypeOf(probe) as {
+    read: (...args: unknown[]) => Promise<{ bytesRead: number }>
+  }
+  await probe.close()
+  const originalRead = prototype.read
+  let mutated = false
+  prototype.read = async function (
+    this: { stat: () => Promise<{ dev: number; ino: number }> },
+    ...args: unknown[]
+  ): Promise<{ bytesRead: number }> {
+    const result = await originalRead.apply(this, args)
+    const info = await this.stat()
+    if (
+      !mutated &&
+      result.bytesRead === 0 &&
+      info.dev === expected.dev &&
+      info.ino === expected.ino
+    ) {
+      mutated = true
+      const writer = await open(path, 'r+')
+      await writer.write(Buffer.from(' '), 0, 1, 0)
+      await writer.close()
+    }
+    return result
+  }
+  return () => {
+    prototype.read = originalRead
+  }
+}
+
 it('partitions a generated snapshot by complete session and emits private terminal manifests', async () => {
   const path = await snapshot()
   const bytes = await readFile(path)
@@ -193,6 +228,18 @@ it('rejects post-EOF source growth and removes staging and output directories af
   expect((await partitionArtifacts()).filter((name) => !before.includes(name))).toEqual([])
 })
 
+it('rejects same-size source mutation while staging', async () => {
+  const snapshots = new Snapshots({ baseUrl: 'http://unused', token: 'unused' })
+  const path = await snapshot()
+  await chmod(path, 0o600)
+  const restoreRead = await mutateAfterSourceEof(path)
+  try {
+    await expect(snapshots.partition({ path })).rejects.toThrow('changed while it was being read')
+  } finally {
+    restoreRead()
+  }
+})
+
 it('validates generated paths, record structure, limits, and cleanup targets', async () => {
   const snapshots = new Snapshots({ baseUrl: 'http://unused', token: 'unused' })
   const originalManifest = sourceRecords().at(-1) as { manifest: Record<string, unknown> }
@@ -223,10 +270,7 @@ it('validates generated paths, record structure, limits, and cleanup targets', a
       },
     },
   ])
-  const notDirectory = join(
-    tmpdir(),
-    `agent-blackboard-partitions-${randomUUID().replaceAll('-', '')}`,
-  )
+  const notDirectory = join(tmpdir(), `agent-blackboard-partitions-${randomUUID()}`)
   await writeFile(notDirectory, 'not a directory')
   try {
     await expect(snapshots.partition({ path: 'relative' })).rejects.toThrow('absolute')
@@ -307,6 +351,26 @@ it('validates generated paths, record structure, limits, and cleanup targets', a
     await expect(snapshots.cleanup({ directory: 'relative' })).rejects.toThrow(
       'generated temporary',
     )
+    const callerDirectory = join(tmpdir(), `agent-blackboard-partitions-${randomUUID()}`)
+    await mkdir(callerDirectory)
+    await writeFile(join(callerDirectory, 'sentinel'), 'keep')
+    await expect(snapshots.cleanup({ directory: callerDirectory })).rejects.toThrow(
+      'ownership marker',
+    )
+    await expect(readFile(join(callerDirectory, 'sentinel'), 'utf8')).resolves.toBe('keep')
+    await rm(callerDirectory, { recursive: true, force: true })
+    const wrongMarkerDirectory = join(tmpdir(), `agent-blackboard-partitions-${randomUUID()}`)
+    await mkdir(wrongMarkerDirectory)
+    await writeFile(join(wrongMarkerDirectory, '.agent-blackboard-partitions'), 'wrong\n')
+    await expect(snapshots.cleanup({ directory: wrongMarkerDirectory })).rejects.toThrow(
+      'ownership marker',
+    )
+    await rm(wrongMarkerDirectory, { recursive: true, force: true })
+    const linkedMarkerDirectory = join(tmpdir(), `agent-blackboard-partitions-${randomUUID()}`)
+    await mkdir(linkedMarkerDirectory)
+    await symlink('missing', join(linkedMarkerDirectory, '.agent-blackboard-partitions'))
+    await expect(snapshots.cleanup({ directory: linkedMarkerDirectory })).rejects.toThrow()
+    await rm(linkedMarkerDirectory, { recursive: true, force: true })
   } finally {
     await rm(valid, { force: true })
     await rm(malformed, { force: true })
@@ -349,7 +413,7 @@ it('streams many session blocks through private staging and cleans each requeste
   expect(first.partitions).toHaveLength(6)
   await snapshots.cleanup({ path: source })
   await expect(readFile(source)).rejects.toThrow()
-  await expect(readdir(first.directory)).resolves.toHaveLength(6)
+  expect((await readdir(first.directory)).filter((name) => name.endsWith('.jsonl'))).toHaveLength(6)
   await snapshots.cleanup({ directory: first.directory })
   await expect(readdir(first.directory)).rejects.toThrow()
 })
@@ -372,4 +436,30 @@ it('attempts both cleanup targets and aggregates an unsafe target failure', asyn
   } finally {
     await rm(unsafeDirectory, { force: true })
   }
+})
+
+it('restores a captured partition directory when recursive removal fails', async () => {
+  const snapshots = new Snapshots({ baseUrl: 'http://unused', token: 'unused' })
+  const path = await snapshot()
+  const result = await snapshots.partition({ path })
+  const remove = vi
+    .spyOn(fileSystem, 'rm')
+    .mockRejectedValueOnce(Object.assign(new Error('busy'), { code: 'EBUSY' }))
+  try {
+    await expect(snapshots.cleanup({ directory: result.directory })).rejects.toThrow('busy')
+    await expect(readdir(result.directory)).resolves.toContain('.agent-blackboard-partitions')
+  } finally {
+    remove.mockRestore()
+  }
+  await expect(snapshots.cleanup({ directory: result.directory })).resolves.toBeUndefined()
+  const removeSource = vi
+    .spyOn(fileSystem, 'rm')
+    .mockRejectedValueOnce(Object.assign(new Error('busy'), { code: 'EBUSY' }))
+  try {
+    await expect(snapshots.cleanup({ path })).rejects.toThrow('busy')
+    await expect(readFile(path)).resolves.not.toHaveLength(0)
+  } finally {
+    removeSource.mockRestore()
+  }
+  await expect(snapshots.cleanup({ path })).resolves.toBeUndefined()
 })
