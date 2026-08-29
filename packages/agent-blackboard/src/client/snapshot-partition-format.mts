@@ -1,8 +1,11 @@
 import type { SnapshotCounts, SnapshotManifest } from './types.mjs'
 
+const SESSION_ID = /^[A-Za-z0-9._:-]+$/
+
 export type SnapshotBlock = {
   sessionId: string
   path: string
+  identity: { dev: string; ino: string }
   bytes: number
   sessions: number
   entries: number
@@ -79,8 +82,9 @@ function isSession(value: unknown): value is Record<string, unknown> {
   return (
     isObject(value) &&
     typeof value.id === 'string' &&
-    value.id.length > 0 &&
-    (value.parentSessionId === null || typeof value.parentSessionId === 'string') &&
+    SESSION_ID.test(value.id) &&
+    (value.parentSessionId === null ||
+      (typeof value.parentSessionId === 'string' && SESSION_ID.test(value.parentSessionId))) &&
     typeof value.agent === 'string' &&
     typeof value.version === 'string' &&
     isTimestamp(value.createdAt) &&
@@ -94,7 +98,7 @@ function isEntry(value: unknown): value is Record<string, unknown> {
   return (
     isObject(value) &&
     typeof value.sessionId === 'string' &&
-    value.sessionId.length > 0 &&
+    SESSION_ID.test(value.sessionId) &&
     isTimestamp(value.createdAt) &&
     isObject(value.data)
   )
@@ -147,7 +151,7 @@ export function consumeSnapshotRecord(record: SnapshotRecord, state: SnapshotSta
   if (record.type === 'manifest') return
   if (record.type === 'session') {
     const createdAt = Date.parse(record.session.createdAt as string)
-    if (state.lastSessionCreatedAt && createdAt < state.lastSessionCreatedAt)
+    if (state.lastSessionCreatedAt !== undefined && createdAt < state.lastSessionCreatedAt)
       throw new Error('snapshot sessions are not ordered')
     state.sessions += 1
     state.records += 1
@@ -159,7 +163,7 @@ export function consumeSnapshotRecord(record: SnapshotRecord, state: SnapshotSta
   const createdAt = Date.parse(record.entry.createdAt as string)
   if (state.currentSessionId !== record.entry.sessionId)
     throw new Error('snapshot entries must follow their session')
-  if (state.lastEntryCreatedAt && createdAt < state.lastEntryCreatedAt)
+  if (state.lastEntryCreatedAt !== undefined && createdAt < state.lastEntryCreatedAt)
     throw new Error('snapshot entries are not ordered')
   state.entries += 1
   state.records += 1

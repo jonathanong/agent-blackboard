@@ -135,6 +135,8 @@ export interface SnapshotExportResult {
   counts: SnapshotCounts
   checksum: SnapshotChecksum
   manifest: SnapshotManifest
+  /** Capability required to partition or clean up an export created by the client. */
+  cleanupToken?: string | undefined
 }
 
 export interface SnapshotChecksum {
@@ -151,6 +153,8 @@ export interface SnapshotVerification {
 export interface SnapshotPartitionOptions extends SnapshotVerification {
   /** A generated temporary snapshot returned by `Snapshots.export` without `path`. */
   path: string
+  /** Capability returned by the generated snapshot export. */
+  cleanupToken?: string | undefined
   /** Maximum whole sessions in one partition. Defaults to 25. */
   maxSessions?: number
   /** Maximum bytes in one partition. Defaults to 1 MiB. */
@@ -167,6 +171,8 @@ export interface SnapshotPartition {
 export interface SnapshotPartitionResult {
   directory: string
   partitions: SnapshotPartition[]
+  /** Capability required to clean up this generated partition directory. */
+  cleanupToken: string
 }
 
 export interface SnapshotCleanupOptions {
@@ -174,4 +180,6 @@ export interface SnapshotCleanupOptions {
   path?: string
   /** A generated temporary partition directory returned by `Snapshots.partition`. */
   directory?: string
+  /** Capability returned by the generated snapshot export/partition. */
+  cleanupToken?: string | undefined
 }

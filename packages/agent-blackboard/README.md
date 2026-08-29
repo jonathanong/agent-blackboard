@@ -45,11 +45,19 @@ for await (const current of entries.get({ sessionId: 'worker-456' })) {
 
 await sessions.archive('worker-456')
 
-// The JSONL file stays local; the result contains only its verification metadata.
+// The JSONL file stays local; the result contains only its verification metadata and cleanup capability.
 const snapshot = await snapshots.export({ selection: { agent: 'claude-code' } })
-console.log(snapshot.path, snapshot.checksum.value)
-const partitions = await snapshots.partition({ path: snapshot.path, checksum: snapshot.checksum })
-await snapshots.cleanup({ path: snapshot.path, directory: partitions.directory })
+console.log(snapshot.path, snapshot.checksum.value, snapshot.cleanupToken)
+const partitions = await snapshots.partition({
+  path: snapshot.path,
+  cleanupToken: snapshot.cleanupToken,
+  checksum: snapshot.checksum,
+})
+await snapshots.cleanup({
+  path: snapshot.path,
+  directory: partitions.directory,
+  cleanupToken: partitions.cleanupToken,
+})
 
 const auth = new Auth({ baseUrl, adminToken })
 await auth.createCredentials({ name: 'ci-bot' })
@@ -78,15 +86,18 @@ agent-blackboard append --session-id worker-456 --file findings.md
 agent-blackboard get --session-id worker-456 --format jsonl
 agent-blackboard sessions archive worker-456
 agent-blackboard snapshot export --root-only --inactive-for-hours 8
-agent-blackboard snapshot partition --path /tmp/agent-blackboard-snapshot-<uuid>.jsonl
+agent-blackboard snapshot partition --path /tmp/agent-blackboard-snapshot-<uuid>.jsonl \
+  --cleanup-token <cleanup-token>
 agent-blackboard snapshot cleanup --path /tmp/agent-blackboard-snapshot-<uuid>.jsonl \
-  --directory /tmp/agent-blackboard-partitions-<suffix>
+  --directory /tmp/agent-blackboard-partitions-<suffix> --cleanup-token <cleanup-token>
 agent-blackboard mcp
 ```
 
 `partition` only accepts a generated temporary snapshot, preserves each session and its ordered
 entries as a single unit, and defaults to 25 sessions or 1 MiB per read-only partition. It can
-verify the export checksum and counts. `cleanup` removes either generated temporary artifact, or both.
+verify the export checksum and counts. Both commands require the capability returned in the generated
+export result; this keeps ownership authorization out of forgeable filenames or markers. `cleanup`
+removes either generated temporary artifact, or both.
 An explicit absolute `snapshot export --path` destination remains caller-owned and is never accepted
 by either command.
 

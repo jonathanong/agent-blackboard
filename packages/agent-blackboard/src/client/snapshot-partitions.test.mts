@@ -3,10 +3,12 @@ import {
   appendFile,
   chmod,
   link,
+  mkdir,
   mkdtemp,
   open,
   readFile,
   readdir,
+  rename,
   rm,
   stat,
   symlink,
@@ -15,12 +17,27 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
+import {
+  assertSnapshotMarker,
+  createCleanupToken,
+  knownCleanupToken,
+  writePartitionMarker,
+  writeSnapshotMarker,
+} from './snapshot-artifact-ownership.mjs'
+import { removeDetached, removeDirectoryContents, restore } from './snapshot-artifact-removal.mjs'
+import { stageSnapshot } from './snapshot-partition-read.mjs'
+import { writePartitions } from './snapshot-partition-write.mjs'
 import { Snapshots } from './snapshots.mjs'
 
 const snapshotsToRemove = new Set<string>()
 
 afterEach(async () => {
-  await Promise.all([...snapshotsToRemove].map((path) => rm(path, { force: true })))
+  await Promise.all(
+    [...snapshotsToRemove].flatMap((path) => [
+      rm(path, { force: true }),
+      rm(`${path}.owner`, { force: true }),
+    ]),
+  )
   snapshotsToRemove.clear()
 })
 
@@ -63,11 +80,18 @@ function sourceRecords() {
   ]
 }
 
-async function snapshot(records: unknown[] = sourceRecords()): Promise<string> {
+async function snapshot(records: unknown[] | string = sourceRecords()): Promise<string> {
   const path = join(tmpdir(), `agent-blackboard-snapshot-${randomUUID()}.jsonl`)
-  await writeFile(path, `${records.map((record) => JSON.stringify(record)).join('\n')}\n`, {
+  const contents =
+    typeof records === 'string'
+      ? records
+      : `${records.map((record) => JSON.stringify(record)).join('\n')}\n`
+  await writeFile(path, contents, {
     mode: 0o400,
   })
+  const file = await open(path, 'r')
+  await writeSnapshotMarker(path, file, createCleanupToken())
+  await file.close()
   snapshotsToRemove.add(path)
   return path
 }
@@ -174,12 +198,52 @@ it('partitions a generated snapshot by complete session and emits private termin
       expect((await stat(partition.path)).mode & 0o777).toBe(0o400)
     }
     expect(await readdir(result.directory)).toContain('.agent-blackboard-partition-owner')
+    await expect(
+      snapshots.cleanup({ directory: result.directory, cleanupToken: createCleanupToken() }),
+    ).rejects.toThrow('ownership marker')
+    await expect(
+      snapshots.cleanup({ directory: result.directory, cleanupToken: 'not-a-capability' }),
+    ).rejects.toThrow('cleanupToken must be a valid generated capability')
+    await expect(readdir(result.directory)).resolves.toContain('.agent-blackboard-partition-owner')
     await snapshots.cleanup({ path, directory: result.directory })
     await expect(readdir(result.directory)).rejects.toThrow()
     await expect(readFile(path)).rejects.toThrow()
     await expect(snapshots.cleanup({ directory: result.directory })).resolves.toBeUndefined()
   } finally {
     await rm(path, { force: true })
+  }
+})
+
+it('rejects caller-owned paths that resemble generated snapshots', async () => {
+  const snapshots = new Snapshots({ baseUrl: 'http://unused', token: 'unused' })
+  const source = await snapshot()
+  const callerPath = join(tmpdir(), `agent-blackboard-snapshot-${randomUUID()}.jsonl`)
+  await writeFile(callerPath, await readFile(source), { mode: 0o400 })
+  const token = knownCleanupToken(source)!
+  try {
+    await expect(snapshots.partition({ path: callerPath, cleanupToken: token })).rejects.toThrow(
+      'ownership marker',
+    )
+    await expect(snapshots.cleanup({ path: callerPath, cleanupToken: token })).rejects.toThrow(
+      'ownership marker',
+    )
+    await expect(readFile(callerPath)).resolves.toBeTruthy()
+  } finally {
+    await rm(callerPath, { force: true })
+  }
+})
+
+it('rejects a generated path replaced after export because its marker is stale', async () => {
+  const snapshots = new Snapshots({ baseUrl: 'http://unused', token: 'unused' })
+  const source = await snapshot()
+  const replacement = join(tmpdir(), `replacement-${randomUUID()}.jsonl`)
+  await writeFile(replacement, await readFile(source), { mode: 0o400 })
+  await rm(source, { force: true })
+  await rename(replacement, source)
+  try {
+    await expect(snapshots.partition({ path: source })).rejects.toThrow('ownership marker')
+  } finally {
+    await rm(source, { force: true })
   }
 })
 
@@ -198,9 +262,9 @@ it('rejects user-chosen sources, invalid manifests, bad verification, and oversi
       snapshots.partition({ path: valid, checksum: { algorithm: 'sha256', value: 'wrong' } }),
     ).rejects.toThrow('checksum')
     await expect(snapshots.partition({ path: valid, maxBytes: 1 })).rejects.toThrow('too large')
-    await expect(snapshots.cleanup({ directory: outside })).rejects.toThrow(
-      'temporary partition directory',
-    )
+    await expect(
+      snapshots.cleanup({ directory: outside, cleanupToken: knownCleanupToken(valid)! }),
+    ).rejects.toThrow('temporary partition directory')
   } finally {
     await rm(outside, { force: true })
     await rm(invalid, { force: true })
@@ -261,15 +325,12 @@ it('validates generated paths, record structure, limits, and cleanup targets', a
     },
   ])
   const noManifest = await snapshot(sourceRecords().slice(0, -1))
-  const blank = join(tmpdir(), `agent-blackboard-snapshot-${randomUUID()}.jsonl`)
-  await writeFile(blank, '\n', { mode: 0o400 })
+  const blank = await snapshot('\n')
   const afterManifest = await snapshot([
     ...sourceRecords(),
     { type: 'session', session: { id: 'three' } },
   ])
-  const invalidJson = join(tmpdir(), `agent-blackboard-snapshot-${randomUUID()}.jsonl`)
-  await writeFile(invalidJson, '{invalid\n', { mode: 0o400 })
-  await chmod(invalidJson, 0o400)
+  const invalidJson = await snapshot('{invalid\n')
   const empty = await snapshot([
     {
       type: 'manifest',
@@ -348,41 +409,93 @@ it('validates generated paths, record structure, limits, and cleanup targets', a
     await expect(snapshots.cleanup({ directory: notDirectory })).rejects.toThrow(
       'not a generated directory',
     )
+    const notFile = join(tmpdir(), `agent-blackboard-snapshot-${randomUUID()}.jsonl`)
+    await mkdir(notFile)
+    await expect(
+      snapshots.cleanup({ path: notFile, cleanupToken: knownCleanupToken(valid)! }),
+    ).rejects.toThrow('not a generated regular file')
+    await rm(notFile, { recursive: true, force: true })
     const callerDirectory = await mkdtemp(join(tmpdir(), 'agent-blackboard-partitions-'))
-    await expect(snapshots.cleanup({ directory: callerDirectory })).rejects.toThrow(
-      'owned generated partition directory',
-    )
+    await expect(
+      snapshots.cleanup({ directory: callerDirectory, cleanupToken: knownCleanupToken(valid)! }),
+    ).rejects.toThrow('ownership marker')
     await expect(readdir(callerDirectory)).resolves.toEqual([])
     await rm(callerDirectory, { recursive: true, force: true })
     const forgedMarker = await mkdtemp(join(tmpdir(), 'agent-blackboard-partitions-'))
-    await writeFile(join(forgedMarker, '.agent-blackboard-partition-owner'), 'not-a-uuid\n')
-    await expect(snapshots.cleanup({ directory: forgedMarker })).rejects.toThrow(
-      'owned generated partition directory',
-    )
+    await writeFile(join(forgedMarker, '.agent-blackboard-partition-owner'), '{}\n')
+    await expect(
+      snapshots.cleanup({ directory: forgedMarker, cleanupToken: knownCleanupToken(valid)! }),
+    ).rejects.toThrow('ownership marker')
     await rm(forgedMarker, { recursive: true, force: true })
+    const malformedMarker = await mkdtemp(join(tmpdir(), 'agent-blackboard-partitions-'))
+    await writeFile(join(malformedMarker, '.agent-blackboard-partition-owner'), 'not-json\n')
+    await expect(
+      snapshots.cleanup({ directory: malformedMarker, cleanupToken: knownCleanupToken(valid)! }),
+    ).rejects.toThrow('ownership marker')
+    await rm(malformedMarker, { recursive: true, force: true })
+    const owned = await snapshots.partition({ path: valid })
+    const mismatchedDirectory = await mkdtemp(join(tmpdir(), 'agent-blackboard-partitions-'))
+    await chmod(mismatchedDirectory, 0o700)
+    try {
+      await writeFile(
+        join(mismatchedDirectory, '.agent-blackboard-partition-owner'),
+        await readFile(join(owned.directory, '.agent-blackboard-partition-owner')),
+        { mode: 0o400 },
+      )
+      await expect(
+        snapshots.cleanup({
+          directory: mismatchedDirectory,
+          cleanupToken: owned.cleanupToken,
+        }),
+      ).rejects.toThrow('does not match its directory')
+      await expect(readdir(mismatchedDirectory)).resolves.toContain(
+        '.agent-blackboard-partition-owner',
+      )
+    } finally {
+      await rm(mismatchedDirectory, { recursive: true, force: true })
+      await snapshots.cleanup({ directory: owned.directory, cleanupToken: owned.cleanupToken })
+    }
+    const unsafe = await snapshots.partition({ path: valid })
+    const nested = join(unsafe.directory, 'nested')
+    await mkdir(nested)
+    try {
+      await expect(
+        snapshots.cleanup({ directory: unsafe.directory, cleanupToken: unsafe.cleanupToken }),
+      ).rejects.toThrow('contains an unsafe entry')
+      await expect(readdir(unsafe.directory)).resolves.toContain('nested')
+    } finally {
+      await rm(nested, { recursive: true, force: true })
+      await snapshots.cleanup({ directory: unsafe.directory, cleanupToken: unsafe.cleanupToken })
+    }
     const linkedMarker = await mkdtemp(join(tmpdir(), 'agent-blackboard-partitions-'))
     const markerTarget = join(linkedMarker, 'marker-target')
     await writeFile(markerTarget, `${randomUUID()}\n`)
     await symlink(markerTarget, join(linkedMarker, '.agent-blackboard-partition-owner'))
-    await expect(snapshots.cleanup({ directory: linkedMarker })).rejects.toThrow(
-      'owned generated partition directory',
-    )
+    await expect(
+      snapshots.cleanup({ directory: linkedMarker, cleanupToken: knownCleanupToken(valid)! }),
+    ).rejects.toThrow('ownership marker')
     await rm(linkedMarker, { recursive: true, force: true })
     const hardlink = join(tmpdir(), `agent-blackboard-snapshot-${randomUUID()}.jsonl`)
     await link(valid, hardlink)
-    await expect(snapshots.partition({ path: hardlink })).rejects.toThrow(
-      'unlinked generated regular file',
-    )
+    await expect(
+      snapshots.partition({ path: hardlink, cleanupToken: knownCleanupToken(valid)! }),
+    ).rejects.toThrow('unlinked generated regular file')
     await rm(hardlink, { force: true })
     const symlinked = join(tmpdir(), `agent-blackboard-snapshot-${randomUUID()}.jsonl`)
     await symlink(valid, symlinked)
-    await expect(snapshots.partition({ path: symlinked })).rejects.toThrow(
-      'unlinked generated regular file',
-    )
+    await expect(
+      snapshots.partition({ path: symlinked, cleanupToken: knownCleanupToken(valid)! }),
+    ).rejects.toThrow('unlinked generated regular file')
     await rm(symlinked, { force: true })
     await expect(snapshots.cleanup({ directory: 'relative' })).rejects.toThrow(
       'generated temporary',
     )
+    for (const path of [
+      'C:\\agent-blackboard-partitions-0123456789',
+      '\\\\server\\share\\agent-blackboard-partitions-0123456789',
+    ]) {
+      await expect(snapshots.cleanup({ directory: path })).rejects.toThrow('generated temporary')
+    }
   } finally {
     await rm(valid, { force: true })
     await rm(malformed, { force: true })
@@ -449,5 +562,184 @@ it('attempts both cleanup targets and aggregates an unsafe target failure', asyn
     await expect(readFile(unsafeDirectory, 'utf8')).resolves.toBe('not a directory')
   } finally {
     await rm(unsafeDirectory, { force: true })
+  }
+})
+
+it('does not detach artifacts when its captured identity is stale and restores atomically', async () => {
+  const quarantine = await mkdtemp(join(tmpdir(), 'snapshot-quarantine-'))
+  const path = join(quarantine, 'artifact')
+  const wrongIdentity = { dev: 0n, ino: 0n }
+  await writeFile(path, 'artifact', { mode: 0o400 })
+  await expect(removeDetached(path, quarantine, 'artifact', wrongIdentity)).rejects.toThrow(
+    'changed while it was being removed',
+  )
+  await expect(readFile(path, 'utf8')).resolves.toBe('artifact')
+
+  const captured = join(quarantine, 'captured')
+  const original = join(quarantine, 'restored')
+  const capturedMarker = join(quarantine, 'captured.owner')
+  const marker = join(quarantine, 'restored.owner')
+  await writeFile(captured, 'captured', { mode: 0o400 })
+  await writeFile(capturedMarker, 'marker', { mode: 0o400 })
+  const identity = await stat(captured, { bigint: true })
+  const markerIdentity = await stat(capturedMarker, { bigint: true })
+  await restore(original, captured, marker, capturedMarker, identity, markerIdentity)
+  await expect(readFile(original, 'utf8')).resolves.toBe('captured')
+  await expect(readFile(marker, 'utf8')).resolves.toBe('marker')
+  const noMarkerCaptured = join(quarantine, 'captured-no-marker')
+  const noMarkerOriginal = join(quarantine, 'restored-no-marker')
+  await writeFile(noMarkerCaptured, 'no-marker', { mode: 0o400 })
+  const noMarkerIdentity = await stat(noMarkerCaptured, { bigint: true })
+  await restore(
+    noMarkerOriginal,
+    noMarkerCaptured,
+    undefined,
+    undefined,
+    noMarkerIdentity,
+    undefined,
+  )
+  await expect(readFile(noMarkerOriginal, 'utf8')).resolves.toBe('no-marker')
+  await rm(quarantine, { recursive: true, force: true })
+})
+
+it('does not remove directory contents when its captured identity is stale', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'snapshot-directory-'))
+  const quarantine = await mkdtemp(join(tmpdir(), 'snapshot-quarantine-'))
+  const child = join(directory, 'child')
+  await writeFile(child, 'preserve', { mode: 0o400 })
+  try {
+    await expect(
+      removeDirectoryContents(directory, quarantine, 'artifact', { dev: 0n, ino: 0n }),
+    ).rejects.toThrow('changed while it was being removed')
+    await expect(readFile(child, 'utf8')).resolves.toBe('preserve')
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+    await rm(quarantine, { recursive: true, force: true })
+  }
+})
+
+it('rejects hardlinked snapshot identities and non-directory ownership markers', async () => {
+  const source = await snapshot()
+  const hardlink = join(tmpdir(), `agent-blackboard-snapshot-${randomUUID()}.jsonl`)
+  const markerTarget = join(
+    tmpdir(),
+    `agent-blackboard-partitions-${randomUUID().replaceAll('-', '')}`,
+  )
+  await link(source, hardlink)
+  await writeFile(markerTarget, 'not-a-directory')
+  const file = await open(hardlink, 'r')
+  try {
+    await expect(writeSnapshotMarker(hardlink, file, createCleanupToken())).rejects.toThrow(
+      'private file',
+    )
+    await expect(assertSnapshotMarker(hardlink, file, createCleanupToken())).rejects.toThrow(
+      'private file',
+    )
+    await expect(writePartitionMarker(markerTarget, createCleanupToken())).rejects.toThrow(
+      'not a directory',
+    )
+  } finally {
+    await file.close()
+    await rm(hardlink, { force: true })
+    await rm(markerTarget, { force: true })
+  }
+})
+
+it('rejects a staged session path replaced before partition publication', async () => {
+  const source = await snapshot()
+  const stage = await mkdtemp(join(tmpdir(), 'agent-blackboard-partition-stage-'))
+  const output = await mkdtemp(join(tmpdir(), 'agent-blackboard-partitions-'))
+  const sourceFile = await open(source, 'r')
+  try {
+    const staged = await stageSnapshot(sourceFile, stage)
+    const stagedPath = join(stage, 'session-1.jsonl')
+    const replacement = join(stage, 'session-replacement.jsonl')
+    const originalIndex = await readFile(staged.index, 'utf8')
+    const [firstLine, ...remainingIndex] = originalIndex.trimEnd().split('\n')
+    const block = JSON.parse(firstLine!) as Record<string, unknown>
+    const writeIndex = async (next: Record<string, unknown>): Promise<void> => {
+      await writeFile(staged.index, `${[JSON.stringify(next), ...remainingIndex].join('\n')}\n`)
+    }
+    await writeIndex({ ...block, identity: { dev: 'invalid', ino: '1' } })
+    const invalidIdentityOutput = await mkdtemp(join(tmpdir(), 'agent-blackboard-partitions-'))
+    await expect(
+      writePartitions(
+        staged.index,
+        staged.indexIdentity,
+        staged.manifest,
+        invalidIdentityOutput,
+        25,
+        1024 * 1024,
+      ),
+    ).rejects.toThrow('invalid identity')
+    await rm(invalidIdentityOutput, { recursive: true, force: true })
+    await writeIndex({ ...block, path: join(stage, 'not-a-session.jsonl') })
+    const invalidPathOutput = await mkdtemp(join(tmpdir(), 'agent-blackboard-partitions-'))
+    await expect(
+      writePartitions(
+        staged.index,
+        staged.indexIdentity,
+        staged.manifest,
+        invalidPathOutput,
+        25,
+        1024 * 1024,
+      ),
+    ).rejects.toThrow('block path is invalid')
+    await rm(invalidPathOutput, { recursive: true, force: true })
+    await writeFile(staged.index, originalIndex)
+    const invalidIndexOutput = await mkdtemp(join(tmpdir(), 'agent-blackboard-partitions-'))
+    await expect(
+      writePartitions(
+        staged.index,
+        { dev: 'invalid', ino: 'invalid' },
+        staged.manifest,
+        invalidIndexOutput,
+        25,
+        1024 * 1024,
+      ),
+    ).rejects.toThrow('index has an invalid identity')
+    await rm(invalidIndexOutput, { recursive: true, force: true })
+    const replacedIndex = join(stage, 'index-replacement.jsonl')
+    await writeFile(replacedIndex, originalIndex)
+    await rm(staged.index, { force: true })
+    await rename(replacedIndex, staged.index)
+    const changedIndexOutput = await mkdtemp(join(tmpdir(), 'agent-blackboard-partitions-'))
+    await expect(
+      writePartitions(
+        staged.index,
+        staged.indexIdentity,
+        staged.manifest,
+        changedIndexOutput,
+        25,
+        1024 * 1024,
+      ),
+    ).rejects.toThrow('index changed before publication')
+    await rm(changedIndexOutput, { recursive: true, force: true })
+    await rm(staged.index, { force: true })
+    await writeFile(staged.index, originalIndex)
+    const restoredIndex = await stat(staged.index, { bigint: true })
+    const restoredIndexIdentity = {
+      dev: String(restoredIndex.dev),
+      ino: String(restoredIndex.ino),
+    }
+    await writeFile(replacement, await readFile(stagedPath), { mode: 0o600 })
+    await rm(stagedPath, { force: true })
+    await rename(replacement, stagedPath)
+    await expect(
+      writePartitions(
+        staged.index,
+        restoredIndexIdentity,
+        staged.manifest,
+        output,
+        25,
+        1024 * 1024,
+      ),
+    ).rejects.toThrow('staged snapshot block changed before publication')
+  } finally {
+    await sourceFile.close()
+    await rm(source, { force: true })
+    await rm(`${source}.owner`, { force: true })
+    await rm(stage, { recursive: true, force: true })
+    await rm(output, { recursive: true, force: true })
   }
 })

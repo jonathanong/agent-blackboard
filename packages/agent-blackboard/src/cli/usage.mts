@@ -12,9 +12,9 @@ Usage:
   agent-blackboard get --session-id <id> [--format json|jsonl|markdown]
   agent-blackboard snapshot export [--path <absolute-path>] [--agent <name>] [--version <version>]
     [--parent-session-id <id>|--root-only] [--data <json>] [--inactive-for-hours <hours>]
-  agent-blackboard snapshot partition --path <generated-snapshot> [--max-sessions <count>]
+  agent-blackboard snapshot partition --path <generated-snapshot> --cleanup-token <token> [--max-sessions <count>]
     [--max-bytes <bytes>] [--checksum <sha256>] [--sessions <count> --entries <count> --records <count> --bytes <count>]
-  agent-blackboard snapshot cleanup [--path <generated-snapshot>] [--directory <generated-partition-directory>]
+  agent-blackboard snapshot cleanup [--path <generated-snapshot>] [--directory <generated-partition-directory>] --cleanup-token <token>
   agent-blackboard credentials <subcommand>
   agent-blackboard mcp
 
