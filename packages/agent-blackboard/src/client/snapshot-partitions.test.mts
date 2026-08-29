@@ -120,6 +120,37 @@ async function appendAfterSourceEof(path: string): Promise<() => void> {
   }
 }
 
+async function overwriteDuringSourceRead(path: string): Promise<() => void> {
+  const probe = await open(path, 'r')
+  const expected = await probe.stat()
+  const prototype = Object.getPrototypeOf(probe) as {
+    read: (...args: unknown[]) => Promise<{ bytesRead: number }>
+  }
+  await probe.close()
+  const originalRead = prototype.read
+  let overwritten = false
+  prototype.read = async function (
+    this: { stat: () => Promise<{ dev: number; ino: number }> },
+    ...args: unknown[]
+  ): Promise<{ bytesRead: number }> {
+    const result = await originalRead.apply(this, args)
+    const info = await this.stat()
+    if (
+      !overwritten &&
+      result.bytesRead > 0 &&
+      info.dev === expected.dev &&
+      info.ino === expected.ino
+    ) {
+      overwritten = true
+      await writeFile(path, await readFile(path))
+    }
+    return result
+  }
+  return () => {
+    prototype.read = originalRead
+  }
+}
+
 it('partitions a generated snapshot by complete session and emits private terminal manifests', async () => {
   const path = await snapshot()
   const bytes = await readFile(path)
@@ -142,6 +173,7 @@ it('partitions a generated snapshot by complete session and emits private termin
       expect(lines.filter((line) => line.type === 'session')).toHaveLength(1)
       expect((await stat(partition.path)).mode & 0o777).toBe(0o400)
     }
+    expect(await readdir(result.directory)).toContain('.agent-blackboard-partition-owner')
     await snapshots.cleanup({ path, directory: result.directory })
     await expect(readdir(result.directory)).rejects.toThrow()
     await expect(readFile(path)).rejects.toThrow()
@@ -191,6 +223,30 @@ it('rejects post-EOF source growth and removes staging and output directories af
   const lateFailure = await snapshot()
   await expect(snapshots.partition({ path: lateFailure, maxBytes: 1 })).rejects.toThrow('too large')
   expect((await partitionArtifacts()).filter((name) => !before.includes(name))).toEqual([])
+})
+
+it('rejects same-size source changes during staging and restores a retryable cleanup path', async () => {
+  const snapshots = new Snapshots({ baseUrl: 'http://unused', token: 'unused' })
+  const before = await partitionArtifacts()
+  const source = await snapshot()
+  await chmod(source, 0o600)
+  const restoreRead = await overwriteDuringSourceRead(source)
+  try {
+    await expect(snapshots.partition({ path: source })).rejects.toThrow(
+      'changed while it was being read',
+    )
+    expect((await partitionArtifacts()).filter((name) => !before.includes(name))).toEqual([])
+  } finally {
+    restoreRead()
+  }
+  const result = await snapshots.partition({ path: await snapshot() })
+  await chmod(result.directory, 0o500)
+  await expect(snapshots.cleanup({ directory: result.directory })).rejects.toThrow(
+    'snapshot cleanup failed',
+  )
+  await expect(readdir(result.directory)).resolves.toContain('.agent-blackboard-partition-owner')
+  await chmod(result.directory, 0o700)
+  await expect(snapshots.cleanup({ directory: result.directory })).resolves.toBeUndefined()
 })
 
 it('validates generated paths, record structure, limits, and cleanup targets', async () => {
@@ -292,6 +348,26 @@ it('validates generated paths, record structure, limits, and cleanup targets', a
     await expect(snapshots.cleanup({ directory: notDirectory })).rejects.toThrow(
       'not a generated directory',
     )
+    const callerDirectory = await mkdtemp(join(tmpdir(), 'agent-blackboard-partitions-'))
+    await expect(snapshots.cleanup({ directory: callerDirectory })).rejects.toThrow(
+      'owned generated partition directory',
+    )
+    await expect(readdir(callerDirectory)).resolves.toEqual([])
+    await rm(callerDirectory, { recursive: true, force: true })
+    const forgedMarker = await mkdtemp(join(tmpdir(), 'agent-blackboard-partitions-'))
+    await writeFile(join(forgedMarker, '.agent-blackboard-partition-owner'), 'not-a-uuid\n')
+    await expect(snapshots.cleanup({ directory: forgedMarker })).rejects.toThrow(
+      'owned generated partition directory',
+    )
+    await rm(forgedMarker, { recursive: true, force: true })
+    const linkedMarker = await mkdtemp(join(tmpdir(), 'agent-blackboard-partitions-'))
+    const markerTarget = join(linkedMarker, 'marker-target')
+    await writeFile(markerTarget, `${randomUUID()}\n`)
+    await symlink(markerTarget, join(linkedMarker, '.agent-blackboard-partition-owner'))
+    await expect(snapshots.cleanup({ directory: linkedMarker })).rejects.toThrow(
+      'owned generated partition directory',
+    )
+    await rm(linkedMarker, { recursive: true, force: true })
     const hardlink = join(tmpdir(), `agent-blackboard-snapshot-${randomUUID()}.jsonl`)
     await link(valid, hardlink)
     await expect(snapshots.partition({ path: hardlink })).rejects.toThrow(
@@ -349,7 +425,9 @@ it('streams many session blocks through private staging and cleans each requeste
   expect(first.partitions).toHaveLength(6)
   await snapshots.cleanup({ path: source })
   await expect(readFile(source)).rejects.toThrow()
-  await expect(readdir(first.directory)).resolves.toHaveLength(6)
+  expect(
+    (await readdir(first.directory)).filter((name) => name.startsWith('partition-')),
+  ).toHaveLength(6)
   await snapshots.cleanup({ directory: first.directory })
   await expect(readdir(first.directory)).rejects.toThrow()
 })

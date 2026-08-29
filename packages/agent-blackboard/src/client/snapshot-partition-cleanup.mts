@@ -1,10 +1,12 @@
-import { lstat, rename, rm } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { lstat, open, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import type { SnapshotCleanupOptions } from './types.mjs'
 
 const SOURCE_NAME = /^agent-blackboard-snapshot-[0-9a-f-]{36}\.jsonl$/
 const DIRECTORY_NAME = /^agent-blackboard-partitions-[A-Za-z0-9]+$/
+const OWNER_MARKER = '.agent-blackboard-partition-owner'
 
 function assertGeneratedPath(path: string, expression: RegExp, label: string): void {
   if (
@@ -15,10 +17,47 @@ function assertGeneratedPath(path: string, expression: RegExp, label: string): v
     throw new Error(`${label} must be a generated temporary ${label}`)
 }
 
+/** Marks a newly generated partition directory so cleanup never recurses into a caller directory. */
+export async function markPartitionDirectory(directory: string): Promise<void> {
+  await writeFile(join(directory, OWNER_MARKER), `${crypto.randomUUID()}\n`, {
+    encoding: 'utf8',
+    mode: 0o400,
+    flag: 'wx',
+  })
+}
+
+async function assertOwnedPartitionDirectory(directory: string): Promise<void> {
+  const marker = join(directory, OWNER_MARKER)
+  let before
+  try {
+    before = await lstat(marker)
+  } catch {
+    throw new Error('partition directory is not an owned generated partition directory')
+  }
+  if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1)
+    throw new Error('partition directory is not an owned generated partition directory')
+  const file = await open(marker, constants.O_RDONLY | constants.O_NOFOLLOW)
+  try {
+    const opened = await file.stat()
+    if (
+      !opened.isFile() ||
+      opened.nlink !== 1 ||
+      opened.dev !== before.dev ||
+      opened.ino !== before.ino ||
+      !/^[0-9a-f-]{36}\n$/.test(Buffer.from(await file.readFile()).toString('utf8'))
+    )
+      throw new Error('partition directory is not an owned generated partition directory')
+  } finally {
+    await file.close()
+  }
+}
+
 async function removeCaptured(path: string, expression: RegExp, directory: boolean): Promise<void> {
   const label = directory ? 'partition directory' : 'snapshot path'
   assertGeneratedPath(path, expression, label)
   let initial
+  let captured = false
+  let renamed = false
   try {
     initial = await lstat(path)
   } catch (error: unknown) {
@@ -41,20 +80,35 @@ async function removeCaptured(path: string, expression: RegExp, directory: boole
   )
   try {
     await rename(path, tombstone)
-    const captured = await lstat(tombstone)
+    renamed = true
+    const capturedStat = await lstat(tombstone)
     /* v8 ignore next -- replacement after random tombstone rename is race-only */
     if (
-      captured.isSymbolicLink() ||
-      captured.dev !== initial.dev ||
-      captured.ino !== initial.ino ||
-      captured.isDirectory() !== directory ||
-      (!directory && (!captured.isFile() || captured.nlink !== 1))
+      capturedStat.isSymbolicLink() ||
+      capturedStat.dev !== initial.dev ||
+      capturedStat.ino !== initial.ino ||
+      capturedStat.isDirectory() !== directory ||
+      (!directory && (!capturedStat.isFile() || capturedStat.nlink !== 1))
     )
       throw new Error(`${label} changed while it was being removed`)
+    captured = true
+    if (directory) await assertOwnedPartitionDirectory(tombstone)
     await rm(tombstone, { recursive: directory, force: true })
   } catch (error: unknown) {
     /* v8 ignore next -- concurrent removal after capture is harmless */
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+    if (!renamed && (error as NodeJS.ErrnoException).code === 'ENOENT') return
+    /* v8 ignore next -- a changed tombstone is a race-only path that must never be restored */
+    if (captured) {
+      try {
+        await rename(tombstone, path)
+      } catch (restoreError) {
+        /* v8 ignore next -- requires another process to recreate the original random temporary path */
+        throw new AggregateError(
+          [error, restoreError],
+          `${label} removal failed and its original path could not be restored`,
+        )
+      }
+    }
     /* v8 ignore next -- non-ENOENT rename/removal failure requires an OS-level fault */
     throw error
   }

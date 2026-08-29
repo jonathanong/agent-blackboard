@@ -111,3 +111,39 @@ it('requires contiguous ordered session and entry records', () => {
     ),
   ).toThrow('entries are not ordered')
 })
+
+it('orders timestamps by their instant rather than their serialized offset', () => {
+  const first = parseSnapshotRecord(
+    JSON.stringify({
+      type: 'session',
+      session: {
+        id: 'one',
+        parentSessionId: null,
+        agent: 'agent',
+        version: '1',
+        createdAt: '2026-01-01T00:00:00Z',
+        lastEntryAt: null,
+        archivedAt: null,
+        data: {},
+      },
+    }),
+  )
+  const earlierOffset = parseSnapshotRecord(
+    JSON.stringify({
+      type: 'session',
+      session: {
+        id: 'two',
+        parentSessionId: null,
+        agent: 'agent',
+        version: '1',
+        createdAt: '2026-01-01T00:30:00+02:00',
+        lastEntryAt: null,
+        archivedAt: null,
+        data: {},
+      },
+    }),
+  )
+  const checked: SnapshotState = { sessions: 0, entries: 0, records: 0 }
+  consumeSnapshotRecord(first, checked)
+  expect(() => consumeSnapshotRecord(earlierOffset, checked)).toThrow('sessions are not ordered')
+})
