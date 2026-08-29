@@ -12,6 +12,7 @@ import {
   rm,
   stat,
   symlink,
+  truncate,
   writeFile,
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -25,6 +26,8 @@ import {
   writeSnapshotMarker,
 } from './snapshot-artifact-ownership.mjs'
 import { removeDetached, removeDirectoryContents, restore } from './snapshot-artifact-removal.mjs'
+import { assertExactFile, copyBlock } from './snapshot-partition-copy.mjs'
+import { readLines } from './snapshot-partition-io.mjs'
 import { stageSnapshot } from './snapshot-partition-read.mjs'
 import { assertPartitionFile, writePartitions } from './snapshot-partition-write.mjs'
 import { Snapshots } from './snapshots.mjs'
@@ -656,6 +659,247 @@ it('rejects every invalid partition publication identity', () => {
   }
 })
 
+it('rejects every invalid exact staged-file identity', () => {
+  const expected = { dev: 1n, ino: 2n, size: 3n }
+  const valid = { isFile: () => true, nlink: 1n, dev: 1n, ino: 2n, size: 3n }
+  expect(() => assertExactFile(valid, expected, 'invalid')).not.toThrow()
+  for (const invalid of [
+    { ...valid, isFile: () => false },
+    { ...valid, nlink: 2n },
+    { ...valid, dev: 3n },
+    { ...valid, ino: 4n },
+    { ...valid, size: 5n },
+  ]) {
+    expect(() => assertExactFile(invalid, expected, 'invalid')).toThrow('invalid')
+  }
+})
+
+it('rejects a staged block appended after its descriptor is opened', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'agent-blackboard-partition-copy-'))
+  const blockPath = join(directory, 'session-1.jsonl')
+  const outputPath = join(directory, 'partition.jsonl')
+  const contents = Buffer.from('{"type":"session"}\n')
+  await writeFile(blockPath, contents, { mode: 0o600 })
+  const identity = await stat(blockPath, { bigint: true })
+  const output = await open(outputPath, 'wx', 0o600)
+  try {
+    const originalWrite = output.write.bind(output) as (
+      data: NodeJS.ArrayBufferView,
+      offset?: number,
+      length?: number,
+      position?: number,
+    ) => ReturnType<typeof output.write>
+    let appended = false
+    output.write = (async (data, offset, length, position) => {
+      if (!appended) {
+        appended = true
+        await appendFile(blockPath, 'unexpected')
+      }
+      return originalWrite(data, offset ?? undefined, length ?? undefined, position ?? undefined)
+    }) as typeof output.write
+    await expect(
+      copyBlock(
+        {
+          sessionId: 'one',
+          path: blockPath,
+          identity: { dev: String(identity.dev), ino: String(identity.ino) },
+          bytes: contents.byteLength,
+          sessions: 1,
+          entries: 0,
+        },
+        output,
+        createHash('sha256'),
+      ),
+    ).rejects.toThrow('staged snapshot block changed before publication')
+  } finally {
+    await output.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+it('rejects a staged block that ends before its recorded byte count', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'agent-blackboard-partition-copy-'))
+  const blockPath = join(directory, 'session-1.jsonl')
+  const outputPath = join(directory, 'partition.jsonl')
+  const contents = Buffer.from('{"type":"session"}\n')
+  await writeFile(blockPath, contents, { mode: 0o600 })
+  const identity = await stat(blockPath, { bigint: true })
+  const output = await open(outputPath, 'wx', 0o600)
+  try {
+    await expect(
+      copyBlock(
+        {
+          sessionId: 'one',
+          path: blockPath,
+          identity: { dev: String(identity.dev), ino: String(identity.ino) },
+          bytes: contents.byteLength + 1,
+          sessions: 1,
+          entries: 0,
+        },
+        output,
+        createHash('sha256'),
+      ),
+    ).rejects.toThrow('staged snapshot block changed before publication')
+  } finally {
+    await output.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+it('rejects invalid staged block byte counts', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'agent-blackboard-partition-copy-'))
+  const blockPath = join(directory, 'session-1.jsonl')
+  const outputPath = join(directory, 'partition.jsonl')
+  await writeFile(blockPath, '{"type":"session"}\n', { mode: 0o600 })
+  const identity = await stat(blockPath, { bigint: true })
+  const output = await open(outputPath, 'wx', 0o600)
+  try {
+    for (const bytes of [-1, Number.MAX_SAFE_INTEGER + 1]) {
+      await expect(
+        copyBlock(
+          {
+            sessionId: 'one',
+            path: blockPath,
+            identity: { dev: String(identity.dev), ino: String(identity.ino) },
+            bytes,
+            sessions: 1,
+            entries: 0,
+          },
+          output,
+          createHash('sha256'),
+        ),
+      ).rejects.toThrow('staged snapshot block has an invalid identity')
+    }
+  } finally {
+    await output.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+it('copies a staged block larger than one read buffer exactly', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'agent-blackboard-partition-copy-'))
+  const blockPath = join(directory, 'session-1.jsonl')
+  const outputPath = join(directory, 'partition.jsonl')
+  const contents = Buffer.alloc(64 * 1024 + 1, 'x')
+  await writeFile(blockPath, contents, { mode: 0o600 })
+  const identity = await stat(blockPath, { bigint: true })
+  const output = await open(outputPath, 'wx', 0o600)
+  try {
+    await copyBlock(
+      {
+        sessionId: 'one',
+        path: blockPath,
+        identity: { dev: String(identity.dev), ino: String(identity.ino) },
+        bytes: contents.byteLength,
+        sessions: 1,
+        entries: 0,
+      },
+      output,
+      createHash('sha256'),
+    )
+  } finally {
+    await output.close()
+  }
+  try {
+    await expect(readFile(outputPath)).resolves.toEqual(contents)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+it('rejects a staged block truncated after descriptor verification', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'agent-blackboard-partition-copy-'))
+  const blockPath = join(directory, 'session-1.jsonl')
+  const outputPath = join(directory, 'partition.jsonl')
+  await writeFile(blockPath, '{"type":"session"}\n', { mode: 0o600 })
+  const identity = await stat(blockPath, { bigint: true })
+  const output = await open(outputPath, 'wx', 0o600)
+  const control = await open(blockPath, 'r')
+  const prototype = Object.getPrototypeOf(control) as {
+    read: (this: unknown, ...args: unknown[]) => unknown
+  }
+  const originalRead = prototype.read
+  let truncated = false
+  prototype.read = async function (this: unknown, ...args: unknown[]) {
+    if (!truncated) {
+      truncated = true
+      await truncate(blockPath, 0)
+    }
+    return Reflect.apply(originalRead, this, args)
+  }
+  try {
+    await expect(
+      copyBlock(
+        {
+          sessionId: 'one',
+          path: blockPath,
+          identity: { dev: String(identity.dev), ino: String(identity.ino) },
+          bytes: Number(identity.size),
+          sessions: 1,
+          entries: 0,
+        },
+        output,
+        createHash('sha256'),
+      ),
+    ).rejects.toThrow('staged snapshot block changed before publication')
+  } finally {
+    prototype.read = originalRead
+    await control.close()
+    await output.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+it('rejects an index appended after its descriptor is opened', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'agent-blackboard-partition-index-'))
+  const index = join(directory, 'index.jsonl')
+  const contents = Buffer.from('{"sessionId":"one"}\n')
+  await writeFile(index, contents, { mode: 0o600 })
+  const file = await open(index, 'r')
+  try {
+    const lines: string[] = []
+    await expect(
+      (async () => {
+        for await (const line of readLines(
+          file,
+          undefined,
+          async () => appendFile(index, 'unexpected'),
+          BigInt(contents.byteLength),
+          'staged snapshot index',
+        ))
+          lines.push(line)
+      })(),
+    ).rejects.toThrow('staged snapshot index changed during publication')
+    expect(lines).toEqual(['{"sessionId":"one"}'])
+  } finally {
+    await file.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+it('rejects short and invalid bounded index reads', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'agent-blackboard-partition-index-'))
+  const index = join(directory, 'index.jsonl')
+  await writeFile(index, '{"sessionId":"one"}\n', { mode: 0o600 })
+  const consume = async (expectedBytes: bigint) => {
+    const file = await open(index, 'r')
+    try {
+      for await (const _line of readLines(file, undefined, undefined, expectedBytes, 'index')) {
+        // Consume the generator so its bounded-read validation runs.
+      }
+    } finally {
+      await file.close()
+    }
+  }
+  try {
+    await expect(consume(1024n)).rejects.toThrow('index changed during publication')
+    for (const expectedBytes of [-1n, BigInt(Number.MAX_SAFE_INTEGER) + 1n])
+      await expect(consume(expectedBytes)).rejects.toThrow('index has an invalid size')
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 it('rejects a staged session path replaced before partition publication', async () => {
   const source = await snapshot()
   const stage = await mkdtemp(join(tmpdir(), 'agent-blackboard-partition-stage-'))
@@ -668,15 +912,17 @@ it('rejects a staged session path replaced before partition publication', async 
     const originalIndex = await readFile(staged.index, 'utf8')
     const [firstLine, ...remainingIndex] = originalIndex.trimEnd().split('\n')
     const block = JSON.parse(firstLine!) as Record<string, unknown>
-    const writeIndex = async (next: Record<string, unknown>): Promise<void> => {
+    const writeIndex = async (next: Record<string, unknown>) => {
       await writeFile(staged.index, `${[JSON.stringify(next), ...remainingIndex].join('\n')}\n`)
+      const identity = await stat(staged.index, { bigint: true })
+      return { dev: String(identity.dev), ino: String(identity.ino), size: String(identity.size) }
     }
-    await writeIndex({ ...block, identity: { dev: 'invalid', ino: '1' } })
+    const invalidBlockIndex = await writeIndex({ ...block, identity: { dev: 'invalid', ino: '1' } })
     const invalidIdentityOutput = await mkdtemp(join(tmpdir(), 'agent-blackboard-partitions-'))
     await expect(
       writePartitions(
         staged.index,
-        staged.indexIdentity,
+        invalidBlockIndex,
         staged.manifest,
         invalidIdentityOutput,
         25,
@@ -684,12 +930,15 @@ it('rejects a staged session path replaced before partition publication', async 
       ),
     ).rejects.toThrow('invalid identity')
     await rm(invalidIdentityOutput, { recursive: true, force: true })
-    await writeIndex({ ...block, path: join(stage, 'not-a-session.jsonl') })
+    const invalidPathIndex = await writeIndex({
+      ...block,
+      path: join(stage, 'not-a-session.jsonl'),
+    })
     const invalidPathOutput = await mkdtemp(join(tmpdir(), 'agent-blackboard-partitions-'))
     await expect(
       writePartitions(
         staged.index,
-        staged.indexIdentity,
+        invalidPathIndex,
         staged.manifest,
         invalidPathOutput,
         25,
@@ -698,11 +947,26 @@ it('rejects a staged session path replaced before partition publication', async 
     ).rejects.toThrow('block path is invalid')
     await rm(invalidPathOutput, { recursive: true, force: true })
     await writeFile(staged.index, originalIndex)
+    const restoredIndex = await stat(staged.index, { bigint: true })
+    for (const size of ['-1', String(BigInt(Number.MAX_SAFE_INTEGER) + 1n)]) {
+      const invalidSizeOutput = await mkdtemp(join(tmpdir(), 'agent-blackboard-partitions-'))
+      await expect(
+        writePartitions(
+          staged.index,
+          { dev: String(restoredIndex.dev), ino: String(restoredIndex.ino), size },
+          staged.manifest,
+          invalidSizeOutput,
+          25,
+          1024 * 1024,
+        ),
+      ).rejects.toThrow('index has an invalid identity')
+      await rm(invalidSizeOutput, { recursive: true, force: true })
+    }
     const invalidIndexOutput = await mkdtemp(join(tmpdir(), 'agent-blackboard-partitions-'))
     await expect(
       writePartitions(
         staged.index,
-        { dev: 'invalid', ino: 'invalid' },
+        { dev: 'invalid', ino: 'invalid', size: 'invalid' },
         staged.manifest,
         invalidIndexOutput,
         25,
@@ -728,10 +992,11 @@ it('rejects a staged session path replaced before partition publication', async 
     await rm(changedIndexOutput, { recursive: true, force: true })
     await rm(staged.index, { force: true })
     await writeFile(staged.index, originalIndex)
-    const restoredIndex = await stat(staged.index, { bigint: true })
+    const restoredIndexAfterReplacement = await stat(staged.index, { bigint: true })
     const restoredIndexIdentity = {
-      dev: String(restoredIndex.dev),
-      ino: String(restoredIndex.ino),
+      dev: String(restoredIndexAfterReplacement.dev),
+      ino: String(restoredIndexAfterReplacement.ino),
+      size: String(restoredIndexAfterReplacement.size),
     }
     await writeFile(replacement, await readFile(stagedPath), { mode: 0o600 })
     await rm(stagedPath, { force: true })

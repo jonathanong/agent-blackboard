@@ -19,7 +19,7 @@ export interface StagedSnapshot {
   bytes: number
   checksum: string
   index: string
-  indexIdentity: { dev: string; ino: string }
+  indexIdentity: { dev: string; ino: string; size: string }
 }
 
 /** Reads source once through its opened descriptor and stages session groups privately on disk. */
@@ -96,7 +96,11 @@ export async function stageSnapshot(
       bytes,
       checksum: hash.digest('hex'),
       index,
-      indexIdentity: { dev: String(indexIdentity.dev), ino: String(indexIdentity.ino) },
+      indexIdentity: {
+        dev: String(indexIdentity.dev),
+        ino: String(indexIdentity.ino),
+        size: String(indexIdentity.size),
+      },
     }
   } finally {
     /* v8 ignore next -- best-effort closure must not mask parse failure */

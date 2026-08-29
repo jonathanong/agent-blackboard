@@ -11,7 +11,7 @@ import {
 } from './snapshot-partition-format.mjs'
 import { readLines, writeAll } from './snapshot-partition-io.mjs'
 import { assertDirectoryIdentity, captureDirectoryIdentity } from './snapshot-artifact-removal.mjs'
-import { copyBlock } from './snapshot-partition-copy.mjs'
+import { assertExactFile, copyBlock } from './snapshot-partition-copy.mjs'
 import type { SnapshotManifest, SnapshotPartition } from './types.mjs'
 
 type PartitionFileStats = {
@@ -49,7 +49,7 @@ function assertStagedBlockPath(block: SnapshotBlock, index: string): void {
 /** Replays private staged groups into bounded, immutable partition files. */
 export async function writePartitions(
   index: string,
-  indexIdentity: { dev: string; ino: string },
+  indexIdentity: { dev: string; ino: string; size: string },
   manifest: SnapshotManifest,
   directory: string,
   maxSessions: number,
@@ -68,20 +68,23 @@ export async function writePartitions(
   await assertStage()
   let expectedIndex
   try {
-    expectedIndex = { dev: BigInt(indexIdentity.dev), ino: BigInt(indexIdentity.ino) }
+    expectedIndex = {
+      dev: BigInt(indexIdentity.dev),
+      ino: BigInt(indexIdentity.ino),
+      size: BigInt(indexIdentity.size),
+    }
+    if (expectedIndex.size < 0n || expectedIndex.size > BigInt(Number.MAX_SAFE_INTEGER))
+      throw new Error('staged snapshot index has an invalid identity')
   } catch {
     await indexFile.close()
     throw new Error('staged snapshot index has an invalid identity')
   }
   const openedIndex = await indexFile.stat({ bigint: true })
-  if (
-    !openedIndex.isFile() ||
-    openedIndex.nlink !== 1n ||
-    openedIndex.dev !== expectedIndex.dev ||
-    openedIndex.ino !== expectedIndex.ino
-  ) {
+  try {
+    assertExactFile(openedIndex, expectedIndex, 'staged snapshot index changed before publication')
+  } catch (error) {
     await indexFile.close()
-    throw new Error('staged snapshot index changed before publication')
+    throw error
   }
   let active:
     | {
@@ -142,7 +145,13 @@ export async function writePartitions(
     active = undefined
   }
   try {
-    for await (const sourceLine of readLines(indexFile)) {
+    for await (const sourceLine of readLines(
+      indexFile,
+      undefined,
+      undefined,
+      expectedIndex.size,
+      'staged snapshot index',
+    )) {
       await assertStage()
       const block = JSON.parse(sourceLine) as SnapshotBlock
       assertStagedBlockPath(block, index)
@@ -171,6 +180,12 @@ export async function writePartitions(
       await copyBlock(block, target.file, target.hash)
       await assertStage()
     }
+    const completedIndex = await indexFile.stat({ bigint: true })
+    assertExactFile(
+      completedIndex,
+      expectedIndex,
+      'staged snapshot index changed before publication',
+    )
     await finish()
     await assertStage()
     await assertOutput()

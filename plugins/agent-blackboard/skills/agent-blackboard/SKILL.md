@@ -67,6 +67,11 @@ and accepts either generated artifact or both; use it when the bounded evidence 
 Explicit `snapshot export --path` destinations remain available for caller-controlled export, but
 cannot be partitioned or cleaned up by these commands.
 
+Generated names, private modes, capabilities, and identity checks reject substitutions visible at
+operation boundaries. Do not place snapshot artifacts where a malicious concurrent process with the
+same operating-system user identity can swap pathnames between those checks; that race is outside
+the pure-Node package boundary.
+
 ## What this skill does not do
 
 This skill only covers **how** to create sessions and append and get entries. It does not prescribe
