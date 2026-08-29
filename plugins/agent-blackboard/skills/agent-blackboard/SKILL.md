@@ -51,19 +51,26 @@ npx -y agent-blackboard@0.4.0 sessions patch worker-456 --data '{"branch":"fix/r
 npx -y agent-blackboard@0.4.0 append --session-id worker-456 '{"note":"found the failing edge case"}'
 npx -y agent-blackboard@0.4.0 get --session-id worker-456 --format markdown
 npx -y agent-blackboard@0.4.0 snapshot export --root-only --inactive-for-hours 8
-npx -y agent-blackboard@0.4.0 snapshot partition --path /tmp/agent-blackboard-snapshot-<uuid>.jsonl
+npx -y agent-blackboard@0.4.0 snapshot partition --path /tmp/agent-blackboard-snapshot-<uuid>.jsonl \
+  --cleanup-token <cleanup-token>
 npx -y agent-blackboard@0.4.0 snapshot cleanup --path /tmp/agent-blackboard-snapshot-<uuid>.jsonl \
-  --directory /tmp/agent-blackboard-partitions-<suffix>
+  --directory /tmp/agent-blackboard-partitions-<suffix> --cleanup-token <cleanup-token>
 ```
 
 Output defaults to JSON; pass `--format jsonl` or `--format markdown` for streaming or
 human-readable reads.
 
-`snapshot partition` accepts only a generated temporary export path, preserves whole sessions and
-their entry order, and creates private read-only partition files. It defaults to 25 sessions or
-1 MiB per partition. `snapshot cleanup` accepts either generated artifact or both; use it when the
-bounded evidence is no longer needed. Explicit `snapshot export --path` destinations remain available
-for caller-controlled export, but cannot be partitioned or cleaned up by these commands.
+`snapshot partition` accepts only a generated temporary export path plus the cleanup token printed by
+export, preserves whole sessions and their entry order, and creates private read-only partition
+files. It defaults to 25 sessions or 1 MiB per partition. `snapshot cleanup` requires the same token
+and accepts either generated artifact or both; use it when the bounded evidence is no longer needed.
+Explicit `snapshot export --path` destinations remain available for caller-controlled export, but
+cannot be partitioned or cleaned up by these commands.
+
+Generated names, private modes, capabilities, and identity checks reject substitutions visible at
+operation boundaries. Do not place snapshot artifacts where a malicious concurrent process with the
+same operating-system user identity can swap pathnames between those checks; that race is outside
+the pure-Node package boundary.
 
 ## What this skill does not do
 

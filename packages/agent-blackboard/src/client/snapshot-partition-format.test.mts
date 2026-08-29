@@ -30,6 +30,32 @@ it('strictly validates snapshot record and terminal manifest shapes', () => {
     {
       type: 'session',
       session: {
+        id: 'invalid/id',
+        parentSessionId: null,
+        agent: 'agent',
+        version: '1',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        lastEntryAt: null,
+        archivedAt: null,
+        data: {},
+      },
+    },
+    {
+      type: 'session',
+      session: {
+        id: 's',
+        parentSessionId: '',
+        agent: 'agent',
+        version: '1',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        lastEntryAt: null,
+        archivedAt: null,
+        data: {},
+      },
+    },
+    {
+      type: 'session',
+      session: {
         id: 's',
         parentSessionId: null,
         agent: 'agent',
@@ -57,6 +83,10 @@ it('strictly validates snapshot record and terminal manifest shapes', () => {
     {
       type: 'entry',
       entry: { sessionId: 'bad id', createdAt: '2026-01-01T00:00:00.000Z', data: {} },
+    },
+    {
+      type: 'entry',
+      entry: { sessionId: 'invalid/id', createdAt: '2026-01-01T00:00:00.000Z', data: {} },
     },
     { type: 'manifest', manifest: [] },
   ]) {
@@ -147,4 +177,76 @@ it('requires contiguous ordered session and entry records', () => {
       laterEntryState,
     ),
   ).toThrow('entries are not ordered')
+})
+
+it('orders timestamps by their instant rather than their serialized offset', () => {
+  const first = parseSnapshotRecord(
+    JSON.stringify({
+      type: 'session',
+      session: {
+        id: 'one',
+        parentSessionId: null,
+        agent: 'agent',
+        version: '1',
+        createdAt: '2026-01-01T00:00:00Z',
+        lastEntryAt: null,
+        archivedAt: null,
+        data: {},
+      },
+    }),
+  )
+  const earlierOffset = parseSnapshotRecord(
+    JSON.stringify({
+      type: 'session',
+      session: {
+        id: 'two',
+        parentSessionId: null,
+        agent: 'agent',
+        version: '1',
+        createdAt: '2026-01-01T00:30:00+02:00',
+        lastEntryAt: null,
+        archivedAt: null,
+        data: {},
+      },
+    }),
+  )
+  const checked: SnapshotState = { sessions: 0, entries: 0, records: 0 }
+  consumeSnapshotRecord(first, checked)
+  expect(() => consumeSnapshotRecord(earlierOffset, checked)).toThrow('sessions are not ordered')
+})
+
+it('checks ordering after an epoch-zero timestamp', () => {
+  const first = parseSnapshotRecord(
+    JSON.stringify({
+      type: 'session',
+      session: {
+        id: 'one',
+        parentSessionId: null,
+        agent: 'agent',
+        version: '1',
+        createdAt: '1970-01-01T00:00:00.000Z',
+        lastEntryAt: null,
+        archivedAt: null,
+        data: {},
+      },
+    }),
+  )
+  const earlier = parseSnapshotRecord(
+    JSON.stringify({
+      type: 'session',
+      session: {
+        id: 'two',
+        parentSessionId: null,
+        agent: 'agent',
+        version: '1',
+        createdAt: '1969-12-31T23:59:59.999Z',
+        lastEntryAt: null,
+        archivedAt: null,
+        data: {},
+      },
+    }),
+  )
+  const checked: SnapshotState = { sessions: 0, entries: 0, records: 0 }
+  consumeSnapshotRecord(first, checked)
+  expect(() => consumeSnapshotRecord(earlier, checked)).toThrow('sessions are not ordered')
 })

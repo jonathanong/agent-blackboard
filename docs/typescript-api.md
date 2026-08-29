@@ -269,27 +269,40 @@ must not exist. `selection` supports exact `agent`, `version`, `parentSessionId`
 
 The method incrementally validates the JSONL records and terminal manifest, computes a SHA-256
 checksum over the exact file bytes, syncs the file, and changes it from private writable mode to
-read-only mode. It deletes incomplete output on any failure. The returned object contains only the
-path, session/entry/record/byte counts, checksum, and manifest; it never buffers or returns all
-snapshot evidence.
+read-only mode. It deletes incomplete output on any failure. Generated temporary exports also return
+a random `cleanupToken`; explicit `path` destinations do not receive one and remain caller-owned.
+The returned object contains only the path, session/entry/record/byte counts, checksum, manifest,
+and (for generated exports) capability; it never buffers or returns all snapshot evidence.
 
 ### `partition(options): Promise<SnapshotPartitionResult>` and `cleanup(options): Promise<void>`
 
 ```ts
 const result = await snapshots.partition({
   path: exported.path,
+  cleanupToken: exported.cleanupToken,
   checksum: exported.checksum,
   counts: exported.counts,
 })
-await snapshots.cleanup({ path: exported.path, directory: result.directory })
+await snapshots.cleanup({
+  path: exported.path,
+  directory: result.directory,
+  cleanupToken: result.cleanupToken,
+})
 ```
 
-Partitioning only accepts a generated temporary export path. It verifies the source's complete
+Partitioning only accepts a generated temporary export path and its cleanup capability. It verifies the source's complete
 schema-1 manifest, optionally verifies the caller's checksum and counts, and emits private
 read-only JSONL files with their own terminal manifests. Sessions and their ordered entries remain
 whole and contiguous. The defaults are 25 sessions and 1 MiB per partition; a session that cannot
 fit is rejected. Cleanup accepts either generated artifact or both. Explicit absolute export
-destinations stay caller-owned and cannot be partitioned or cleaned up.
+destinations stay caller-owned and cannot be partitioned or cleaned up. The cleanup capability is
+required for cross-process CLI use; library calls in the same process may reuse the generated
+artifact's tracked capability.
+
+The generated names, private modes, capability, and identity checks reject substitutions visible at
+each operation boundary. This pure-Node implementation cannot defend against a malicious concurrent
+process running as the same operating-system user that swaps a pathname between those checks; do not
+use these temporary artifacts across mutually untrusted same-UID processes.
 
 ### `SessionEntry`
 
