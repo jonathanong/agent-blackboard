@@ -133,6 +133,45 @@ export interface SnapshotExportOptions {
 export interface SnapshotExportResult {
   path: string
   counts: SnapshotCounts
-  checksum: { algorithm: 'sha256'; value: string }
+  checksum: SnapshotChecksum
   manifest: SnapshotManifest
+}
+
+export interface SnapshotChecksum {
+  algorithm: 'sha256'
+  value: string
+}
+
+/** Verification metadata returned by `Snapshots.export` and accepted by `partition`. */
+export interface SnapshotVerification {
+  checksum?: SnapshotChecksum
+  counts?: SnapshotCounts
+}
+
+export interface SnapshotPartitionOptions extends SnapshotVerification {
+  /** A generated temporary snapshot returned by `Snapshots.export` without `path`. */
+  path: string
+  /** Maximum whole sessions in one partition. Defaults to 25. */
+  maxSessions?: number
+  /** Maximum bytes in one partition. Defaults to 1 MiB. */
+  maxBytes?: number
+}
+
+export interface SnapshotPartition {
+  path: string
+  counts: SnapshotCounts
+  checksum: SnapshotChecksum
+  manifest: SnapshotManifest
+}
+
+export interface SnapshotPartitionResult {
+  directory: string
+  partitions: SnapshotPartition[]
+}
+
+export interface SnapshotCleanupOptions {
+  /** A generated temporary snapshot returned by `Snapshots.export` without `path`. */
+  path?: string
+  /** A generated temporary partition directory returned by `Snapshots.partition`. */
+  directory?: string
 }

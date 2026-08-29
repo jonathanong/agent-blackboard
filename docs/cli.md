@@ -64,6 +64,9 @@ agent-blackboard snapshot export --path /absolute/path/evidence.jsonl
 agent-blackboard snapshot export --root-only --inactive-for-hours 8
 agent-blackboard snapshot export --agent codex --version 1.0.0 \
   --data '{"repository":"example/tooling"}'
+agent-blackboard snapshot partition --path /tmp/agent-blackboard-snapshot-<uuid>.jsonl
+agent-blackboard snapshot cleanup --path /tmp/agent-blackboard-snapshot-<uuid>.jsonl \
+  --directory /tmp/agent-blackboard-partitions-<suffix>
 ```
 
 The command streams every matching unarchived session and entry into a newly created private file.
@@ -75,6 +78,13 @@ manifest. Partial or invalid snapshots are deleted.
 Use `--parent-session-id <id>` for exact children or `--root-only` for roots; the two flags are
 mutually exclusive. `--agent`, `--version`, `--data`, and `--inactive-for-hours` apply the same
 exact filters as session listing. The export always excludes archived sessions.
+
+`snapshot partition` accepts only a generated temporary export path, not a caller-selected
+`snapshot export --path` destination. It verifies the terminal schema-1 manifest and may verify
+`--checksum <sha256>` plus all four `--sessions`, `--entries`, `--records`, and `--bytes` counts.
+It preserves each contiguous session and its ordered entries, defaults to 25 sessions or 1 MiB per
+read-only partition, and rejects an oversize session instead of splitting it. `snapshot cleanup`
+accepts either generated path, or both, and attempts all requested cleanup safely.
 
 ## Credentials
 

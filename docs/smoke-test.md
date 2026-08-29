@@ -39,10 +39,14 @@ local server started with `AGENT_BLACKBOARD_STORE=memory pnpm --dir packages/ser
 >    stdout contains only path/counts/checksum/manifest, the JSONL file ends in a complete manifest,
 >    counts and checksum match its bytes, and the file is read-only. Use MCP `snapshot_export`
 >    without a path and verify the same compact result, that archived sessions are absent, and no
->    entry records crossed MCP. Remove both snapshot files.
-> 10. Across CLI and MCP, verify omitted session id, parent id, agent, or version is rejected. Verify
+>    entry records crossed MCP. Keep the generated snapshot for the next step.
+> 10. With the CLI, partition the generated MCP snapshot using its path, checksum, and counts. Verify
+>     the partitions contain complete contiguous sessions, end in complete manifests, and are read-only.
+>     Verify cleanup removes both the generated snapshot and partition directory. Verify an explicitly
+>     chosen export path is rejected by both partition and cleanup.
+> 11. Across CLI and MCP, verify omitted session id, parent id, agent, or version is rejected. Verify
 >     appending to a never-created session is rejected and no id was silently generated.
-> 11. Report every command/tool call, returned session/entry shape, and invariant failure. Do not
+> 12. Report every command/tool call, returned session/entry shape, and invariant failure. Do not
 >     modify repository files.
 
 The smoke passes only if both interfaces agree, root and child sessions remain separate, the child

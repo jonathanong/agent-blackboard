@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { sendJson, startHttpFixture } from './__tests__/http-fixture.mjs'
-import { AgentBlackboardError, Auth, Entries, formatError, Sessions, Snapshots } from './index.mjs'
+import {
+  AgentBlackboardError,
+  Auth,
+  cleanupSnapshotPartitions,
+  Entries,
+  formatError,
+  partitionSnapshot,
+  Sessions,
+  Snapshots,
+} from './index.mjs'
 
 describe('public API', () => {
   it('exports Sessions, Entries, Snapshots, Auth, AgentBlackboardError, and formatError', async () => {
@@ -29,6 +38,8 @@ describe('public API', () => {
       ).toEqual(session)
       expect(new Entries({ baseUrl: fixture.baseUrl, token: 't' })).toBeInstanceOf(Entries)
       expect(new Snapshots({ baseUrl: fixture.baseUrl, token: 't' })).toBeInstanceOf(Snapshots)
+      expect(partitionSnapshot).toBeTypeOf('function')
+      expect(cleanupSnapshotPartitions).toBeTypeOf('function')
       await expect(
         new Auth({ baseUrl: fixture.baseUrl, adminToken: 'admin' }).listCredentials(),
       ).rejects.toBeInstanceOf(AgentBlackboardError)

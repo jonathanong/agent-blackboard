@@ -17,6 +17,8 @@ export { Entries } from './client/entries.mjs'
 export { formatError } from './format-error.mjs'
 export { Sessions } from './client/sessions.mjs'
 export { Snapshots } from './client/snapshots.mjs'
+export { cleanupSnapshotPartitions } from './client/snapshot-partition-cleanup.mjs'
+export { partitionSnapshot } from './client/snapshot-partitions.mjs'
 export type {
   AppendEntryInput,
   ClientConfig,
@@ -35,6 +37,12 @@ export type {
   SnapshotCounts,
   SnapshotExportOptions,
   SnapshotExportResult,
+  SnapshotChecksum,
+  SnapshotCleanupOptions,
   SnapshotManifest,
+  SnapshotPartition,
+  SnapshotPartitionOptions,
+  SnapshotPartitionResult,
   SnapshotSelection,
+  SnapshotVerification,
 } from './client/types.mjs'

@@ -4,11 +4,16 @@ import { tmpdir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import { rawRequest } from './http.mjs'
 import { readSnapshot } from './snapshot-response.mjs'
+import { cleanupSnapshotPartitions } from './snapshot-partition-cleanup.mjs'
+import { partitionSnapshot } from './snapshot-partitions.mjs'
 import type {
   ClientConfig,
   SnapshotExportOptions,
   SnapshotExportResult,
   SnapshotSelection,
+  SnapshotCleanupOptions,
+  SnapshotPartitionOptions,
+  SnapshotPartitionResult,
 } from './types.mjs'
 
 type File = Awaited<ReturnType<typeof open>>
@@ -83,5 +88,15 @@ export class Snapshots {
       if (file) await file.close().catch(() => undefined)
       if (!complete) await rm(target.path, { force: true })
     }
+  }
+
+  /** Splits a generated export into bounded session-preserving files. */
+  partition(options: SnapshotPartitionOptions): Promise<SnapshotPartitionResult> {
+    return partitionSnapshot(options)
+  }
+
+  /** Removes a generated partition directory. */
+  cleanup(options: SnapshotCleanupOptions): Promise<void> {
+    return cleanupSnapshotPartitions(options)
   }
 }

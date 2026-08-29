@@ -273,6 +273,24 @@ read-only mode. It deletes incomplete output on any failure. The returned object
 path, session/entry/record/byte counts, checksum, and manifest; it never buffers or returns all
 snapshot evidence.
 
+### `partition(options): Promise<SnapshotPartitionResult>` and `cleanup(options): Promise<void>`
+
+```ts
+const result = await snapshots.partition({
+  path: exported.path,
+  checksum: exported.checksum,
+  counts: exported.counts,
+})
+await snapshots.cleanup({ path: exported.path, directory: result.directory })
+```
+
+Partitioning only accepts a generated temporary export path. It verifies the source's complete
+schema-1 manifest, optionally verifies the caller's checksum and counts, and emits private
+read-only JSONL files with their own terminal manifests. Sessions and their ordered entries remain
+whole and contiguous. The defaults are 25 sessions and 1 MiB per partition; a session that cannot
+fit is rejected. Cleanup accepts either generated artifact or both. Explicit absolute export
+destinations stay caller-owned and cannot be partitioned or cleaned up.
+
 ### `SessionEntry`
 
 ```ts
@@ -382,9 +400,11 @@ The package root exports:
 - entries: `SessionEntry`, `AppendEntryInput`, `GetEntriesQuery`, `GetRawEntriesQuery`,
   `EntryWireFormat`, `StructuredEntryFormat`;
 - credentials: `CredentialCreated`, `CredentialSummary`.
-- snapshots: `Snapshots`, `SnapshotSelection`, `SnapshotManifest`, `SnapshotCounts`,
-  `SnapshotExportOptions`, `SnapshotExportResult`;
+- snapshots: `Snapshots`, `partitionSnapshot`, `cleanupSnapshotPartitions`, `SnapshotSelection`,
+  `SnapshotManifest`, `SnapshotCounts`, `SnapshotChecksum`, `SnapshotVerification`,
+  `SnapshotExportOptions`, `SnapshotExportResult`, `SnapshotPartitionOptions`,
+  `SnapshotPartition`, `SnapshotPartitionResult`, `SnapshotCleanupOptions`;
 - errors: `AgentBlackboardError`, `formatError`.
 
-The package is currently version `0.0.0`. Tooling should pin an exact version until a stable
+The package is currently version `0.3.1`. Tooling should pin an exact version until a stable
 compatibility policy is published.
