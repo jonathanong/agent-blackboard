@@ -1,11 +1,17 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { chmod, open, rm } from 'node:fs/promises'
+import { lstat, open } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import { rawRequest } from './http.mjs'
 import { readSnapshot } from './snapshot-response.mjs'
 import { cleanupSnapshotPartitions } from './snapshot-partition-cleanup.mjs'
 import { partitionSnapshot } from './snapshot-partitions.mjs'
+import { removeOwnedFile, type Identity } from './snapshot-artifact-removal.mjs'
+import {
+  createCleanupToken,
+  snapshotMarkerPath,
+  writeSnapshotMarker,
+} from './snapshot-artifact-ownership.mjs'
 import type {
   ClientConfig,
   SnapshotExportOptions,
@@ -30,11 +36,18 @@ function queryFor(selection: SnapshotSelection = {}): Record<string, string> {
   return query
 }
 
-async function createDestination(path: string | undefined): Promise<{ path: string; file: File }> {
+async function createDestination(path: string | undefined): Promise<{
+  path: string
+  file: File
+  identity: Identity
+  cleanupToken?: string
+}> {
   if (path !== undefined) {
     if (!isAbsolute(path)) throw new Error('snapshot path must be absolute')
     try {
-      return { path, file: await open(path, 'wx', 0o600) }
+      const file = await open(path, 'wx', 0o600)
+      const identity = await file.stat({ bigint: true })
+      return { path, file, identity: { dev: identity.dev, ino: identity.ino } }
     } catch (error: unknown) {
       if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
         throw new Error(`snapshot path already exists: ${path}`)
@@ -43,7 +56,37 @@ async function createDestination(path: string | undefined): Promise<{ path: stri
     }
   }
   const generated = join(tmpdir(), `agent-blackboard-snapshot-${randomUUID()}.jsonl`)
-  return { path: generated, file: await open(generated, 'wx', 0o600) }
+  const cleanupToken = createCleanupToken()
+  const file = await open(generated, 'wx', 0o600)
+  const identity = await file.stat({ bigint: true })
+  try {
+    await writeSnapshotMarker(generated, file, cleanupToken)
+    return {
+      path: generated,
+      file,
+      identity: { dev: identity.dev, ino: identity.ino },
+      cleanupToken,
+    }
+  } catch (error) {
+    /* v8 ignore start -- ownership-marker creation can fail only through an OS-level collision or fault */
+    await file.close().catch(() => undefined)
+    await removeOwnedFile(generated, 'snapshot path', {
+      dev: identity.dev,
+      ino: identity.ino,
+    }).catch(() => undefined)
+    const marker = await lstat(snapshotMarkerPath(generated), { bigint: true }).catch(
+      () => undefined,
+    )
+    if (marker) {
+      await removeOwnedFile(snapshotMarkerPath(generated), 'snapshot ownership marker', {
+        dev: marker.dev,
+        ino: marker.ino,
+      }).catch(() => undefined)
+    }
+    /* v8 ignore stop */
+    /* v8 ignore next -- preserve the primary marker-creation failure */
+    throw error
+  }
 }
 
 /** Streams an immutable server snapshot directly into a private local JSONL file. */
@@ -68,9 +111,9 @@ export class Snapshots {
       const { state, manifest } = await readSnapshot(response, file, hash, options.selection)
       const info = await file.stat()
       await file.sync()
+      await file.chmod(0o400)
       await file.close()
       file = undefined
-      await chmod(target.path, 0o400)
       complete = true
       return {
         path: target.path,
@@ -82,11 +125,26 @@ export class Snapshots {
         },
         checksum: { algorithm: 'sha256', value: hash.digest('hex') },
         manifest,
+        ...(target.cleanupToken === undefined ? {} : { cleanupToken: target.cleanupToken }),
       }
     } finally {
       /* v8 ignore next -- cleanup must still remove partial output if close itself fails */
       if (file) await file.close().catch(() => undefined)
-      if (!complete) await rm(target.path, { force: true })
+      if (!complete) {
+        /* v8 ignore next -- best-effort cleanup must not mask the original export failure */
+        await removeOwnedFile(target.path, 'snapshot path', target.identity).catch(() => undefined)
+        /* v8 ignore next -- best-effort marker cleanup must not mask the original export failure */
+        if (target.cleanupToken !== undefined) {
+          const marker = await lstat(snapshotMarkerPath(target.path), { bigint: true }).catch(
+            () => undefined,
+          )
+          if (marker)
+            await removeOwnedFile(snapshotMarkerPath(target.path), 'snapshot ownership marker', {
+              dev: marker.dev,
+              ino: marker.ino,
+            }).catch(() => undefined)
+        }
+      }
     }
   }
 

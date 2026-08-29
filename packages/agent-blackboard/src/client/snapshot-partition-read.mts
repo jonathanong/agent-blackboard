@@ -18,6 +18,7 @@ export interface StagedSnapshot {
   bytes: number
   checksum: string
   index: string
+  indexIdentity: { dev: string; ino: string }
 }
 
 /** Reads source once through its opened descriptor and stages session groups privately on disk. */
@@ -58,13 +59,16 @@ export async function stageSnapshot(
         await finish()
         ordinal += 1
         const path = join(directory, `session-${ordinal}.jsonl`)
+        const file = await open(path, 'wx', 0o600)
+        const identity = await file.stat({ bigint: true })
         current = {
           sessionId: record.session.id as string,
           path,
+          identity: { dev: String(identity.dev), ino: String(identity.ino) },
           bytes: 0,
           sessions: 1,
           entries: 0,
-          file: await open(path, 'wx', 0o600),
+          file,
         }
       } else if (!current) throw new Error('snapshot entries must follow their session')
       consumeSnapshotRecord(record, state)
@@ -75,7 +79,14 @@ export async function stageSnapshot(
     }
     if (!manifest) throw new Error('snapshot is missing a complete terminal manifest')
     await indexFile.sync()
-    return { manifest, bytes, checksum: hash.digest('hex'), index }
+    const indexIdentity = await indexFile.stat({ bigint: true })
+    return {
+      manifest,
+      bytes,
+      checksum: hash.digest('hex'),
+      index,
+      indexIdentity: { dev: String(indexIdentity.dev), ino: String(indexIdentity.ino) },
+    }
   } finally {
     /* v8 ignore next -- best-effort closure must not mask parse failure */
     await current?.file.close().catch(() => undefined)

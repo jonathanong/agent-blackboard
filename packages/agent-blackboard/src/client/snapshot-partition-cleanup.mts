@@ -1,126 +1,151 @@
 import { constants } from 'node:fs'
-import { lstat, open, rename, rm, writeFile } from 'node:fs/promises'
+import { chmod, lstat, mkdtemp, open, rename, rmdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
+import { basename, join } from 'node:path'
 import type { SnapshotCleanupOptions } from './types.mjs'
+import {
+  assertCleanupToken,
+  assertGeneratedPath,
+  assertPartitionMarker,
+  assertSnapshotMarker,
+  DIRECTORY_NAME,
+  forgetCleanupToken,
+  knownCleanupToken,
+  snapshotMarkerPath,
+  SOURCE_NAME,
+} from './snapshot-artifact-ownership.mjs'
+import {
+  assertDirectoryContents,
+  removeDetached,
+  removeDirectoryContents,
+  restore,
+  type Identity,
+} from './snapshot-artifact-removal.mjs'
 
-const SOURCE_NAME = /^agent-blackboard-snapshot-[0-9a-f-]{36}\.jsonl$/
-const DIRECTORY_NAME = /^agent-blackboard-partitions-[A-Za-z0-9]+$/
-const OWNER_MARKER = '.agent-blackboard-partition-owner'
-
-function assertGeneratedPath(path: string, expression: RegExp, label: string): void {
-  if (
-    !isAbsolute(path) ||
-    dirname(resolve(path)) !== resolve(tmpdir()) ||
-    !expression.test(basename(path))
-  )
-    throw new Error(`${label} must be a generated temporary ${label}`)
-}
-
-/** Marks a newly generated partition directory so cleanup never recurses into a caller directory. */
-export async function markPartitionDirectory(directory: string): Promise<void> {
-  await writeFile(join(directory, OWNER_MARKER), `${crypto.randomUUID()}\n`, {
-    encoding: 'utf8',
-    mode: 0o400,
-    flag: 'wx',
-  })
-}
-
-async function assertOwnedPartitionDirectory(directory: string): Promise<void> {
-  const marker = join(directory, OWNER_MARKER)
-  let before
+async function assertSnapshotOwnership(path: string, token: string): Promise<void> {
+  const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW)
   try {
-    before = await lstat(marker)
-  } catch {
-    throw new Error('partition directory is not an owned generated partition directory')
-  }
-  if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1)
-    throw new Error('partition directory is not an owned generated partition directory')
-  const file = await open(marker, constants.O_RDONLY | constants.O_NOFOLLOW)
-  try {
-    const opened = await file.stat()
-    if (
-      !opened.isFile() ||
-      opened.nlink !== 1 ||
-      opened.dev !== before.dev ||
-      opened.ino !== before.ino ||
-      !/^[0-9a-f-]{36}\n$/.test(Buffer.from(await file.readFile()).toString('utf8'))
-    )
-      throw new Error('partition directory is not an owned generated partition directory')
+    await assertSnapshotMarker(path, file, token)
   } finally {
     await file.close()
   }
 }
 
-async function removeCaptured(path: string, expression: RegExp, directory: boolean): Promise<void> {
+async function removeEmpty(path: string): Promise<void> {
+  await rmdir(path).catch(() => undefined)
+}
+
+async function removeCaptured(
+  path: string,
+  expression: RegExp,
+  directory: boolean,
+  token: string | undefined,
+): Promise<void> {
   const label = directory ? 'partition directory' : 'snapshot path'
   assertGeneratedPath(path, expression, label)
   let initial
-  let captured = false
-  let renamed = false
   try {
-    initial = await lstat(path)
-  } catch (error: unknown) {
-    /* v8 ignore next -- tests cover ENOENT; another lstat code needs an OS-level fault */
+    initial = await lstat(path, { bigint: true })
+  } catch (error) {
+    /* v8 ignore start -- only ENOENT is deterministic; other codes need an OS fault */
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
-    /* v8 ignore next -- non-ENOENT lstat failure requires an OS-level fault */
     throw error
+    /* v8 ignore stop */
   }
-  /* v8 ignore next -- every unsafe target shape is rejected by the same branch */
+  /* v8 ignore start -- a replacement after the preflight check is race-only */
   if (
     initial.isSymbolicLink() ||
-    (!initial.isFile() && !directory) ||
+    (!directory && !initial.isFile()) ||
     (directory && !initial.isDirectory()) ||
-    (!directory && initial.nlink !== 1)
+    (!directory && initial.nlink !== 1n)
   )
     throw new Error(`${label} is not a generated ${directory ? 'directory' : 'regular file'}`)
-  const tombstone = join(
-    tmpdir(),
-    `.agent-blackboard-cleanup-${process.pid}-${crypto.randomUUID()}`,
-  )
+  assertCleanupToken(token)
+  if (directory) await assertPartitionMarker(path, token)
+  else await assertSnapshotOwnership(path, token)
+  if (directory) await assertDirectoryContents(path, label)
+
+  const marker = directory ? undefined : snapshotMarkerPath(path)
+  let markerIdentity: Identity | undefined
+  if (!directory) {
+    const identity = await lstat(marker!, { bigint: true })
+    /* v8 ignore next -- replacing a validated marker before this lstat is race-only */
+    if (!identity.isFile() || identity.isSymbolicLink() || identity.nlink !== 1n)
+      throw new Error(`${label} ownership marker changed`)
+    markerIdentity = identity
+  }
+  const quarantine = await mkdtemp(join(tmpdir(), '.agent-blackboard-cleanup-'))
+  await chmod(quarantine, 0o700)
+  const captured = join(quarantine, basename(path))
+  const capturedMarker = directory ? undefined : snapshotMarkerPath(captured)
+  let moved = false
+  let markerMoved = false
   try {
-    await rename(path, tombstone)
-    renamed = true
-    const capturedStat = await lstat(tombstone)
-    /* v8 ignore next -- replacement after random tombstone rename is race-only */
+    await rename(path, captured)
+    moved = true
+    const capturedStat = await lstat(captured, { bigint: true })
     if (
       capturedStat.isSymbolicLink() ||
       capturedStat.dev !== initial.dev ||
       capturedStat.ino !== initial.ino ||
       capturedStat.isDirectory() !== directory ||
-      (!directory && (!capturedStat.isFile() || capturedStat.nlink !== 1))
+      (!directory && (!capturedStat.isFile() || capturedStat.nlink !== 1n))
     )
+      /* v8 ignore next -- replacing the detached target between rename and stat is race-only */
       throw new Error(`${label} changed while it was being removed`)
-    captured = true
-    if (directory) await assertOwnedPartitionDirectory(tombstone)
-    await rm(tombstone, { recursive: directory, force: true })
-  } catch (error: unknown) {
-    /* v8 ignore next -- concurrent removal after capture is harmless */
-    if (!renamed && (error as NodeJS.ErrnoException).code === 'ENOENT') return
-    /* v8 ignore next -- a changed tombstone is a race-only path that must never be restored */
-    if (captured) {
+    /* v8 ignore stop */
+    if (directory) await assertPartitionMarker(captured, token)
+    else {
+      await rename(marker!, capturedMarker!)
+      markerMoved = true
+      await assertSnapshotOwnership(captured, token)
+    }
+    if (directory) {
+      await removeDirectoryContents(captured, quarantine, label, initial)
+    } else {
+      await removeDetached(capturedMarker!, quarantine, `${label} ownership marker`, markerIdentity)
+      await removeDetached(captured, quarantine, label, initial)
+    }
+    await rmdir(quarantine)
+    forgetCleanupToken(path)
+  } catch (error) {
+    /* v8 ignore start -- post-detach failures require an OS-level race or filesystem fault */
+    if (moved && !directory) {
       try {
-        await rename(tombstone, path)
+        await restore(
+          path,
+          captured,
+          markerMoved ? marker : undefined,
+          capturedMarker,
+          initial,
+          markerIdentity,
+        )
       } catch (restoreError) {
-        /* v8 ignore next -- requires another process to recreate the original random temporary path */
         throw new AggregateError(
           [error, restoreError],
-          `${label} removal failed and its original path could not be restored`,
+          'artifact cleanup failed and target was not restored',
         )
       }
     }
-    /* v8 ignore next -- non-ENOENT rename/removal failure requires an OS-level fault */
+    /* v8 ignore stop */
+    /* v8 ignore next -- preserve the primary pre-detach failure */
     throw error
+  } finally {
+    await removeEmpty(quarantine)
   }
 }
 
-/** Removes generated snapshot and/or partition evidence, refusing arbitrary filesystem paths. */
+/** Removes generated snapshot and/or partition evidence using an explicit capability. */
 export async function cleanupSnapshotPartitions(options: SnapshotCleanupOptions): Promise<void> {
   if (!options.path && !options.directory)
     throw new Error('cleanup requires a snapshot path or partition directory')
+  const inferredToken = options.path
+    ? knownCleanupToken(options.path)
+    : knownCleanupToken(options.directory!)
+  const token = options.cleanupToken ?? inferredToken
   const results = await Promise.allSettled([
-    ...(options.path ? [removeCaptured(options.path, SOURCE_NAME, false)] : []),
-    ...(options.directory ? [removeCaptured(options.directory, DIRECTORY_NAME, true)] : []),
+    ...(options.path ? [removeCaptured(options.path, SOURCE_NAME, false, token)] : []),
+    ...(options.directory ? [removeCaptured(options.directory, DIRECTORY_NAME, true, token)] : []),
   ])
   const failures = results.filter((result) => result.status === 'rejected')
   if (failures.length) {

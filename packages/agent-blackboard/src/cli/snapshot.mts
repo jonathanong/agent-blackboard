@@ -7,6 +7,19 @@ import type { CliContext } from './context.mjs'
 import { clientConfigFromEnv } from './env.mjs'
 import { CliError } from './errors.mjs'
 import { writeLine } from './output.mjs'
+import { partitionCounts } from './snapshot-partition-options.mjs'
+
+const PARTITION_FLAGS = [
+  'path',
+  'cleanup-token',
+  'max-sessions',
+  'max-bytes',
+  'checksum',
+  'sessions',
+  'entries',
+  'records',
+  'bytes',
+]
 function optionalString(
   flags: Record<string, string | boolean>,
   key: string,
@@ -84,7 +97,7 @@ function requiredString(
   command: string,
 ): string {
   return (
-    optionalString(flags, key) ??
+    optionalString(flags, key, command) ??
     (() => {
       throw new CliError(`${command} requires --${key}.`)
     })()
@@ -101,40 +114,6 @@ function positiveInteger(flags: Record<string, string | boolean>, key: string): 
   return value
 }
 
-function nonNegativeInteger(
-  flags: Record<string, string | boolean>,
-  key: string,
-): number | undefined {
-  const raw = optionalString(flags, key)
-  if (raw === undefined) return undefined
-  const value = Number(raw)
-  if (!Number.isSafeInteger(value) || value < 0) {
-    throw new CliError(`snapshot partition --${key} must be a non-negative integer.`)
-  }
-  return value
-}
-
-function partitionCounts(flags: Record<string, string | boolean>) {
-  const sessions = nonNegativeInteger(flags, 'sessions')
-  const entries = nonNegativeInteger(flags, 'entries')
-  const records = nonNegativeInteger(flags, 'records')
-  const bytes = nonNegativeInteger(flags, 'bytes')
-  if ([sessions, entries, records, bytes].some((value) => value !== undefined)) {
-    if ([sessions, entries, records, bytes].some((value) => value === undefined)) {
-      throw new CliError(
-        'snapshot partition count verification requires --sessions, --entries, --records, and --bytes.',
-      )
-    }
-    return { sessions, entries, records, bytes } as {
-      sessions: number
-      entries: number
-      records: number
-      bytes: number
-    }
-  }
-  return undefined
-}
-
 function only(flags: Record<string, string | boolean>, allowed: string[], command: string): void {
   for (const key of Object.keys(flags)) {
     if (!allowed.includes(key)) throw new CliError(`${command} does not accept --${key}.`)
@@ -146,21 +125,20 @@ export async function runSnapshot(argv: string[], ctx: CliContext): Promise<void
   const [subcommand, ...rest] = argv
   const { positional, flags } = parseArgs(rest)
   if (subcommand === 'partition') {
-    only(
-      flags,
-      ['path', 'max-sessions', 'max-bytes', 'checksum', 'sessions', 'entries', 'records', 'bytes'],
-      'snapshot partition',
-    )
+    only(flags, PARTITION_FLAGS, 'snapshot partition')
     if (positional.length > 0) throw new CliError('snapshot partition accepts flags only.')
+    const path = requiredString(flags, 'path', 'snapshot partition')
     const maxSessions = positiveInteger(flags, 'max-sessions')
     const maxBytes = positiveInteger(flags, 'max-bytes')
     const checksum = optionalString(flags, 'checksum')
-    const counts = partitionCounts(flags)
+    const counts = partitionCounts(flags, optionalString)
     if (checksum !== undefined && !/^[a-f0-9]{64}$/.test(checksum)) {
       throw new CliError('snapshot partition --checksum must be a SHA-256 hex digest.')
     }
+    const cleanupToken = requiredString(flags, 'cleanup-token', 'snapshot partition')
     const result = await partitionSnapshot({
-      path: requiredString(flags, 'path', 'snapshot partition'),
+      path,
+      cleanupToken,
       ...(maxSessions === undefined ? {} : { maxSessions }),
       ...(maxBytes === undefined ? {} : { maxBytes }),
       ...(checksum === undefined ? {} : { checksum: { algorithm: 'sha256', value: checksum } }),
@@ -170,14 +148,16 @@ export async function runSnapshot(argv: string[], ctx: CliContext): Promise<void
     return
   }
   if (subcommand === 'cleanup') {
-    only(flags, ['path', 'directory'], 'snapshot cleanup')
+    only(flags, ['path', 'directory', 'cleanup-token'], 'snapshot cleanup')
     if (positional.length > 0) throw new CliError('snapshot cleanup accepts flags only.')
     const path = optionalString(flags, 'path', 'snapshot cleanup')
     const directory = optionalString(flags, 'directory', 'snapshot cleanup')
     if (!path && !directory) throw new CliError('snapshot cleanup requires --path or --directory.')
+    const cleanupToken = requiredString(flags, 'cleanup-token', 'snapshot cleanup')
     await cleanupSnapshotPartitions({
       ...(path === undefined ? {} : { path }),
       ...(directory === undefined ? {} : { directory }),
+      cleanupToken,
     })
     writeLine(ctx.stdout, JSON.stringify({ removed: true }))
     return

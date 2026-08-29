@@ -1,8 +1,11 @@
 import type { SnapshotCounts, SnapshotManifest } from './types.mjs'
 
+const SESSION_ID = /^[A-Za-z0-9._:-]+$/
+
 export type SnapshotBlock = {
   sessionId: string
   path: string
+  identity: { dev: string; ino: string }
   bytes: number
   sessions: number
   entries: number
@@ -19,8 +22,6 @@ export type SnapshotState = {
   lastEntryCreatedAt?: number
   currentSessionId?: string
 }
-
-const SESSION_ID = /^[A-Za-z0-9._:-]+$/
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -149,26 +150,24 @@ export function parseSnapshotRecord(line: string): SnapshotRecord {
 export function consumeSnapshotRecord(record: SnapshotRecord, state: SnapshotState): void {
   if (record.type === 'manifest') return
   if (record.type === 'session') {
-    const createdAt = record.session.createdAt as string
-    const createdAtInstant = Date.parse(createdAt)
-    if (state.lastSessionCreatedAt !== undefined && createdAtInstant < state.lastSessionCreatedAt)
+    const createdAt = Date.parse(record.session.createdAt as string)
+    if (state.lastSessionCreatedAt !== undefined && createdAt < state.lastSessionCreatedAt)
       throw new Error('snapshot sessions are not ordered')
     state.sessions += 1
     state.records += 1
-    state.lastSessionCreatedAt = createdAtInstant
+    state.lastSessionCreatedAt = createdAt
     delete state.lastEntryCreatedAt
     state.currentSessionId = record.session.id as string
     return
   }
-  const createdAt = record.entry.createdAt as string
-  const createdAtInstant = Date.parse(createdAt)
+  const createdAt = Date.parse(record.entry.createdAt as string)
   if (state.currentSessionId !== record.entry.sessionId)
     throw new Error('snapshot entries must follow their session')
-  if (state.lastEntryCreatedAt !== undefined && createdAtInstant < state.lastEntryCreatedAt)
+  if (state.lastEntryCreatedAt !== undefined && createdAt < state.lastEntryCreatedAt)
     throw new Error('snapshot entries are not ordered')
   state.entries += 1
   state.records += 1
-  state.lastEntryCreatedAt = createdAtInstant
+  state.lastEntryCreatedAt = createdAt
 }
 
 export function assertManifest(manifest: SnapshotManifest, state: SnapshotState): void {

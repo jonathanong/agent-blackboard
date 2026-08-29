@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, open, readFile, rm, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,6 +7,7 @@ import { expect, it } from 'vitest'
 import { createFakeContext } from '../__tests__/cli-context.mjs'
 import { sendNdjson, startHttpFixture } from '../__tests__/http-fixture.mjs'
 import { runSnapshot } from './snapshot.mjs'
+import { createCleanupToken, writeSnapshotMarker } from '../client/snapshot-artifact-ownership.mjs'
 
 const records = [
   {
@@ -125,9 +126,13 @@ it('exports a snapshot without optional filters or an explicit path', async () =
   })
   try {
     await runSnapshot(['export', '--parent-session-id', 'parent'], ctx)
-    const result = JSON.parse(ctx.stdoutLines[0]!) as { path: string }
+    const result = JSON.parse(ctx.stdoutLines[0]!) as { path: string; cleanupToken: string }
     expect(result.path).toContain('agent-blackboard-snapshot-')
-    await rm(result.path, { force: true })
+    expect(result.cleanupToken).toMatch(/^[A-Za-z0-9_-]{43}$/)
+    await runSnapshot(
+      ['cleanup', '--path', result.path, '--cleanup-token', result.cleanupToken],
+      ctx,
+    )
   } finally {
     await fixture.close()
   }
@@ -139,6 +144,10 @@ it('partitions and cleans up only generated temporary snapshots without server c
     mode: 0o400,
   })
   await chmod(path, 0o400)
+  const cleanupToken = createCleanupToken()
+  const sourceFile = await open(path, 'r')
+  await writeSnapshotMarker(path, sourceFile, cleanupToken)
+  await sourceFile.close()
   const bytes = await readFile(path)
   const ctx = createFakeContext({ env: {} })
   try {
@@ -147,6 +156,8 @@ it('partitions and cleans up only generated temporary snapshots without server c
         'partition',
         '--path',
         path,
+        '--cleanup-token',
+        cleanupToken,
         '--max-sessions',
         '1',
         '--checksum',
@@ -164,14 +175,35 @@ it('partitions and cleans up only generated temporary snapshots without server c
     )
     const result = JSON.parse(ctx.stdoutLines[0]!) as { directory: string; partitions: unknown[] }
     expect(result.partitions).toHaveLength(1)
-    await runSnapshot(['cleanup', '--directory', result.directory], ctx)
+    await runSnapshot(
+      ['cleanup', '--directory', result.directory, '--cleanup-token', cleanupToken],
+      ctx,
+    )
     const defaults = createFakeContext({ env: {} })
-    await runSnapshot(['partition', '--path', path, '--max-bytes', '10000'], defaults)
-    const defaultResult = JSON.parse(defaults.stdoutLines[0]!) as { directory: string }
-    await runSnapshot(['cleanup', '--path', path], defaults)
-    await runSnapshot(['cleanup', '--directory', defaultResult.directory], defaults)
+    await runSnapshot(
+      ['partition', '--path', path, '--cleanup-token', cleanupToken, '--max-bytes', '10000'],
+      defaults,
+    )
+    const defaultResult = JSON.parse(defaults.stdoutLines[0]!) as {
+      directory: string
+      cleanupToken: string
+    }
+    await runSnapshot(['cleanup', '--path', path, '--cleanup-token', cleanupToken], defaults)
+    await runSnapshot(
+      [
+        'cleanup',
+        '--directory',
+        defaultResult.directory,
+        '--cleanup-token',
+        defaultResult.cleanupToken,
+      ],
+      defaults,
+    )
     await expect(
-      runSnapshot(['partition', '--path', path, '--max-bytes', 'no'], ctx),
+      runSnapshot(
+        ['partition', '--path', path, '--cleanup-token', cleanupToken, '--max-bytes', 'no'],
+        ctx,
+      ),
     ).rejects.toThrow('positive integer')
   } finally {
     await rm(path, { force: true })
@@ -181,6 +213,9 @@ it('partitions and cleans up only generated temporary snapshots without server c
 it('validates partition and cleanup arguments before operating on the filesystem', async () => {
   const ctx = createFakeContext({ env: {} })
   await expect(runSnapshot(['partition'], ctx)).rejects.toThrow('requires --path')
+  await expect(runSnapshot(['partition', '--path', '/tmp/a'], ctx)).rejects.toThrow(
+    'requires --cleanup-token',
+  )
   await expect(runSnapshot(['partition', 'extra', '--path', '/tmp/a'], ctx)).rejects.toThrow(
     'accepts flags only',
   )

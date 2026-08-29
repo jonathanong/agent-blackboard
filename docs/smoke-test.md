@@ -40,10 +40,11 @@ local server started with `AGENT_BLACKBOARD_STORE=memory pnpm --dir packages/ser
 >    counts and checksum match its bytes, and the file is read-only. Use MCP `snapshot_export`
 >    without a path and verify the same compact result, that archived sessions are absent, and no
 >    entry records crossed MCP. Keep the generated snapshot for the next step.
-> 10. With the CLI, partition the generated MCP snapshot using its path, checksum, and counts. Verify
->     the partitions contain complete contiguous sessions, end in complete manifests, and are read-only.
->     Verify cleanup removes both the generated snapshot and partition directory. Verify an explicitly
->     chosen export path is rejected by both partition and cleanup.
+> 10. With the CLI, partition the generated MCP snapshot using its path, cleanup token, checksum, and
+>     counts. Verify the partitions contain complete contiguous sessions, end in complete manifests,
+>     and are read-only. Verify cleanup removes both the generated snapshot and partition directory.
+>     Verify an explicitly chosen export path is rejected by both partition and cleanup, even when its
+>     basename resembles a generated path.
 > 11. Across CLI and MCP, verify omitted session id, parent id, agent, or version is rejected. Verify
 >     appending to a never-created session is rejected and no id was silently generated.
 > 12. Report every command/tool call, returned session/entry shape, and invariant failure. Do not
