@@ -1,12 +1,12 @@
 import { constants } from 'node:fs'
-import fileSystem from 'node:fs/promises'
+import { lstat, open, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import type { SnapshotCleanupOptions } from './types.mjs'
 
 const SOURCE_NAME = /^agent-blackboard-snapshot-[0-9a-f-]{36}\.jsonl$/
-const DIRECTORY_NAME = /^agent-blackboard-partitions-[0-9a-f-]{36}$/
-const OWNERSHIP_MARKER = '.agent-blackboard-partitions'
+const DIRECTORY_NAME = /^agent-blackboard-partitions-[A-Za-z0-9]+$/
+const OWNER_MARKER = '.agent-blackboard-partition-owner'
 
 function assertGeneratedPath(path: string, expression: RegExp, label: string): void {
   if (
@@ -17,23 +17,38 @@ function assertGeneratedPath(path: string, expression: RegExp, label: string): v
     throw new Error(`${label} must be a generated temporary ${label}`)
 }
 
-async function assertOwnershipMarker(directory: string, identity: string): Promise<void> {
-  let marker
+/** Marks a newly generated partition directory so cleanup never recurses into a caller directory. */
+export async function markPartitionDirectory(directory: string): Promise<void> {
+  await writeFile(join(directory, OWNER_MARKER), `${crypto.randomUUID()}\n`, {
+    encoding: 'utf8',
+    mode: 0o400,
+    flag: 'wx',
+  })
+}
+
+async function assertOwnedPartitionDirectory(directory: string): Promise<void> {
+  const marker = join(directory, OWNER_MARKER)
+  let before
   try {
-    marker = await fileSystem.open(
-      join(directory, OWNERSHIP_MARKER),
-      constants.O_RDONLY | constants.O_NOFOLLOW,
+    before = await lstat(marker)
+  } catch {
+    throw new Error('partition directory is not an owned generated partition directory')
+  }
+  if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1)
+    throw new Error('partition directory is not an owned generated partition directory')
+  const file = await open(marker, constants.O_RDONLY | constants.O_NOFOLLOW)
+  try {
+    const opened = await file.stat()
+    if (
+      !opened.isFile() ||
+      opened.nlink !== 1 ||
+      opened.dev !== before.dev ||
+      opened.ino !== before.ino ||
+      !/^[0-9a-f-]{36}\n$/.test(Buffer.from(await file.readFile()).toString('utf8'))
     )
-    const info = await marker.stat()
-    if (!info.isFile() || info.nlink !== 1 || (await marker.readFile('utf8')) !== `${identity}\n`)
-      throw new Error('partition directory does not contain its ownership marker')
-  } catch (error: unknown) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT')
-      throw new Error('partition directory does not contain its ownership marker')
-    throw error
+      throw new Error('partition directory is not an owned generated partition directory')
   } finally {
-    /* v8 ignore next -- marker close failure requires an OS-level fault */
-    await marker?.close().catch(() => undefined)
+    await file.close()
   }
 }
 
@@ -41,8 +56,10 @@ async function removeCaptured(path: string, expression: RegExp, directory: boole
   const label = directory ? 'partition directory' : 'snapshot path'
   assertGeneratedPath(path, expression, label)
   let initial
+  let captured = false
+  let renamed = false
   try {
-    initial = await fileSystem.lstat(path)
+    initial = await lstat(path)
   } catch (error: unknown) {
     /* v8 ignore next -- tests cover ENOENT; another lstat code needs an OS-level fault */
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
@@ -57,57 +74,42 @@ async function removeCaptured(path: string, expression: RegExp, directory: boole
     (!directory && initial.nlink !== 1)
   )
     throw new Error(`${label} is not a generated ${directory ? 'directory' : 'regular file'}`)
-  const identity = basename(path)
-  if (directory) await assertOwnershipMarker(path, identity)
   const tombstone = join(
     tmpdir(),
     `.agent-blackboard-cleanup-${process.pid}-${crypto.randomUUID()}`,
   )
-  let capturedPath = false
   try {
-    await fileSystem.rename(path, tombstone)
-    capturedPath = true
-    const captured = await fileSystem.lstat(tombstone)
+    await rename(path, tombstone)
+    renamed = true
+    const capturedStat = await lstat(tombstone)
     /* v8 ignore next -- replacement after random tombstone rename is race-only */
     if (
-      captured.isSymbolicLink() ||
-      captured.dev !== initial.dev ||
-      captured.ino !== initial.ino ||
-      captured.isDirectory() !== directory ||
-      (!directory && (!captured.isFile() || captured.nlink !== 1))
+      capturedStat.isSymbolicLink() ||
+      capturedStat.dev !== initial.dev ||
+      capturedStat.ino !== initial.ino ||
+      capturedStat.isDirectory() !== directory ||
+      (!directory && (!capturedStat.isFile() || capturedStat.nlink !== 1))
     )
       throw new Error(`${label} changed while it was being removed`)
-    if (directory) await assertOwnershipMarker(tombstone, identity)
-    await fileSystem.rm(tombstone, { recursive: directory, force: true })
+    captured = true
+    if (directory) await assertOwnedPartitionDirectory(tombstone)
+    await rm(tombstone, { recursive: directory, force: true })
   } catch (error: unknown) {
     /* v8 ignore next -- concurrent removal after capture is harmless */
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT' && !capturedPath) return
-    /* v8 ignore next -- only a non-ENOENT rename failure reaches this without capture */
-    if (!capturedPath) throw error
-    try {
-      if (directory) {
-        try {
-          await fileSystem.writeFile(join(tombstone, OWNERSHIP_MARKER), `${identity}\n`, {
-            flag: 'wx',
-            mode: 0o400,
-          })
-        } catch (markerError: unknown) {
-          /* v8 ignore next -- a non-EEXIST marker repair failure needs an OS-level fault */
-          if ((markerError as NodeJS.ErrnoException).code !== 'EEXIST') throw markerError
-        }
+    if (!renamed && (error as NodeJS.ErrnoException).code === 'ENOENT') return
+    /* v8 ignore next -- a changed tombstone is a race-only path that must never be restored */
+    if (captured) {
+      try {
+        await rename(tombstone, path)
+      } catch (restoreError) {
+        /* v8 ignore next -- requires another process to recreate the original random temporary path */
+        throw new AggregateError(
+          [error, restoreError],
+          `${label} removal failed and its original path could not be restored`,
+        )
       }
-      await fileSystem.rename(tombstone, path)
-    } catch (restoreError: unknown) {
-      /* v8 ignore start -- restore failure requires a concurrent replacement or OS fault */
-      /* v8 ignore next -- a fully removed tombstone means cleanup ultimately succeeded */
-      if ((restoreError as NodeJS.ErrnoException).code === 'ENOENT') return
-      throw new AggregateError(
-        [error, restoreError],
-        `${label} cleanup failed; retained retryable artifact at ${tombstone}`,
-      )
-      /* v8 ignore stop */
     }
-    /* v8 ignore next -- non-ENOENT removal failure requires an OS-level fault */
+    /* v8 ignore next -- non-ENOENT rename/removal failure requires an OS-level fault */
     throw error
   }
 }

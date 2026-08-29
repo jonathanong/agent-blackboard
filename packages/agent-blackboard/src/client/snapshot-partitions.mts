@@ -1,11 +1,11 @@
-import { randomUUID } from 'node:crypto'
 import { constants } from 'node:fs'
-import { chmod, lstat, mkdir, mkdtemp, open, rm, writeFile } from 'node:fs/promises'
+import { chmod, lstat, mkdtemp, open, rm } from 'node:fs/promises'
 import type { FileHandle } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { basename, dirname, isAbsolute, resolve } from 'node:path'
+import { isAbsolute, resolve } from 'node:path'
 import { stageSnapshot } from './snapshot-partition-read.mjs'
 import { writePartitions } from './snapshot-partition-write.mjs'
+import { markPartitionDirectory } from './snapshot-partition-cleanup.mjs'
 import type {
   SnapshotManifest,
   SnapshotPartitionOptions,
@@ -15,7 +15,6 @@ import type {
 const MAX_SESSIONS = 25
 const MAX_BYTES = 1024 * 1024
 const SOURCE_NAME = /^agent-blackboard-snapshot-[0-9a-f-]{36}\.jsonl$/
-const OWNERSHIP_MARKER = '.agent-blackboard-partitions'
 
 function assertLimit(value: number | undefined, fallback: number, label: string): number {
   const limit = value ?? fallback
@@ -66,16 +65,10 @@ export async function partitionSnapshot(
   try {
     source = await open(options.path, constants.O_RDONLY | constants.O_NOFOLLOW)
     stage = await mkdtemp(resolve(tmpdir(), 'agent-blackboard-partition-stage-'))
-    directory = resolve(tmpdir(), `agent-blackboard-partitions-${randomUUID()}`)
-    await mkdir(directory, { mode: 0o700 })
-    await Promise.all([
-      chmod(stage, 0o700),
-      chmod(directory, 0o700),
-      writeFile(resolve(directory, OWNERSHIP_MARKER), `${basename(directory)}\n`, {
-        flag: 'wx',
-        mode: 0o400,
-      }),
-    ])
+    await chmod(stage, 0o700)
+    directory = await mkdtemp(resolve(tmpdir(), 'agent-blackboard-partitions-'))
+    await chmod(directory, 0o700)
+    await markPartitionDirectory(directory)
     const opened = await source.stat({ bigint: true })
     /* v8 ignore next -- a replacement between lstat and O_NOFOLLOW open is race-only */
     if (
@@ -110,13 +103,13 @@ export async function partitionSnapshot(
     )
     return { directory, partitions }
   } catch (error) {
-    /* v8 ignore next -- false only when setup fails before assigning the output path */
+    /* v8 ignore next -- allocation failures before a directory exists are not deterministic in tests */
     if (directory) await rm(directory, { recursive: true, force: true })
     throw error
   } finally {
     /* v8 ignore next -- best-effort descriptor closure must not mask the original failure */
     await source?.close().catch(() => undefined)
-    /* v8 ignore next -- false only when setup fails before staging exists */
+    /* v8 ignore next -- allocation failures before staging are not deterministic in tests */
     if (stage) await rm(stage, { recursive: true, force: true })
   }
 }
