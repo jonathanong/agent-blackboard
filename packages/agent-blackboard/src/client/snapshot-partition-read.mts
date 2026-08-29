@@ -32,6 +32,7 @@ export async function stageSnapshot(
   let current: (SnapshotBlock & { file: FileHandle }) | undefined
   let manifest: SnapshotManifest | undefined
   let ordinal = 0
+  let bytes = 0
   const finish = async (): Promise<void> => {
     if (!current) return
     await current.file.sync()
@@ -41,7 +42,9 @@ export async function stageSnapshot(
     current = undefined
   }
   try {
-    for await (const sourceLine of readLines(source, hash)) {
+    for await (const sourceLine of readLines(source, hash, (read) => {
+      bytes += read
+    })) {
       if (!sourceLine) throw new Error('snapshot contains a blank JSONL record')
       if (manifest) throw new Error('snapshot contains records after its manifest')
       const record = parseSnapshotRecord(sourceLine)
@@ -72,7 +75,7 @@ export async function stageSnapshot(
     }
     if (!manifest) throw new Error('snapshot is missing a complete terminal manifest')
     await indexFile.sync()
-    return { manifest, bytes: (await source.stat()).size, checksum: hash.digest('hex'), index }
+    return { manifest, bytes, checksum: hash.digest('hex'), index }
   } finally {
     /* v8 ignore next -- best-effort closure must not mask parse failure */
     await current?.file.close().catch(() => undefined)

@@ -16,6 +16,7 @@ export async function writeAll(file: FileHandle, bytes: Uint8Array): Promise<voi
 export async function* readLines(
   file: FileHandle,
   hash?: ReturnType<typeof createHash>,
+  onRead?: (bytes: number) => void,
 ): AsyncGenerator<string> {
   const buffer = Buffer.allocUnsafe(CHUNK_SIZE)
   const decoder = new TextDecoder('utf-8', { fatal: true })
@@ -27,6 +28,7 @@ export async function* readLines(
     position += bytesRead
     const bytes = buffer.subarray(0, bytesRead)
     hash?.update(bytes)
+    onRead?.(bytesRead)
     pending += decoder.decode(bytes, { stream: true })
     for (;;) {
       const newline = pending.indexOf('\n')

@@ -1,8 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto'
 import {
+  appendFile,
   chmod,
   link,
   mkdtemp,
+  open,
   readFile,
   readdir,
   rm,
@@ -77,6 +79,47 @@ function withManifest(change: Record<string, unknown>): unknown[] {
   return records
 }
 
+async function partitionArtifacts(): Promise<string[]> {
+  return (await readdir(tmpdir()))
+    .filter(
+      (name) =>
+        name.startsWith('agent-blackboard-partition-stage-') ||
+        name.startsWith('agent-blackboard-partitions-'),
+    )
+    .sort()
+}
+
+async function appendAfterSourceEof(path: string): Promise<() => void> {
+  const probe = await open(path, 'r')
+  const expected = await probe.stat()
+  const prototype = Object.getPrototypeOf(probe) as {
+    read: (...args: unknown[]) => Promise<{ bytesRead: number }>
+  }
+  await probe.close()
+  const originalRead = prototype.read
+  let appended = false
+  prototype.read = async function (
+    this: { stat: () => Promise<{ dev: number; ino: number }> },
+    ...args: unknown[]
+  ): Promise<{ bytesRead: number }> {
+    const result = await originalRead.apply(this, args)
+    const info = await this.stat()
+    if (
+      !appended &&
+      result.bytesRead === 0 &&
+      info.dev === expected.dev &&
+      info.ino === expected.ino
+    ) {
+      appended = true
+      await appendFile(path, '\n')
+    }
+    return result
+  }
+  return () => {
+    prototype.read = originalRead
+  }
+}
+
 it('partitions a generated snapshot by complete session and emits private terminal manifests', async () => {
   const path = await snapshot()
   const bytes = await readFile(path)
@@ -131,6 +174,23 @@ it('rejects user-chosen sources, invalid manifests, bad verification, and oversi
     await rm(invalid, { force: true })
     await rm(valid, { force: true })
   }
+})
+
+it('rejects post-EOF source growth and removes staging and output directories after late failure', async () => {
+  const snapshots = new Snapshots({ baseUrl: 'http://unused', token: 'unused' })
+  const path = await snapshot()
+  const before = await partitionArtifacts()
+  await chmod(path, 0o600)
+  const restoreRead = await appendAfterSourceEof(path)
+  try {
+    await expect(snapshots.partition({ path })).rejects.toThrow('changed while it was being read')
+    expect((await partitionArtifacts()).filter((name) => !before.includes(name))).toEqual([])
+  } finally {
+    restoreRead()
+  }
+  const lateFailure = await snapshot()
+  await expect(snapshots.partition({ path: lateFailure, maxBytes: 1 })).rejects.toThrow('too large')
+  expect((await partitionArtifacts()).filter((name) => !before.includes(name))).toEqual([])
 })
 
 it('validates generated paths, record structure, limits, and cleanup targets', async () => {

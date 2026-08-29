@@ -82,6 +82,7 @@ export async function partitionSnapshot(
       after.dev !== opened.dev ||
       after.ino !== opened.ino ||
       after.nlink !== 1 ||
+      opened.size !== staged.bytes ||
       after.size !== staged.bytes
     )
       throw new Error('snapshot path changed while it was being read')
