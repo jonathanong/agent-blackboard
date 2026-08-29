@@ -35,6 +35,12 @@ export type {
   SnapshotCounts,
   SnapshotExportOptions,
   SnapshotExportResult,
+  SnapshotChecksum,
+  SnapshotCleanupOptions,
   SnapshotManifest,
+  SnapshotPartition,
+  SnapshotPartitionOptions,
+  SnapshotPartitionResult,
   SnapshotSelection,
+  SnapshotVerification,
 } from './client/types.mjs'

@@ -273,6 +273,24 @@ read-only mode. It deletes incomplete output on any failure. The returned object
 path, session/entry/record/byte counts, checksum, and manifest; it never buffers or returns all
 snapshot evidence.
 
+### `partition(options): Promise<SnapshotPartitionResult>` and `cleanup(options): Promise<void>`
+
+```ts
+const result = await snapshots.partition({
+  path: exported.path,
+  checksum: exported.checksum,
+  counts: exported.counts,
+})
+await snapshots.cleanup({ directory: result.directory })
+```
+
+Partitioning only accepts a generated temporary export path. It verifies the source's complete
+schema-1 manifest, optionally verifies the caller's checksum and counts, and emits private
+read-only JSONL files with their own terminal manifests. Sessions and their ordered entries remain
+whole and contiguous. The defaults are 25 sessions and 1 MiB per partition; a session that cannot
+fit is rejected. Cleanup only accepts the generated partition directory. Explicit absolute export
+destinations stay caller-owned and cannot be partitioned or cleaned up.
+
 ### `SessionEntry`
 
 ```ts
