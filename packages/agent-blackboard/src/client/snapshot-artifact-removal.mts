@@ -13,14 +13,28 @@ function hasIdentity(stats: Identity, expected: Identity): boolean {
   return stats.dev === expected.dev && stats.ino === expected.ino
 }
 
-async function assertDirectoryIdentity(
+function isPrivateDirectory(stats: Awaited<ReturnType<typeof lstat>>): boolean {
+  const mode = BigInt(stats.mode)
+  return stats.isDirectory() && !stats.isSymbolicLink() && (mode & 0o777n) === 0o700n
+}
+
+export async function captureDirectoryIdentity(
+  directory: string,
+  label: string,
+): Promise<Identity> {
+  const stats = await lstat(directory, { bigint: true })
+  if (!isPrivateDirectory(stats)) throw new Error(`${label} is not a private directory`)
+  return { dev: stats.dev, ino: stats.ino }
+}
+
+export async function assertDirectoryIdentity(
   directory: string,
   expected: Identity | undefined,
   label: string,
 ): Promise<void> {
   if (!expected) return
   const stats = await lstat(directory, { bigint: true })
-  if (!stats.isDirectory() || !hasIdentity(stats, expected))
+  if (!isPrivateDirectory(stats) || !hasIdentity(stats, expected))
     throw new Error(`${label} changed while it was being removed`)
 }
 

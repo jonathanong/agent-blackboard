@@ -26,7 +26,7 @@ import {
 } from './snapshot-artifact-ownership.mjs'
 import { removeDetached, removeDirectoryContents, restore } from './snapshot-artifact-removal.mjs'
 import { stageSnapshot } from './snapshot-partition-read.mjs'
-import { writePartitions } from './snapshot-partition-write.mjs'
+import { assertPartitionFile, writePartitions } from './snapshot-partition-write.mjs'
 import { Snapshots } from './snapshots.mjs'
 
 const snapshotsToRemove = new Set<string>()
@@ -642,6 +642,20 @@ it('rejects hardlinked snapshot identities and non-directory ownership markers',
   }
 })
 
+it('rejects every invalid partition publication identity', () => {
+  const expected = { dev: 1n, ino: 2n }
+  const valid = { isFile: () => true, nlink: 1n, dev: 1n, ino: 2n }
+  expect(() => assertPartitionFile(valid, expected, 'invalid')).not.toThrow()
+  for (const invalid of [
+    { ...valid, isFile: () => false },
+    { ...valid, nlink: 2n },
+    { ...valid, dev: 3n },
+    { ...valid, ino: 4n },
+  ]) {
+    expect(() => assertPartitionFile(invalid, expected, 'invalid')).toThrow('invalid')
+  }
+})
+
 it('rejects a staged session path replaced before partition publication', async () => {
   const source = await snapshot()
   const stage = await mkdtemp(join(tmpdir(), 'agent-blackboard-partition-stage-'))
@@ -738,5 +752,56 @@ it('rejects a staged session path replaced before partition publication', async 
     await rm(`${source}.owner`, { force: true })
     await rm(stage, { recursive: true, force: true })
     await rm(output, { recursive: true, force: true })
+  }
+})
+
+it('rejects staging through a replaced directory symlink', async () => {
+  const source = await snapshot()
+  const stage = await mkdtemp(join(tmpdir(), 'agent-blackboard-partition-stage-'))
+  const originalStage = `${stage}-original`
+  const victim = await mkdtemp(join(tmpdir(), 'snapshot-stage-victim-'))
+  const sentinel = join(victim, 'sentinel')
+  await writeFile(sentinel, 'preserve')
+  await rename(stage, originalStage)
+  await symlink(victim, stage)
+  const sourceFile = await open(source, 'r')
+  try {
+    await expect(stageSnapshot(sourceFile, stage)).rejects.toThrow('private directory')
+    await expect(readFile(sentinel, 'utf8')).resolves.toBe('preserve')
+  } finally {
+    await sourceFile.close()
+    await rm(source, { force: true })
+    await rm(`${source}.owner`, { force: true })
+    await rm(stage, { force: true })
+    await rm(originalStage, { recursive: true, force: true })
+    await rm(victim, { recursive: true, force: true })
+  }
+})
+
+it('rejects publication through a replaced output directory symlink', async () => {
+  const source = await snapshot()
+  const stage = await mkdtemp(join(tmpdir(), 'agent-blackboard-partition-stage-'))
+  const output = await mkdtemp(join(tmpdir(), 'agent-blackboard-partitions-'))
+  const originalOutput = `${output}-original`
+  const victim = await mkdtemp(join(tmpdir(), 'snapshot-output-victim-'))
+  const sentinel = join(victim, 'sentinel')
+  await writeFile(sentinel, 'preserve')
+  const sourceFile = await open(source, 'r')
+  try {
+    const staged = await stageSnapshot(sourceFile, stage)
+    await rename(output, originalOutput)
+    await symlink(victim, output)
+    await expect(
+      writePartitions(staged.index, staged.indexIdentity, staged.manifest, output, 25, 1024 * 1024),
+    ).rejects.toThrow('private directory')
+    await expect(readFile(sentinel, 'utf8')).resolves.toBe('preserve')
+  } finally {
+    await sourceFile.close()
+    await rm(source, { force: true })
+    await rm(`${source}.owner`, { force: true })
+    await rm(stage, { recursive: true, force: true })
+    await rm(originalOutput, { recursive: true, force: true })
+    await rm(output, { force: true })
+    await rm(victim, { recursive: true, force: true })
   }
 })

@@ -11,6 +11,7 @@ import {
   type SnapshotState,
 } from './snapshot-partition-format.mjs'
 import { readLines, writeAll } from './snapshot-partition-io.mjs'
+import { assertDirectoryIdentity, captureDirectoryIdentity } from './snapshot-artifact-removal.mjs'
 import type { SnapshotManifest } from './types.mjs'
 
 export interface StagedSnapshot {
@@ -26,8 +27,11 @@ export async function stageSnapshot(
   source: FileHandle,
   directory: string,
 ): Promise<StagedSnapshot> {
+  const directoryIdentity = await captureDirectoryIdentity(directory, 'snapshot staging directory')
   const index = join(directory, 'index.jsonl')
+  await assertDirectoryIdentity(directory, directoryIdentity, 'snapshot staging directory')
   const indexFile = await open(index, 'wx', 0o600)
+  await assertDirectoryIdentity(directory, directoryIdentity, 'snapshot staging directory')
   const hash = createHash('sha256')
   const state: SnapshotState = { sessions: 0, entries: 0, records: 0 }
   let current: (SnapshotBlock & { file: FileHandle }) | undefined
@@ -36,10 +40,13 @@ export async function stageSnapshot(
   let bytes = 0
   const finish = async (): Promise<void> => {
     if (!current) return
+    await assertDirectoryIdentity(directory, directoryIdentity, 'snapshot staging directory')
     await current.file.sync()
     await current.file.close()
     const { file: _file, ...block } = current
+    await assertDirectoryIdentity(directory, directoryIdentity, 'snapshot staging directory')
     await writeAll(indexFile, Buffer.from(snapshotLine(block)))
+    await assertDirectoryIdentity(directory, directoryIdentity, 'snapshot staging directory')
     current = undefined
   }
   try {
@@ -59,7 +66,9 @@ export async function stageSnapshot(
         await finish()
         ordinal += 1
         const path = join(directory, `session-${ordinal}.jsonl`)
+        await assertDirectoryIdentity(directory, directoryIdentity, 'snapshot staging directory')
         const file = await open(path, 'wx', 0o600)
+        await assertDirectoryIdentity(directory, directoryIdentity, 'snapshot staging directory')
         const identity = await file.stat({ bigint: true })
         current = {
           sessionId: record.session.id as string,
@@ -78,8 +87,10 @@ export async function stageSnapshot(
       current!.bytes += bytes.byteLength
     }
     if (!manifest) throw new Error('snapshot is missing a complete terminal manifest')
+    await assertDirectoryIdentity(directory, directoryIdentity, 'snapshot staging directory')
     await indexFile.sync()
     const indexIdentity = await indexFile.stat({ bigint: true })
+    await assertDirectoryIdentity(directory, directoryIdentity, 'snapshot staging directory')
     return {
       manifest,
       bytes,
