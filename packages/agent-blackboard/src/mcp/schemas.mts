@@ -5,6 +5,35 @@ const SESSION_ID = {
   description: 'Caller-supplied session id. Never inferred or generated.',
 }
 
+// Keep all four hints explicit so clients do not rely on protocol defaults.
+const READ_ONLY = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+} as const
+
+const ADDITIVE = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: false,
+  openWorldHint: false,
+} as const
+
+const IDEMPOTENT_ADDITIVE = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+} as const
+
+const MUTATING = {
+  readOnlyHint: false,
+  destructiveHint: true,
+  idempotentHint: true,
+  openWorldHint: false,
+} as const
+
 export const ENTRY_TOOLS: Tool[] = [
   {
     name: 'snapshot_export',
@@ -29,6 +58,7 @@ export const ENTRY_TOOLS: Tool[] = [
         },
       },
     },
+    annotations: ADDITIVE,
   },
   {
     name: 'session_create',
@@ -46,6 +76,7 @@ export const ENTRY_TOOLS: Tool[] = [
       },
       required: ['sessionId', 'parentSessionId', 'agent', 'version'],
     },
+    annotations: ADDITIVE,
   },
   {
     name: 'session_ensure',
@@ -65,6 +96,7 @@ export const ENTRY_TOOLS: Tool[] = [
       },
       required: ['sessionId', 'parentSessionId', 'agent', 'version'],
     },
+    annotations: IDEMPOTENT_ADDITIVE,
   },
   {
     name: 'session_search',
@@ -111,6 +143,7 @@ export const ENTRY_TOOLS: Tool[] = [
         },
       },
     },
+    annotations: READ_ONLY,
   },
   {
     name: 'session_patch',
@@ -123,6 +156,7 @@ export const ENTRY_TOOLS: Tool[] = [
       },
       required: ['sessionId', 'data'],
     },
+    annotations: MUTATING,
   },
   {
     name: 'session_archive',
@@ -133,6 +167,7 @@ export const ENTRY_TOOLS: Tool[] = [
       properties: { sessionId: SESSION_ID },
       required: ['sessionId'],
     },
+    annotations: MUTATING,
   },
   {
     name: 'entry_append',
@@ -145,6 +180,7 @@ export const ENTRY_TOOLS: Tool[] = [
       },
       required: ['sessionId', 'data'],
     },
+    annotations: ADDITIVE,
   },
   {
     name: 'entry_get',
@@ -157,5 +193,6 @@ export const ENTRY_TOOLS: Tool[] = [
       },
       required: ['sessionId'],
     },
+    annotations: READ_ONLY,
   },
 ]

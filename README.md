@@ -71,7 +71,7 @@ Create client credentials with an admin token:
 agent-blackboard credentials create --name "my laptop"
 ```
 
-## Install in Codex or Claude Code
+## Install in Codex, Claude Code, Cursor, OpenCode, or Grok
 
 Both installation options run the published package with `npx`; neither requires a local clone of
 this repository. Before starting your agent host, export the deployed service URL and a client
@@ -143,6 +143,28 @@ For Claude Code, add this project-scoped `.mcp.json` (or merge the server into a
 Start Claude Code in that project, approve the server when prompted, and use `/mcp` or
 `claude mcp get agent-blackboard` to verify it. See [MCP tools](docs/mcp.md) and
 [agent hosts](docs/agent-hosts.md) for the available operations and explicit-session-id contract.
+
+For Cursor, add the same stdio server to `.cursor/mcp.json` (or `~/.cursor/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "agent-blackboard": {
+      "command": "npx",
+      "args": ["-y", "agent-blackboard@0.5.0", "mcp"],
+      "env": {
+        "AGENT_BLACKBOARD_URL": "${AGENT_BLACKBOARD_URL}",
+        "AGENT_BLACKBOARD_TOKEN": "${AGENT_BLACKBOARD_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+For OpenCode v1, add a `type: "local"` server under `mcp` in `opencode.json` and pass the two
+environment variables through its `environment` object. Grok custom connectors require a public
+remote MCP URL; this package currently exposes stdio only, so Grok is not supported directly.
+See [agent hosts](docs/agent-hosts.md) for complete host-specific examples and limitations.
 
 ## Deploy and teardown
 
