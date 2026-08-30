@@ -51,8 +51,8 @@ standard `mcpServers` shape. Add this entry and restart Cursor:
       "command": "npx",
       "args": ["-y", "agent-blackboard@0.5.0", "mcp"],
       "env": {
-        "AGENT_BLACKBOARD_URL": "${AGENT_BLACKBOARD_URL}",
-        "AGENT_BLACKBOARD_TOKEN": "${AGENT_BLACKBOARD_TOKEN}"
+        "AGENT_BLACKBOARD_URL": "${env:AGENT_BLACKBOARD_URL}",
+        "AGENT_BLACKBOARD_TOKEN": "${env:AGENT_BLACKBOARD_TOKEN}"
       }
     }
   }

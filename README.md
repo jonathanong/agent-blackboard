@@ -132,8 +132,8 @@ For Claude Code, add this project-scoped `.mcp.json` (or merge the server into a
       "command": "npx",
       "args": ["-y", "agent-blackboard@0.5.0", "mcp"],
       "env": {
-        "AGENT_BLACKBOARD_URL": "${AGENT_BLACKBOARD_URL}",
-        "AGENT_BLACKBOARD_TOKEN": "${AGENT_BLACKBOARD_TOKEN}"
+        "AGENT_BLACKBOARD_URL": "${env:AGENT_BLACKBOARD_URL}",
+        "AGENT_BLACKBOARD_TOKEN": "${env:AGENT_BLACKBOARD_TOKEN}"
       }
     }
   }
