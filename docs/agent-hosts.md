@@ -59,12 +59,14 @@ standard `mcpServers` shape. Add this entry and restart Cursor:
 }
 ```
 
-Keep the URL and client token in environment variables; do not commit credentials. Cursor's MCP
-configuration is separate from the Codex and Claude plugin manifests.
+Keep the URL and client token in environment variables; do not commit credentials. Cursor desktop
+resolves the `env:` placeholders. Cursor CLI users must also export both variables in the shell that
+starts `cursor-agent`. Cursor's MCP configuration is separate from the Codex and Claude plugin
+manifests.
 
-## OpenCode
+## OpenCode v1
 
-OpenCode uses a local server entry under `mcp` in `opencode.json`:
+OpenCode v1 uses a local server entry under `mcp` in `opencode.json`:
 
 ```json
 {

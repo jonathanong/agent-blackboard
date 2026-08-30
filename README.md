@@ -161,7 +161,7 @@ For Cursor, add the same stdio server to `.cursor/mcp.json` (or `~/.cursor/mcp.j
 }
 ```
 
-For OpenCode, add a `type: "local"` server under `mcp` in `opencode.json` and pass the two
+For OpenCode v1, add a `type: "local"` server under `mcp` in `opencode.json` and pass the two
 environment variables through its `environment` object. Grok custom connectors require a public
 remote MCP URL; this package currently exposes stdio only, so Grok is not supported directly.
 See [agent hosts](docs/agent-hosts.md) for complete host-specific examples and limitations.
