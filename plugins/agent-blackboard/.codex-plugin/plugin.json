@@ -12,6 +12,7 @@
   "license": "MIT",
   "keywords": ["entries", "agent", "mcp", "retrospective", "codex"],
   "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "agent-blackboard",
     "shortDescription": "Session entries for autonomous agents",

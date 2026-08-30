@@ -93,6 +93,57 @@ it('lists eight tools and returns JSON text or MCP errors', async () => {
       'session_search',
       'snapshot_export',
     ])
+    const annotations = Object.fromEntries(tools.map((tool) => [tool.name, tool.annotations]))
+    expect(annotations).toEqual({
+      entry_append: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+      entry_get: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      session_archive: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      session_create: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+      session_ensure: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      session_patch: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      session_search: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      snapshot_export: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    })
     expect(tools.find((tool) => tool.name === 'session_search')?.inputSchema).toMatchObject({
       properties: {
         archived: { type: 'integer', enum: [0, 1] },
