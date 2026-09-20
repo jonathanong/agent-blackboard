@@ -18,4 +18,17 @@ describe('CloudFormation template', () => {
     const template = await readFile(new URL('../infra/template.yaml', import.meta.url), 'utf8')
     expect(template).toContain('      Timeout: 300')
   })
+
+  it('keeps Sentry optional and injects only public runtime configuration', async () => {
+    const template = await readFile(new URL('../infra/template.yaml', import.meta.url), 'utf8')
+    expect(template).toContain('  SentryEnabled:')
+    expect(template).toContain('  SentryDsn:')
+    expect(template).toContain('  SentryEnvironment:')
+    expect(template).toContain('  SentryRelease:')
+    expect(template).toContain('          SENTRY_ENABLED: !Ref SentryEnabled')
+    expect(template).toContain('          SENTRY_DSN: !Ref SentryDsn')
+    expect(template).toContain('          SENTRY_ENVIRONMENT: !Ref SentryEnvironment')
+    expect(template).toContain('          SENTRY_RELEASE: !Ref SentryRelease')
+    expect(template).not.toContain('SENTRY_AUTH_TOKEN')
+  })
 })

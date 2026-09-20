@@ -73,6 +73,15 @@ AGENT_BLACKBOARD_ADMIN_CREDENTIALS=$(node -e "console.log(Buffer.from(JSON.strin
 list would just make `/credentials*` permanently 401 on a fresh deploy.
 Override `AGENT_BLACKBOARD_TTL_DAYS`/`STACK_NAME` via env vars.
 
+Optional Sentry reporting is selected by the deploy CLI, not by the ordinary
+runtime environment. `--sentry=required --sentry-environment=staging|production`
+requires `AGENT_BLACKBOARD_SENTRY_DSN`, a clean worktree, and an exact commit;
+the command then injects the public DSN, environment, and commit release into
+CloudFormation. Without that flag it explicitly disables Sentry and clears the
+DSN. Project and key provisioning lives in the independent
+[`opentofu/sentry`](../opentofu/sentry/README.md) root and is never run by
+`deploy`.
+
 **Prerequisites**: an AWS account and the AWS CLI (`aws`), configured with
 credentials that can manage CloudFormation, Lambda, IAM roles, DynamoDB, and
 S3.
@@ -112,6 +121,10 @@ A single CloudFormation stack:
 | `AGENT_BLACKBOARD_STORE`             | local-server only                       | Set to `memory` to use the in-memory store instead of DynamoDB.                                                           |
 | `PORT`                               | local-server only                       | Listen port for `pnpm run dev`. Default `3000`.                                                                           |
 | `AWS_REGION`                         | handler, local-server (via the AWS SDK) | Region for the DynamoDB client — read automatically by `@aws-sdk/client-dynamodb`'s default provider chain.               |
+| `SENTRY_ENABLED`                     | deployed handler                        | `true` only for an explicit `--sentry=required` deployment.                                                               |
+| `SENTRY_DSN`                         | deployed handler                        | Public event-ingestion DSN selected from the independent OpenTofu stack.                                                  |
+| `SENTRY_ENVIRONMENT`                 | deployed handler                        | `staging` or `production`, matching the selected client key.                                                              |
+| `SENTRY_RELEASE`                     | deployed handler                        | Exact 40-character Git commit used for the deployed bundle.                                                               |
 
 ## Testing
 

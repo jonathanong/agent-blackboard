@@ -174,6 +174,9 @@ pnpm --dir packages/server run teardown
 ```
 
 See [CloudFormation deployment](docs/cloudformation.md) for prerequisites and configuration.
+Sentry project/key provisioning is isolated in
+[`opentofu/sentry`](opentofu/sentry/README.md); normal deploys leave it disabled
+unless `--sentry=required` is supplied explicitly.
 
 ## Documentation
 
@@ -195,6 +198,7 @@ See [CloudFormation deployment](docs/cloudformation.md) for prerequisites and co
 | `AGENT_BLACKBOARD_URL`               | client/CLI/MCP | Server base URL                   |
 | `AGENT_BLACKBOARD_TOKEN`             | client/CLI/MCP | Client credential                 |
 | `AGENT_BLACKBOARD_ADMIN_TOKEN`       | CLI            | Admin credential                  |
+| `AGENT_BLACKBOARD_SENTRY_DSN`        | deploy CLI     | Optional public Lambda Sentry DSN |
 
 ## Harness Ecosystem
 

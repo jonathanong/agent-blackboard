@@ -13,6 +13,7 @@
 //      AGENT_BLACKBOARD_ADMIN_CREDENTIALS (required), AGENT_BLACKBOARD_TTL_DAYS (optional),
 //      STACK_NAME (optional, default "agent-blackboard").
 import { bundle } from './bundle.mjs'
+import { parseSentryDeployOptions } from './deploy-options.mjs'
 import { migrateEntryMetadata, migrationClient } from './migrate-entry-metadata.mjs'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
@@ -98,7 +99,7 @@ function stackDetails(stackName, region) {
   }
 }
 
-export async function deploy() {
+export async function deploy(argv = process.argv.slice(2)) {
   const adminCredentials = process.env.AGENT_BLACKBOARD_ADMIN_CREDENTIALS
   if (!adminCredentials) {
     throw new Error(
@@ -110,6 +111,9 @@ export async function deploy() {
   const accountId = JSON.parse(aws(['sts', 'get-caller-identity'])).Account
   const bucket = `agent-blackboard-deploy-${accountId}-${region}`
   const stackName = process.env.STACK_NAME || 'agent-blackboard'
+  const sentry = parseSentryDeployOptions(argv, process.env, (args) =>
+    execFileSync('git', args, { cwd: path.resolve(infraDir, '../../..'), encoding: 'utf8' }),
+  )
 
   const { zipPath } = await bundle()
   const hash = createHash('sha256')
@@ -124,6 +128,10 @@ export async function deploy() {
     `LambdaCodeS3Bucket=${bucket}`,
     `LambdaCodeS3Key=${key}`,
     `AdminCredentials=${adminCredentials}`,
+    `SentryEnabled=${String(sentry.enabled)}`,
+    `SentryDsn=${sentry.dsn}`,
+    `SentryEnvironment=${sentry.environment}`,
+    `SentryRelease=${sentry.release}`,
   ]
   if (process.env.AGENT_BLACKBOARD_TTL_DAYS)
     overrides.push(`AgentBlackboardTtlDays=${process.env.AGENT_BLACKBOARD_TTL_DAYS}`)

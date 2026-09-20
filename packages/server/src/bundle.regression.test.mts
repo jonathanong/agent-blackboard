@@ -65,5 +65,7 @@ describe('lambda bundle (real esbuild output)', () => {
     // (ECONNREFUSED, a credentials error, etc.) is expected and fine —
     // only a "Dynamic require" failure means the banner regressed.
     expect(output).not.toMatch(/Dynamic require/)
+    expect(output).not.toMatch(/SyntaxError|already been declared/)
+    expect(output).toMatch(/THREW:|completed without throwing/)
   })
 })

@@ -13,7 +13,8 @@
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.1130.0",
-    "@aws-sdk/lib-dynamodb": "^3.1130.0"
+    "@aws-sdk/lib-dynamodb": "^3.1130.0",
+    "@sentry/aws-serverless": "10.75.0"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",
