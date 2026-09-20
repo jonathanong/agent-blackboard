@@ -53,7 +53,7 @@ export async function bundle() {
     // `createRequire` output makes those calls resolve like normal CJS
     // `require()` of a builtin.
     banner: {
-      js: "import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);",
+      js: "import { createRequire as __agentBlackboardCreateRequire } from 'node:module'; const require = __agentBlackboardCreateRequire(import.meta.url);",
     },
   })
 

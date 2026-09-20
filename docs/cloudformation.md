@@ -75,6 +75,20 @@ cd packages/server
 pnpm run deploy
 ```
 
+Sentry is optional and disabled by default. Provision its independent project
+and environment keys using [`opentofu/sentry`](../opentofu/sentry/README.md),
+then opt a deployment in explicitly:
+
+```sh
+export AGENT_BLACKBOARD_SENTRY_DSN="$(tofu -chdir=opentofu/sentry output -json public_dsns | jq -r '.production')"
+pnpm run deploy -- --sentry=required --sentry-environment=production
+```
+
+An opted-in deployment requires a clean Git worktree and uses the exact
+40-character commit as `SENTRY_RELEASE`. Provisioning credentials are never
+passed to CloudFormation or Lambda. Use `--sentry=off` (the default) to clear
+the runtime DSN and deploy without telemetry.
+
 This bundles the handler, uploads it to a deploy-owned S3 bucket, and runs
 `aws cloudformation deploy` — creating the stack on the first run, updating
 it on every run after (safe to re-run any time; unchanged code is a no-op
@@ -168,6 +182,11 @@ aws s3 rb s3://agent-blackboard-deploy-<account-id>-<region> --force
 - **`AGENT_BLACKBOARD_ADMIN_CREDENTIALS env var is required`** — see step 3; there's
   deliberately no default (an empty admin list would just make
   `/credentials*` permanently 401).
+- **`--sentry=required needs a clean Git worktree`** — commit the exact source
+  being deployed so Sentry events identify a reproducible release.
+- **`AGENT_BLACKBOARD_SENTRY_DSN must be a public HTTPS Sentry DSN`** — apply
+  the separate Sentry stack, select its `staging` or `production` output, and
+  export it before retrying the deploy.
 - **Deploy fails on `ReservedConcurrentExecutions`** — the template reserves
   20 units of concurrency as a DoS backstop. On a fresh/restricted AWS
   account with little unreserved concurrency left (default account limit is

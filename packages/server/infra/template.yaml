@@ -33,6 +33,28 @@ Parameters:
       S3 key (content-hash-addressed) of the packaged handler zip. Supplied
       by infra/deploy.mjs.
 
+  SentryEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: Enables optional Sentry error reporting in the Lambda runtime.
+
+  SentryDsn:
+    Type: String
+    Default: ''
+    Description: Public Sentry event-ingestion DSN. Empty when Sentry is disabled.
+
+  SentryEnvironment:
+    Type: String
+    Default: staging
+    AllowedValues: [staging, production]
+    Description: Sentry environment tag selected by the deploy CLI.
+
+  SentryRelease:
+    Type: String
+    Default: ''
+    Description: Exact 40-character Git commit deployed by the CLI.
+
 Resources:
   AgentBlackboardTable:
     Type: AWS::DynamoDB::Table
@@ -142,6 +164,10 @@ Resources:
           AGENT_BLACKBOARD_TABLE: !Ref AgentBlackboardTable
           AGENT_BLACKBOARD_TTL_DAYS: !Ref AgentBlackboardTtlDays
           AGENT_BLACKBOARD_ADMIN_CREDENTIALS: !Ref AdminCredentials
+          SENTRY_ENABLED: !Ref SentryEnabled
+          SENTRY_DSN: !Ref SentryDsn
+          SENTRY_ENVIRONMENT: !Ref SentryEnvironment
+          SENTRY_RELEASE: !Ref SentryRelease
 
   # AuthType: NONE makes the Function URL publicly reachable — the handler
   # itself is responsible for validating the bearer token on every request

@@ -11,32 +11,12 @@ import type { HandlerRequest, HandlerResponse } from './core/types.mjs'
 import { createDynamoStore } from './store/dynamo.mjs'
 import type { AdminEnv } from './auth/admin.mjs'
 import { errorMessage, nodeStreamSink, streamResponseBody } from './handler-stream.mjs'
-import type { ResponseStreamSink, WritableSink } from './handler-stream.mjs'
+import type { ResponseStreamSink } from './handler-stream.mjs'
+import { reportSentryError } from './sentry.mjs'
+import type { ErrorReporter } from './sentry.mjs'
 
 export type { ResponseStreamSink, WritableSink } from './handler-stream.mjs'
 export { errorMessage, nodeStreamSink, streamResponseBody } from './handler-stream.mjs'
-
-// Injected by the Lambda Node runtime only under InvokeMode: RESPONSE_STREAM
-// — doesn't exist outside it, hence the test-time polyfill in
-// handler.test.mts and the narrow v8-ignore below around the code that
-// touches it.
-declare global {
-  const awslambda: {
-    streamifyResponse: (
-      fn: (
-        event: LambdaFunctionUrlEvent,
-        stream: WritableSink,
-        ctx: LambdaContext,
-      ) => Promise<void>,
-    ) => unknown
-    HttpResponseStream: {
-      from: (
-        stream: WritableSink,
-        metadata: { statusCode: number; headers?: Record<string, string> },
-      ) => WritableSink
-    }
-  }
-}
 
 export interface LambdaFunctionUrlEvent {
   requestContext: { http: { method: string; path: string } }
@@ -89,6 +69,7 @@ export type StartResponseStream = (
 export interface HandleDeps extends HandleRequestDeps {
   handleRequest: HandleRequestFn
   requestId?: string
+  reportError?: ErrorReporter
 }
 
 export async function handle(
@@ -101,6 +82,7 @@ export async function handle(
     request = parseFunctionUrlEvent(event)
   } catch (error) {
     logError('failed to parse Function URL event', error, deps.requestId)
+    await deps.reportError?.(error, { stage: 'request-parse', requestId: deps.requestId })
     await streamResponseBody(
       JSON.stringify({ error: 'bad_request' }),
       startStream(400, { 'content-type': 'application/json' }),
@@ -117,6 +99,7 @@ export async function handle(
     })
   } catch (error) {
     logError('handleRequest threw', error, deps.requestId)
+    await deps.reportError?.(error, { stage: 'request', requestId: deps.requestId })
     await streamResponseBody(
       JSON.stringify({ error: 'internal_error' }),
       startStream(500, { 'content-type': 'application/json' }),
@@ -134,6 +117,7 @@ export async function handle(
     // truncating whatever data hadn't streamed yet (see
     // docs/architecture.md's streaming-reads section).
     logError('error while streaming response body', error, deps.requestId)
+    await deps.reportError?.(error, { stage: 'response-stream', requestId: deps.requestId })
     try {
       sink.destroy(error instanceof Error ? error : new Error(errorMessage(error)))
     } catch {
@@ -178,6 +162,7 @@ export const handler = awslambda.streamifyResponse(async (event, responseStream,
       now: currentTime,
       env: adminEnv(),
       requestId: context.awsRequestId,
+      reportError: reportSentryError,
     },
   )
 })

@@ -289,23 +289,29 @@ describe('handle', () => {
     const calls: Array<{ status: number; headers: Record<string, string> }> = []
     const sink = recordingSink()
     const handleRequest = vi.fn()
+    const reportError = vi.fn(async () => undefined)
     await handle(
       {} as unknown as LambdaFunctionUrlEvent,
       (status, headers) => {
         calls.push({ status, headers })
         return sink
       },
-      deps({ handleRequest }),
+      deps({ handleRequest, reportError }),
     )
 
     expect(calls).toEqual([{ status: 400, headers: { 'content-type': 'application/json' } }])
     expect(JSON.parse(sink.writes[0] as string)).toEqual({ error: 'bad_request' })
     expect(handleRequest).not.toHaveBeenCalled()
+    expect(reportError).toHaveBeenCalledWith(expect.any(TypeError), {
+      stage: 'request-parse',
+      requestId: 'req-1',
+    })
     expect(consoleError).toHaveBeenCalledTimes(1)
   })
 
   it('responds 500 and logs a non-Error throw when handleRequest rejects', async () => {
     const sink = recordingSink()
+    const reportError = vi.fn(async () => undefined)
     await handle(
       baseEvent(),
       () => sink,
@@ -313,11 +319,16 @@ describe('handle', () => {
         handleRequest: async () => {
           throw 'boom' // eslint-disable-line no-throw-literal -- exercises the non-Error branch of errorMessage()
         },
+        reportError,
       }),
     )
     expect(sink.ended).toBe(true)
     expect(JSON.parse(sink.writes[0] as string)).toEqual({ error: 'internal_error' })
     expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('"error":"boom"'))
+    expect(reportError).toHaveBeenCalledWith('boom', {
+      stage: 'request',
+      requestId: 'req-1',
+    })
   })
 
   it('threads store/now/env through to handleRequest', async () => {
@@ -368,6 +379,7 @@ describe('handle', () => {
     // sink must be destroyed instead, so the client sees a genuine
     // transport-level error (see docs/architecture.md#streaming-reads).
     const sink = recordingSink()
+    const reportError = vi.fn(async () => undefined)
     async function* explode(): AsyncIterable<string> {
       yield 'partial'
       throw new Error('stream broke')
@@ -375,12 +387,19 @@ describe('handle', () => {
     await handle(
       baseEvent(),
       () => sink,
-      deps({ handleRequest: async () => ({ status: 200, headers: {}, body: explode() }) }),
+      deps({
+        handleRequest: async () => ({ status: 200, headers: {}, body: explode() }),
+        reportError,
+      }),
     )
     expect(sink.writes).toEqual(['partial'])
     expect(sink.ended).toBe(false)
     expect(sink.destroyedWith?.message).toBe('stream broke')
     expect(consoleError).toHaveBeenCalledWith(expect.stringContaining('stream broke'))
+    expect(reportError).toHaveBeenCalledWith(expect.any(Error), {
+      stage: 'response-stream',
+      requestId: 'req-1',
+    })
   })
 
   it('wraps a non-Error thrown value in a real Error before destroying the sink', async () => {
