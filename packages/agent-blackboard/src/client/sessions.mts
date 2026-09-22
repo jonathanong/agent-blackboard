@@ -43,6 +43,8 @@ function buildListSessionsQuery(query: ListSessionsQuery): Record<string, string
     wire.parentSessionId = query.parentSessionId ?? ''
   }
   if (query.data !== undefined) wire.data = JSON.stringify(query.data)
+  if (query.dataArrayContains !== undefined)
+    wire.dataArrayContains = JSON.stringify(query.dataArrayContains)
   if (query.inactiveForHours !== undefined) {
     wire.inactiveForHours = String(query.inactiveForHours)
   }

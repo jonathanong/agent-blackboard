@@ -7,6 +7,7 @@ import { expect, it } from 'vitest'
 import { createFakeContext } from '../__tests__/cli-context.mjs'
 import { sendNdjson, startHttpFixture } from '../__tests__/http-fixture.mjs'
 import { runSnapshot } from './snapshot.mjs'
+import { parseDataArrayContains } from './data-array-contains.mjs'
 import { createCleanupToken, writeSnapshotMarker } from '../client/snapshot-artifact-ownership.mjs'
 
 const records = [
@@ -48,6 +49,14 @@ const records = [
   },
 ]
 
+it('parses valid CLI array-membership selectors', () => {
+  expect(parseDataArrayContains('{"repositories":"owner/repo"}', 'selector')).toEqual({
+    repositories: 'owner/repo',
+  })
+  expect(() => parseDataArrayContains('[]', 'selector')).toThrow('JSON object')
+  expect(() => parseDataArrayContains('{}', 'selector')).toThrow('string values')
+})
+
 it('exports a filtered root-only snapshot and emits only its compact result', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'abb-cli-snapshot-'))
   const fixture = await startHttpFixture((_request, response) => sendNdjson(response, records))
@@ -84,6 +93,42 @@ it('exports a filtered root-only snapshot and emits only its compact result', as
   }
 })
 
+it('forwards array-membership snapshot selectors', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'abb-cli-snapshot-'))
+  const fixture = await startHttpFixture((_request, response) =>
+    sendNdjson(response, [
+      records[0],
+      {
+        ...records[1],
+        manifest: {
+          ...records[1]!.manifest,
+          selection: { archived: false, dataArrayContains: { repositories: 'owner/repo' } },
+        },
+      },
+    ]),
+  )
+  try {
+    await runSnapshot(
+      [
+        'export',
+        '--path',
+        join(directory, 'snapshot.jsonl'),
+        '--data-array-contains',
+        '{"repositories":"owner/repo"}',
+      ],
+      createFakeContext({
+        env: { AGENT_BLACKBOARD_URL: fixture.baseUrl, AGENT_BLACKBOARD_TOKEN: 't' },
+      }),
+    )
+    expect(
+      new URL(fixture.requests[0]!.url, fixture.baseUrl).searchParams.get('dataArrayContains'),
+    ).toBe('{"repositories":"owner/repo"}')
+  } finally {
+    await fixture.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 it('rejects invalid snapshot command arguments before making an HTTP request', async () => {
   const ctx = createFakeContext({ env: {} })
   await expect(runSnapshot(['nope'], ctx)).rejects.toThrow('requires: export')
@@ -95,6 +140,9 @@ it('rejects invalid snapshot command arguments before making an HTTP request', a
     'does not accept a value',
   )
   await expect(runSnapshot(['export', '--data', '[]'], ctx)).rejects.toThrow('JSON object')
+  await expect(
+    runSnapshot(['export', '--data-array-contains', '{"repositories":""}'], ctx),
+  ).rejects.toThrow('string values')
   await expect(runSnapshot(['export', '--agent'], ctx)).rejects.toThrow('requires a value')
   await expect(runSnapshot(['export', 'extra'], ctx)).rejects.toThrow('accepts flags only')
   await expect(runSnapshot(['export', '--parent-session-id', 'invalid/id'], ctx)).rejects.toThrow(

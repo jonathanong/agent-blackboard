@@ -20,6 +20,9 @@ function selection(request: HandlerRequest): SnapshotSelection | { error: string
     ...(query.version === undefined ? {} : { version: query.version }),
     ...(query.parentSessionId === undefined ? {} : { parentSessionId: query.parentSessionId }),
     ...(query.data === undefined ? {} : { data: query.data }),
+    ...(query.dataArrayContains === undefined
+      ? {}
+      : { dataArrayContains: query.dataArrayContains }),
     ...(query.inactiveForHours === undefined ? {} : { inactiveForHours: query.inactiveForHours }),
   }
 }

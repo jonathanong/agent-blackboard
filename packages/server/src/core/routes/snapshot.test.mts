@@ -55,6 +55,45 @@ describe('snapshot route', () => {
     expect(Number.isNaN(Date.parse(records[0].manifest.createdAt))).toBe(false)
   })
 
+  it('selects sessions by exact array membership and preserves it in the manifest', async () => {
+    await store.createSession({
+      credId,
+      id: 'match',
+      parentSessionId: null,
+      agent: 'codex',
+      version: '1',
+    })
+    await store.createSession({
+      credId,
+      id: 'other',
+      parentSessionId: null,
+      agent: 'codex',
+      version: '1',
+    })
+    await store.patchSession(credId, {
+      sessionId: 'match',
+      data: { repositories: ['owner/repo'] },
+    })
+    await store.patchSession(credId, {
+      sessionId: 'other',
+      data: { repositories: ['different/repo'] },
+    })
+    const response = await handleSnapshotRoute(
+      request({ query: { dataArrayContains: '{"repositories":"owner/repo"}' } }),
+      store,
+      () => NOW,
+    )
+    const records = (await collect(response.body))
+      .trim()
+      .split('\n')
+      .map((value) => JSON.parse(value))
+    expect(records.map((record) => record.session?.id).filter(Boolean)).toEqual(['match'])
+    expect(records.at(-1).manifest.selection).toEqual({
+      archived: false,
+      dataArrayContains: { repositories: 'owner/repo' },
+    })
+  })
+
   it('streams session blocks, entries, and a complete manifest while excluding archived sessions', async () => {
     await store.createSession({
       credId,

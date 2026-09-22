@@ -36,6 +36,17 @@ function matchesData(session: Session, data: Record<string, unknown> | undefined
   )
 }
 
+function matchesDataArrayContains(
+  session: Session,
+  data: Record<string, string> | undefined,
+): boolean {
+  if (data === undefined) return true
+  return Object.entries(data).every(([key, value]) => {
+    const candidate = session.data[key]
+    return Array.isArray(candidate) && candidate.includes(value)
+  })
+}
+
 function matchesInactivity(session: Session, hours: number | undefined, now: Date): boolean {
   if (hours === undefined) return true
   if (session.lastEntryAt === null) return false
@@ -56,5 +67,9 @@ export function matchesListFilter(
   if (query.parentSessionId !== undefined && session.parentSessionId !== query.parentSessionId) {
     return false
   }
-  return matchesData(session, query.data) && matchesInactivity(session, query.inactiveForHours, now)
+  return (
+    matchesData(session, query.data) &&
+    matchesDataArrayContains(session, query.dataArrayContains) &&
+    matchesInactivity(session, query.inactiveForHours, now)
+  )
 }

@@ -67,6 +67,28 @@ describe('parseListSessionsQuery', () => {
     })
   })
 
+  it('parses and validates a JSON string membership filter', () => {
+    expect(parseListSessionsQuery({ dataArrayContains: '{"repositories":"owner/repo"}' })).toEqual({
+      ok: true,
+      query: { archived: false, dataArrayContains: { repositories: 'owner/repo' } },
+    })
+    expect(parseListSessionsQuery({ dataArrayContains: '{"repositories":[]}' })).toEqual({
+      ok: false,
+      error: 'dataArrayContains must be a JSON object with string values',
+    })
+    expect(parseListSessionsQuery({ dataArrayContains: 'not json' })).toEqual({
+      ok: false,
+      error: 'dataArrayContains must be a JSON object with string values',
+    })
+    expect(parseListSessionsQuery({ dataArrayContains: '{"repositories":""}' })).toEqual({
+      ok: false,
+      error: 'dataArrayContains must be a JSON object with string values',
+    })
+    expect(parseListSessionsQuery({ dataArrayContains: '[]' }).ok).toBe(false)
+    expect(parseListSessionsQuery({ dataArrayContains: '{}' }).ok).toBe(false)
+    expect(parseListSessionsQuery({ dataArrayContains: '{"":"owner/repo"}' }).ok).toBe(false)
+  })
+
   it('parses positive integer and fractional inactivity filters', () => {
     expect(parseListSessionsQuery({ inactiveForHours: '8' })).toEqual({
       ok: true,

@@ -46,6 +46,19 @@ export function buildSessionFilter(
       expressions.push(`#data.${nameToken} = ${valueToken}`)
     }
   }
+  if (query.dataArrayContains && Object.keys(query.dataArrayContains).length > 0) {
+    names['#data'] = 'data'
+    values[':dataArrayType'] = 'L'
+    for (const [index, [key, value]] of Object.entries(query.dataArrayContains).entries()) {
+      const nameToken = `#dataArrayKey${index}`
+      const valueToken = `:dataArrayValue${index}`
+      names[nameToken] = key
+      values[valueToken] = value
+      expressions.push(
+        `attribute_type(#data.${nameToken}, :dataArrayType) AND contains(#data.${nameToken}, ${valueToken})`,
+      )
+    }
+  }
   if (query.inactiveForHours !== undefined) {
     names['#lastEntryAt'] = 'lastEntryAt'
     values[':lastEntryCutoff'] = new Date(

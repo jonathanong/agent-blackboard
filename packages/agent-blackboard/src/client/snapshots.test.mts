@@ -22,7 +22,7 @@ const entry = {
   data: { type: 'retrospective' },
 }
 
-function records() {
+function records(includeArrayFilter = false) {
   return [
     { type: 'session', session },
     { type: 'entry', entry },
@@ -38,6 +38,7 @@ function records() {
           agent: 'codex',
           parentSessionId: null,
           data: { branch: 'main' },
+          ...(includeArrayFilter ? { dataArrayContains: { repositories: 'owner/repo' } } : {}),
           inactiveForHours: 8,
         },
         counts: { sessions: 1, entries: 1, records: 3 },
@@ -54,7 +55,7 @@ function records() {
 it('streams an authenticated snapshot into a read-only JSONL file and verifies its manifest', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'abb-snapshot-test-'))
   const destination = join(directory, 'export.jsonl')
-  const fixture = await startHttpFixture((_req, response) => sendNdjson(response, records()))
+  const fixture = await startHttpFixture((_req, response) => sendNdjson(response, records(true)))
   try {
     const result = await new Snapshots({ baseUrl: fixture.baseUrl, token: 'secret' }).export({
       path: destination,
@@ -62,6 +63,7 @@ it('streams an authenticated snapshot into a read-only JSONL file and verifies i
         agent: 'codex',
         parentSessionId: null,
         data: { branch: 'main' },
+        dataArrayContains: { repositories: 'owner/repo' },
         inactiveForHours: 8,
       },
     })
@@ -81,6 +83,7 @@ it('streams an authenticated snapshot into a read-only JSONL file and verifies i
     expect(request.pathname).toBe('/snapshot')
     expect(request.searchParams.get('parentSessionId')).toBe('')
     expect(request.searchParams.get('data')).toBe('{"branch":"main"}')
+    expect(request.searchParams.get('dataArrayContains')).toBe('{"repositories":"owner/repo"}')
   } finally {
     await fixture.close()
     await rm(directory, { recursive: true, force: true })

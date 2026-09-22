@@ -6,6 +6,7 @@ import { parseArgs, stringFlag } from './args.mjs'
 import type { CliContext } from './context.mjs'
 import { clientConfigFromEnv } from './env.mjs'
 import { CliError } from './errors.mjs'
+import { parseDataArrayContains } from './data-array-contains.mjs'
 import { writeLine } from './output.mjs'
 import { partitionCounts } from './snapshot-partition-options.mjs'
 
@@ -81,12 +82,17 @@ function selectionFrom(flags: Record<string, string | boolean>): SnapshotSelecti
   const agent = optionalString(flags, 'agent')
   const version = optionalString(flags, 'version')
   const data = dataSelection(flags)
+  const dataArrayContains = parseDataArrayContains(
+    optionalString(flags, 'data-array-contains'),
+    'snapshot export --data-array-contains',
+  )
   const inactiveForHours = inactivitySelection(flags)
   return {
     ...(agent === undefined ? {} : { agent }),
     ...(version === undefined ? {} : { version }),
     ...parentSelection(flags),
     ...(data === undefined ? {} : { data }),
+    ...(dataArrayContains === undefined ? {} : { dataArrayContains }),
     ...(inactiveForHours === undefined ? {} : { inactiveForHours }),
   }
 }
@@ -166,7 +172,16 @@ export async function runSnapshot(argv: string[], ctx: CliContext): Promise<void
     throw new CliError('snapshot requires: export, partition, or cleanup.')
   only(
     flags,
-    ['path', 'agent', 'version', 'parent-session-id', 'root-only', 'data', 'inactive-for-hours'],
+    [
+      'path',
+      'agent',
+      'version',
+      'parent-session-id',
+      'root-only',
+      'data',
+      'data-array-contains',
+      'inactive-for-hours',
+    ],
     'snapshot export',
   )
   if (positional.length > 0) throw new CliError('snapshot export accepts flags only.')

@@ -61,9 +61,35 @@ export async function runSessions(argv: string[], ctx: CliContext): Promise<void
     if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) {
       throw new CliError('sessions list --limit must be a positive integer.')
     }
+    const dataArrayContainsFlag = stringFlag(flags, 'data-array-contains')
+    let dataArrayContains: Record<string, string> | undefined
+    if (Object.hasOwn(flags, 'data-array-contains') && dataArrayContainsFlag === undefined) {
+      throw new CliError('sessions list --data-array-contains requires JSON.')
+    }
+    if (dataArrayContainsFlag !== undefined) {
+      try {
+        const parsed: unknown = JSON.parse(dataArrayContainsFlag)
+        if (
+          !parsed ||
+          typeof parsed !== 'object' ||
+          Array.isArray(parsed) ||
+          Object.keys(parsed).length === 0 ||
+          Object.entries(parsed).some(
+            ([key, value]) => key.length === 0 || typeof value !== 'string' || value.length === 0,
+          )
+        )
+          throw new Error()
+        dataArrayContains = parsed as Record<string, string>
+      } catch {
+        throw new CliError(
+          'sessions list --data-array-contains must be a JSON object with string values.',
+        )
+      }
+    }
     const query: ListSessionsQuery = {
       ...(archivedFlag === undefined ? {} : { archived: archivedFlag === 'true' }),
       ...(inactiveForHours === undefined ? {} : { inactiveForHours }),
+      ...(dataArrayContains === undefined ? {} : { dataArrayContains }),
     }
     if (limit !== undefined) {
       // `--limit` fetches a single bounded page instead of the full drain below —

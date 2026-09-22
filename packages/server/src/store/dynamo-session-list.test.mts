@@ -125,6 +125,29 @@ describe('dynamoListSessions', () => {
     })
   })
 
+  it('keeps the cursor when a filtered DynamoDB page is empty', async () => {
+    let seen: Record<string, unknown> | undefined
+    const doc = client((command) => {
+      seen = command.input
+      return {
+        Items: [],
+        LastEvaluatedKey: {
+          PK: 'SESSIONS#c',
+          sessionCreatedAt: '2026-01-01T00:00:00.000Z',
+          SK: 'SESSION#s',
+        },
+      }
+    })
+    const result = await dynamoListSessions(doc, 'T', 'c', {
+      dataArrayContains: { repositories: 'owner/repo' },
+    })
+    expect(result.sessions).toEqual([])
+    expect(result.nextCursor).toBe(
+      encodeSessionCursor({ createdAt: '2026-01-01T00:00:00.000Z', sessionId: 's' }),
+    )
+    expect(seen?.FilterExpression).toContain(':dataArrayType')
+  })
+
   it('leaves FilterExpression and ExpressionAttributeNames undefined when the query has no filters', async () => {
     let seen: Record<string, unknown> | undefined
     const doc = client((command) => {

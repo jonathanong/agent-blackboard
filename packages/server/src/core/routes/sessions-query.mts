@@ -20,6 +20,26 @@ function parseDataParam(raw: string): FieldResult<Record<string, unknown>> {
   return data ? { ok: true, value: data } : { ok: false }
 }
 
+function parseDataArrayContainsParam(raw: string): FieldResult<Record<string, string>> {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    return { ok: false }
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return { ok: false }
+  const entries = Object.entries(parsed)
+  if (
+    entries.length === 0 ||
+    entries.some(
+      ([key, value]) => key.length === 0 || typeof value !== 'string' || value.length === 0,
+    )
+  ) {
+    return { ok: false }
+  }
+  return { ok: true, value: Object.fromEntries(entries) as Record<string, string> }
+}
+
 /** Parses the `limit` query param into a bounded integer, or fails if it isn't one. */
 function parseLimitParam(raw: string): FieldResult<number> {
   const limit = Number(raw)
@@ -38,6 +58,16 @@ function addDataFilter(query: QueryMap, result: ListSessionsQuery): string | und
   const parsed = parseDataParam(query.data)
   if (!parsed.ok) return 'data must be a JSON object'
   result.data = parsed.value
+}
+
+function addDataArrayContainsFilter(
+  query: QueryMap,
+  result: ListSessionsQuery,
+): string | undefined {
+  if (query.dataArrayContains === undefined) return
+  const parsed = parseDataArrayContainsParam(query.dataArrayContains)
+  if (!parsed.ok) return 'dataArrayContains must be a JSON object with string values'
+  result.dataArrayContains = parsed.value
 }
 
 function addInactivityFilter(query: QueryMap, result: ListSessionsQuery): string | undefined {
@@ -79,6 +109,7 @@ export function parseListSessionsQuery(query: QueryMap): ListSessionsQueryResult
 
   const filterErrors = [
     addDataFilter(query, result),
+    addDataArrayContainsFilter(query, result),
     addInactivityFilter(query, result),
     addLimit(query, result),
   ]

@@ -15,6 +15,7 @@ agent-blackboard sessions patch worker-456 --data '{"branch":"fix/retry"}'
 agent-blackboard sessions list
 agent-blackboard sessions list --archived true
 agent-blackboard sessions list --inactive-for-hours 8
+agent-blackboard sessions list --data-array-contains '{"repositories":"owner/repo"}'
 agent-blackboard sessions list --limit 1
 agent-blackboard sessions get worker-456
 agent-blackboard sessions archive worker-456
@@ -35,6 +36,10 @@ JSON array). The store applies filters after the page limit, so a `--limit` page
 connectivity probe, not a reliable existence or count check. Archived session metadata cannot be
 patched, but entries may still be appended and children
 may reference an archived parent.
+
+Use `--data-array-contains <json>` to match exact string membership in array-valued session data,
+for example `{"repositories":"owner/repo"}`. Every listed field must be an array containing its
+requested string.
 
 ## Entries
 
@@ -62,6 +67,7 @@ as `{ "markdown": "..." }`; `.txt` files are sent as `{ "text": "..." }`.
 agent-blackboard snapshot export
 agent-blackboard snapshot export --path /absolute/path/evidence.jsonl
 agent-blackboard snapshot export --root-only --inactive-for-hours 8
+agent-blackboard snapshot export --data-array-contains '{"repositories":"owner/repo"}'
 agent-blackboard snapshot export --agent codex --version 1.0.0 \
   --data '{"repository":"example/tooling"}'
 agent-blackboard snapshot partition --path /tmp/agent-blackboard-snapshot-<uuid>.jsonl \

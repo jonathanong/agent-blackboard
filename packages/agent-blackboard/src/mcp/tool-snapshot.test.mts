@@ -35,6 +35,7 @@ it('exports compact snapshot metadata without exposing JSONL through MCP', async
             version: '1',
             parentSessionId: null,
             data: { branch: 'main' },
+            dataArrayContains: { repositories: 'owner/repo' },
             inactiveForHours: 1,
           },
           counts: { sessions: 1, entries: 0, records: 2 },
@@ -56,6 +57,7 @@ it('exports compact snapshot metadata without exposing JSONL through MCP', async
         version: '1',
         parentSessionId: null,
         data: { branch: 'main' },
+        dataArrayContains: { repositories: 'owner/repo' },
         inactiveForHours: 1,
       },
       { baseUrl: fixture.baseUrl, token: 't' },
@@ -73,6 +75,20 @@ it('exports compact snapshot metadata without exposing JSONL through MCP', async
     expect(() =>
       dispatchTool('snapshot_export', { data: [] }, { baseUrl: fixture.baseUrl, token: 't' }),
     ).toThrow('data')
+    expect(() =>
+      dispatchTool(
+        'snapshot_export',
+        { dataArrayContains: { repositories: '' } },
+        { baseUrl: fixture.baseUrl, token: 't' },
+      ),
+    ).toThrow('string values')
+    expect(() =>
+      dispatchTool(
+        'snapshot_export',
+        { dataArrayContains: {} },
+        { baseUrl: fixture.baseUrl, token: 't' },
+      ),
+    ).toThrow('string values')
     expect(() =>
       dispatchTool(
         'snapshot_export',
