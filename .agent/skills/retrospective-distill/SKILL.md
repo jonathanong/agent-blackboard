@@ -30,12 +30,12 @@ If the scope or mutation authority is missing, perform read-only analysis and pr
    returns one page at a time as `{ sessions, nextCursor }`; keep calling it with `cursor` set to
    the previous `nextCursor` until `nextCursor` is `null`, and concatenate every page's `sessions`
    into the undistilled-session worklist. Sessions without entries never match
-   `inactiveForHours`. If MCP is unavailable, use
-   `agent-blackboard sessions list --inactive-for-hours <hours>` as the fallback when applicable
-   (the CLI already drains every page for you). When the journal supports repository membership
-   search, require the selected repository in `data.repositories` (for example,
+   `inactiveForHours`. When the journal supports repository membership search, require the
+   selected repository in `data.repositories` (for example,
    `dataArrayContains: { "repositories": "owner/name" }`); do not emulate this by exact matching
-   the whole array.
+   the whole array. If MCP is unavailable, use `agent-blackboard sessions list` with
+   `--data-array-contains '{"repositories":"owner/name"}'` for a repository scope, and include
+   `--inactive-for-hours <hours>` when an inactivity threshold applies. The CLI drains every page.
 2. For every returned session, call `entry_get({ "sessionId": "<id>" })`. For a repository
    distillation, retain only entries whose `data.repositories` contains that exact tag. Do not skip
    sessions with no retrospective entry; ongoing blackboard evidence is also input. Keep each entry's `sessionId`,
