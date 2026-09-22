@@ -23,6 +23,8 @@ skill explains how to use it; project instructions decide what is worth recordin
   session's `data.repositories` is the cumulative union; an entry's `data.repositories` contains
   only repositories relevant to that entry. Untagged historical data is unclassified, so do not
   infer repositories from its text or path.
+- **One writer owns each session.** Give subagents their own child sessions. Concurrent patches to
+  one session can replace its `repositories` array and lose a repository from the union.
 - **Entries are strictly append-only.** An entry's `data` cannot be changed after it is written; to
   enrich or correct an earlier observation, append a new entry rather than editing the original.
   Archival applies to the whole session.

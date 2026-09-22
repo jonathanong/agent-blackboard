@@ -33,6 +33,10 @@ concerns. A session's `data.repositories` is the cumulative union of its entries
 when work moves across repositories. Existing sessions or entries without this field are legacy
 and unclassified; do not infer a tag from their prose or filesystem context.
 
+Assign one writer to each session. Subagents write to their own child sessions, not concurrently to
+the parent's session. `session_patch` replaces the `repositories` array, so simultaneous writers
+could lose a repository from the union.
+
 ## Exact procedure
 
 1. Prefer MCP when `session_create` and `entry_append` are available; otherwise use the equivalent
