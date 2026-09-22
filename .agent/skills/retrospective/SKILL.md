@@ -28,7 +28,11 @@ Require the explicit `sessionId` owned by this agent. Never infer or generate it
 
 4. If an entry already has `data.type === "retrospective"`, do not append another. Report its
    `createdAt` and stop.
-5. Compare the entries with the current session context. Explicitly recover:
+5. Compare the entries with the current session context. A session can cover several repositories,
+   so synthesize all of its tagged entries and retain each entry's exact repository association. If
+   an authorized repository-scoped review is requested, use only entries whose
+   `data.repositories` contains the selected canonical lowercase `owner/name` tag. Do not infer
+   repository membership for legacy untagged entries. Explicitly recover:
 
    - the outcome and important changes;
    - decisions and the constraints behind them;
@@ -37,13 +41,18 @@ Require the explicit `sessionId` owned by this agent. Never infer or generate it
    - validation actually performed;
    - unresolved risks or follow-ups.
 
-6. Call `entry_append` exactly once:
+6. Call `entry_append` exactly once. Set its `repositories` to the sorted, deduplicated union of
+   repository tags on the entries it synthesizes; use an empty array only for a legacy-only
+   retrospective. Before appending a non-empty list, ensure the session's cumulative
+   `data.repositories` contains that union by successfully patching the session first. Do not
+   patch an archived session.
 
    ```json
    {
      "sessionId": "<sessionId>",
      "data": {
        "type": "retrospective",
+       "repositories": ["owner/name"],
        "summary": "Self-contained, thorough synthesis",
        "decisions": [],
        "learnings": [],

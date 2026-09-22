@@ -47,6 +47,7 @@ it('runs every session command and validates subcommands', async () => {
       ['list'],
       ['list', '--archived', 'true'],
       ['list', '--inactive-for-hours', '8'],
+      ['list', '--data-array-contains', '{"repositories":"owner/repo"}'],
       ['list', '--limit', '1'],
       ['get', 's'],
       ['patch', 's', '--data', '{"branch":"main"}'],
@@ -101,6 +102,16 @@ it('runs every session command and validates subcommands', async () => {
   } finally {
     await fixture.close()
   }
+})
+
+it('rejects empty array-membership values before listing', async () => {
+  const ctx = createFakeContext({
+    env: { AGENT_BLACKBOARD_URL: 'http://localhost', AGENT_BLACKBOARD_TOKEN: 't' },
+  })
+  await expect(
+    runSessions(['list', '--data-array-contains', '{"repositories":""}'], ctx),
+  ).rejects.toThrow('string values')
+  await expect(runSessions(['list', '--data-array-contains'], ctx)).rejects.toThrow('requires JSON')
 })
 
 it('drains every page of sessions list into a single flat JSON array', async () => {

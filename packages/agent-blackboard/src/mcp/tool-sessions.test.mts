@@ -28,7 +28,7 @@ const child: Session = {
   parentSessionId: 's',
   agent: 'other',
   lastEntryAt: '2026-01-01T09:00:00.000Z',
-  data: { branch: 'dev', nested: { ok: true } },
+  data: { branch: 'dev', nested: { ok: true }, repositories: ['owner/repo'] },
 }
 
 const archivedSession: Session = {
@@ -185,6 +185,12 @@ it('session_search without sessionId forwards filters and pagination straight to
     expect(new URL(fixture.requests.at(-1)!.url, 'http://localhost').searchParams.get('data')).toBe(
       JSON.stringify({ branch: 'dev' }),
     )
+    await handleSessionSearch({ dataArrayContains: { repositories: 'owner/repo' } }, config)
+    expect(
+      new URL(fixture.requests.at(-1)!.url, 'http://localhost').searchParams.get(
+        'dataArrayContains',
+      ),
+    ).toBe(JSON.stringify({ repositories: 'owner/repo' }))
 
     await handleSessionSearch({ inactiveForHours: 8 }, config)
     expect(
@@ -227,6 +233,7 @@ it('session_search with sessionId does a direct get and filters in-process, neve
           agent: 'other',
           version: '1',
           data: { nested: { ok: true } },
+          dataArrayContains: { repositories: 'owner/repo' },
         },
         config,
         SEARCH_NOW,
@@ -287,6 +294,12 @@ it('validates sessionId/parentSessionId/data/inactivity/limit/cursor input types
       'parentSessionId',
     )
     await expect(handleSessionSearch({ data: [] }, config)).rejects.toThrow('data')
+    await expect(
+      handleSessionSearch({ dataArrayContains: { repositories: '' } }, config),
+    ).rejects.toThrow('string values')
+    await expect(handleSessionSearch({ dataArrayContains: {} }, config)).rejects.toThrow(
+      'string values',
+    )
     for (const limit of [0, -1, '5']) {
       await expect(handleSessionSearch({ limit }, config)).rejects.toThrow('limit')
     }

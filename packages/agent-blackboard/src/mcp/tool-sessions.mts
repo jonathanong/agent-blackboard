@@ -26,6 +26,7 @@ interface SessionSearchArgs {
   agent: string | undefined
   version: string | undefined
   data: Record<string, unknown> | undefined
+  dataArrayContains: Record<string, string> | undefined
   inactiveForHours: number | undefined
 }
 
@@ -45,13 +46,41 @@ function parseSessionSearchArgs(args: Record<string, unknown>): SessionSearchArg
     agent: args.agent === undefined ? undefined : requiredString(args.agent, 'agent'),
     version: args.version === undefined ? undefined : requiredString(args.version, 'version'),
     data: args.data === undefined ? undefined : expectObject(args.data, 'data'),
+    dataArrayContains:
+      args.dataArrayContains === undefined
+        ? undefined
+        : parseDataArrayContains(args.dataArrayContains),
     inactiveForHours: optionalPositiveNumber(args.inactiveForHours, 'inactiveForHours'),
   }
+}
+
+function parseDataArrayContains(value: unknown): Record<string, string> {
+  const object = expectObject(value, 'dataArrayContains')
+  if (
+    Object.keys(object).length === 0 ||
+    Object.entries(object).some(
+      ([key, item]) => key.length === 0 || typeof item !== 'string' || item.length === 0,
+    )
+  ) {
+    throw new Error('"dataArrayContains" must contain only string values.')
+  }
+  return object as Record<string, string>
 }
 
 function matchesData(session: Session, data: Record<string, unknown> | undefined): boolean {
   if (data === undefined) return true
   return Object.entries(data).every(([key, value]) => isDeepStrictEqual(session.data[key], value))
+}
+
+function matchesDataArrayContains(
+  session: Session,
+  data: Record<string, string> | undefined,
+): boolean {
+  if (data === undefined) return true
+  return Object.entries(data).every(([key, value]) => {
+    const candidate = session.data[key]
+    return Array.isArray(candidate) && candidate.includes(value)
+  })
 }
 
 function isInactiveFor(session: Session, hours: number | undefined, now: Date): boolean {
@@ -67,7 +96,11 @@ function matchesDirectSession(session: Session, parsed: SessionSearchArgs, now: 
   if (parsed.hasParent && session.parentSessionId !== parsed.parentSessionId) return false
   if (parsed.agent !== undefined && session.agent !== parsed.agent) return false
   if (parsed.version !== undefined && session.version !== parsed.version) return false
-  return matchesData(session, parsed.data) && isInactiveFor(session, parsed.inactiveForHours, now)
+  return (
+    matchesData(session, parsed.data) &&
+    matchesDataArrayContains(session, parsed.dataArrayContains) &&
+    isInactiveFor(session, parsed.inactiveForHours, now)
+  )
 }
 
 /**
@@ -109,6 +142,7 @@ export async function handleSessionSearch(
   if (parsed.agent !== undefined) query.agent = parsed.agent
   if (parsed.version !== undefined) query.version = parsed.version
   if (parsed.data !== undefined) query.data = parsed.data
+  if (parsed.dataArrayContains !== undefined) query.dataArrayContains = parsed.dataArrayContains
   if (parsed.inactiveForHours !== undefined) query.inactiveForHours = parsed.inactiveForHours
   if (parsed.limit !== undefined) query.limit = parsed.limit
   if (parsed.cursor !== undefined) query.cursor = parsed.cursor

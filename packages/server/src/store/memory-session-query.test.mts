@@ -128,6 +128,21 @@ describe('matchesListFilter', () => {
     expect(matchesListFilter(withData, { data: { missing: true } })).toBe(false)
   })
 
+  it('filters on exact membership in array-valued data', () => {
+    const withRepositories = session({ data: { repositories: ['owner/repo', 'other/repo'] } })
+    expect(
+      matchesListFilter(withRepositories, { dataArrayContains: { repositories: 'owner/repo' } }),
+    ).toBe(true)
+    expect(
+      matchesListFilter(withRepositories, { dataArrayContains: { repositories: 'repo' } }),
+    ).toBe(false)
+    expect(
+      matchesListFilter(session({ data: { repositories: 'owner/repo' } }), {
+        dataArrayContains: { repositories: 'owner/repo' },
+      }),
+    ).toBe(false)
+  })
+
   it('filters on strict last-entry inactivity and excludes sessions without entries', () => {
     const now = new Date('2026-01-01T10:00:00.000Z')
     expect(

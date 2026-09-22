@@ -42,7 +42,11 @@ async function createVariedSessions(
     ...AGENT,
   })
   await store.archiveSession(credId, archived.id)
-  await store.patchSession(credId, { sessionId: child.id, data: { branch: 'main' } })
+  await store.patchSession(credId, {
+    sessionId: child.id,
+    data: { branch: 'main', repositories: ['owner/repo'] },
+  })
+  await store.patchSession(credId, { sessionId: other.id, data: { repositories: 'owner/repo' } })
   return { root: root.id, child: child.id, other: other.id, archived: archived.id }
 }
 
@@ -69,6 +73,11 @@ export function runSessionPaginationConformance(makeStore: () => BlackboardStore
 
       const byData = await store.listSessions(credId, { data: { branch: 'main' } })
       expect(byData.sessions.map((s) => s.id)).toEqual([ids.child])
+
+      const byArrayData = await store.listSessions(credId, {
+        dataArrayContains: { repositories: 'owner/repo' },
+      })
+      expect(byArrayData.sessions.map((s) => s.id)).toEqual([ids.child])
 
       const byArchived = await store.listSessions(credId, { archived: true })
       expect(byArchived.sessions.map((s) => s.id)).toEqual([ids.archived])

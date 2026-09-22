@@ -51,6 +51,7 @@ export const ENTRY_TOOLS: Tool[] = [
           description: 'Exact parent id; null selects root sessions.',
         },
         data: { type: 'object', description: 'Top-level session data fields to match exactly.' },
+        dataArrayContains: { type: 'object', description: 'Exact string membership in arrays.' },
         inactiveForHours: {
           type: 'number',
           exclusiveMinimum: 0,
@@ -123,6 +124,7 @@ export const ENTRY_TOOLS: Tool[] = [
           type: 'object',
           description: 'Top-level data fields whose JSON values must match exactly.',
         },
+        dataArrayContains: { type: 'object', description: 'Exact string membership in arrays.' },
         inactiveForHours: {
           type: 'number',
           exclusiveMinimum: 0,

@@ -19,7 +19,7 @@ Streams all selected unarchived sessions and their entries into a local immutabl
 ```
 
 Every argument is optional. Omit `path` to create a unique file under the system temporary
-directory. Supported filters are `parentSessionId`, `agent`, `version`, `data`, and
+directory. Supported filters are `parentSessionId`, `agent`, `version`, `data`, `dataArrayContains`, and
 `inactiveForHours`; archived sessions are never included.
 
 The result contains only `path`, counts (including bytes), a SHA-256 checksum, and the verified
@@ -86,9 +86,9 @@ Search undistilled sessions by default:
 ```
 
 Every filter is optional. Supported filters are `sessionId`, `parentSessionId`, `agent`, `version`,
-`archived`, `data`, and `inactiveForHours`. A `null` parent matches root sessions. The `data` object
+`archived`, `data`, `dataArrayContains`, and `inactiveForHours`. A `null` parent matches root sessions. The `data` object
 is a shallow subset filter: every supplied top-level key must have an exactly equal JSON value in
-the session, while additional session data is allowed. `inactiveForHours` must be positive and
+the session, while additional session data is allowed. `dataArrayContains` matches exact string membership in array-valued session data fields. `inactiveForHours` must be positive and
 matches sessions whose `lastEntryAt` is strictly older than the calculated cutoff; sessions with no
 entries do not match.
 

@@ -16,8 +16,22 @@ Obtain these values from the caller or existing task context before writing:
 - `parentSessionId`: `null` for a root or the direct parent's session id for a subagent;
 - `agent`: the actual agent name;
 - `version`: the actual agent version.
+- `repositories`: the repositories relevant to this entry, as one or more canonical
+  `owner/name` strings.
 
 Never infer or generate any of them. Ask for missing values.
+
+## Repository tags
+
+Use repository tags whenever the work concerns a repository. Represent them as a sorted,
+deduplicated array of lowercase GitHub `owner/name` strings, for example
+`["jonathanong/agent-blackboard"]`. Do not use a local path, URL, branch, display name, or an
+organization-only value.
+
+An entry's `repositories` describes only the repository or repositories that its evidence actually
+concerns. A session's `data.repositories` is the cumulative union of its entries, so it may grow
+when work moves across repositories. Existing sessions or entries without this field are legacy
+and unclassified; do not infer a tag from their prose or filesystem context.
 
 ## Exact procedure
 
@@ -41,7 +55,21 @@ Never infer or generate any of them. Ask for missing values.
    report the conflict. If the CLI is unavailable, stop rather than writing to an unverified
    session.
 
-3. Choose exactly one entry type using this order:
+3. Before every append, read or retain the current session repository list, merge it with the
+   entry's `repositories`, normalize the union, and call `session_patch` with:
+
+   ```json
+   {
+     "sessionId": "<sessionId>",
+     "data": { "repositories": ["owner/name"] }
+   }
+   ```
+
+   Wait for this patch to succeed before appending. Stop and report a patch failure; never append
+   an entry whose repository tags are absent from the session union. Do not patch an archived
+   session; begin a new session for new work after archival.
+
+4. Choose exactly one entry type using this order:
 
    - `gotcha`: a surprising failure mode, constraint, trap, or easy-to-repeat mistake;
    - `learning`: a reusable technique or general rule that avoids future work;
@@ -49,13 +77,14 @@ Never infer or generate any of them. Ask for missing values.
 
    When categories overlap, choose the first matching type in that list.
 
-4. Call `entry_append` immediately with this shape:
+5. Call `entry_append` immediately with this shape:
 
    ```json
    {
      "sessionId": "<sessionId>",
      "data": {
        "type": "finding",
+       "repositories": ["owner/name"],
        "summary": "One concrete observation",
        "evidence": "The command, error, file, test, or behavior that proves it",
        "impact": "Why another agent should care"
@@ -63,11 +92,11 @@ Never infer or generate any of them. Ask for missing values.
    }
    ```
 
-5. Add optional `files`, `commands`, or `decision` fields only when they improve reuse.
-6. Entries are append-only. To enrich an earlier observation, call `entry_append` again with a new
+6. Add optional `files`, `commands`, or `decision` fields only when they improve reuse.
+7. Entries are append-only. To enrich an earlier observation, call `entry_append` again with a new
    entry rather than modifying the original — reference the earlier entry's `createdAt` in the new
    entry's `data` if the connection isn't otherwise obvious.
-7. Continue the assigned work. Do not archive the session.
+8. Continue the assigned work. Do not archive the session.
 
 Do not log routine progress, placeholder text, unsupported guesses, or vague narration.
 

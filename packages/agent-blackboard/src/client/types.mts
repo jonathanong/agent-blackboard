@@ -58,6 +58,7 @@ export interface ListSessionsQuery {
   version?: string
   parentSessionId?: string | null
   data?: Record<string, unknown>
+  dataArrayContains?: Record<string, string>
   inactiveForHours?: number
   limit?: number
   cursor?: string
@@ -102,6 +103,7 @@ export interface SnapshotSelection {
   version?: string
   parentSessionId?: string | null
   data?: Record<string, unknown>
+  dataArrayContains?: Record<string, string>
   inactiveForHours?: number
 }
 

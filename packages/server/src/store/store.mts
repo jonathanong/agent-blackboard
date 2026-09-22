@@ -16,6 +16,8 @@ export interface ListSessionsQuery {
   parentSessionId?: string | null
   /** Per-key equality filter against the session's `data` object. */
   data?: Record<string, unknown>
+  /** Per-key membership filter against array-valued session data fields. */
+  dataArrayContains?: Record<string, string>
   /** Match sessions whose last entry is strictly older than this positive number of hours. */
   inactiveForHours?: number
   limit?: number

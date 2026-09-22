@@ -71,6 +71,15 @@ describe('buildSessionFilter', () => {
     })
   })
 
+  it('guards array membership filters with a DynamoDB list type check', () => {
+    expect(buildSessionFilter({ dataArrayContains: { repositories: 'owner/repo' } })).toEqual({
+      FilterExpression:
+        'attribute_type(#data.#dataArrayKey0, :dataArrayType) AND contains(#data.#dataArrayKey0, :dataArrayValue0)',
+      ExpressionAttributeNames: { '#data': 'data', '#dataArrayKey0': 'repositories' },
+      ExpressionAttributeValues: { ':dataArrayType': 'L', ':dataArrayValue0': 'owner/repo' },
+    })
+  })
+
   it('treats an empty data object as no filter, contributing no #data alias', () => {
     expect(buildSessionFilter({ archived: true, data: {} })).toEqual({
       FilterExpression: 'attribute_exists(#archivedAt)',

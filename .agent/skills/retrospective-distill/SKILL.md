@@ -12,6 +12,8 @@ Coordinate a read-first distillation. Produce owner-ready actions, not another n
 Obtain before starting:
 
 - the explicit session ids or a user-approved session-selection rule;
+- when the journal supports repository tags, the canonical lowercase `owner/name` repository being
+  distilled;
 - an optional positive `inactiveForHours` threshold when selection should exclude recently-written
   sessions (for example, `8`);
 - the target for actions: proposal only, ticket system, or repository changes;
@@ -28,11 +30,15 @@ If the scope or mutation authority is missing, perform read-only analysis and pr
    returns one page at a time as `{ sessions, nextCursor }`; keep calling it with `cursor` set to
    the previous `nextCursor` until `nextCursor` is `null`, and concatenate every page's `sessions`
    into the undistilled-session worklist. Sessions without entries never match
-   `inactiveForHours`. If MCP is unavailable, use `agent-blackboard sessions list
---inactive-for-hours <hours>` as the fallback when applicable (the CLI already drains every
-   page for you).
-2. For every returned session, call `entry_get({ "sessionId": "<id>" })`. Do not skip sessions
-   with no retrospective entry; ongoing blackboard evidence is also input. Keep each entry's `sessionId`,
+   `inactiveForHours`. When the journal supports repository membership search, require the
+   selected repository in `data.repositories` (for example,
+   `dataArrayContains: { "repositories": "owner/name" }`); do not emulate this by exact matching
+   the whole array. If MCP is unavailable, use `agent-blackboard sessions list` with
+   `--data-array-contains '{"repositories":"owner/name"}'` for a repository scope, and include
+   `--inactive-for-hours <hours>` when an inactivity threshold applies. The CLI drains every page.
+2. For every returned session, call `entry_get({ "sessionId": "<id>" })`. For a repository
+   distillation, retain only entries whose `data.repositories` contains that exact tag. Do not skip
+   sessions with no retrospective entry; ongoing blackboard evidence is also input. Keep each entry's `sessionId`,
    `createdAt`, `type`, `summary`, `evidence`, and `impact`. Set a missing optional field to `null`;
    never invent it. Do not mutate anything yet.
 3. Group entries across agents and subagents by shared root cause or opportunity. Promote a group
@@ -60,10 +66,14 @@ If the scope or mutation authority is missing, perform read-only analysis and pr
 6. Use `no-action` only when the evidence is invalid, obsolete, or outweighed by a documented
    tradeoff; put the explanation in `reason`. If authorized, create or implement remaining actions
    and change `status` to `created` or `completed`. Preserve the source evidence in the destination.
-7. Archive a selected session exactly once, only after all its relevant evidence maps to a
-   created/completed action or an explicit `no-action` decision. Record `archivedAt` from the
-   response. Never select archived sessions for another retrospective or distillation, even if
-   entries were appended later.
+7. Archive a selected session exactly once, only after all evidence for every repository in its
+   cumulative `data.repositories` has mapped to a created/completed action or an explicit
+   `no-action` decision. A distillation for one repository must leave a shared multi-repository
+   session active while another repository remains unreviewed. Legacy sessions or entries without
+   `repositories` are unclassified: do not select, infer tags for, or archive them as part of a
+   repository-scoped distillation; handle them in an explicit legacy review. Record `archivedAt`
+   from the response. Never select archived sessions for another retrospective or distillation,
+   even if entries were appended later.
 
 Reject vague actions such as "improve reliability." Do not append distillation output back into
 source sessions.

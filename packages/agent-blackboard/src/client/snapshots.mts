@@ -31,6 +31,8 @@ function queryFor(selection: SnapshotSelection = {}): Record<string, string> {
   if (selection.parentSessionId !== undefined)
     query.parentSessionId = selection.parentSessionId ?? ''
   if (selection.data !== undefined) query.data = JSON.stringify(selection.data)
+  if (selection.dataArrayContains !== undefined)
+    query.dataArrayContains = JSON.stringify(selection.dataArrayContains)
   if (selection.inactiveForHours !== undefined)
     query.inactiveForHours = String(selection.inactiveForHours)
   return query
