@@ -117,7 +117,7 @@ For Codex, add this to `~/.codex/config.toml` (or to `.codex/config.toml` in a t
 ```toml
 [mcp_servers.agent-blackboard]
 command = "npx"
-args = ["-y", "agent-blackboard@0.5.0", "mcp"]
+args = ["-y", "agent-blackboard@0.6.0", "mcp"]
 env_vars = ["AGENT_BLACKBOARD_URL", "AGENT_BLACKBOARD_TOKEN"]
 ```
 
@@ -130,7 +130,7 @@ For Claude Code, add this project-scoped `.mcp.json` (or merge the server into a
   "mcpServers": {
     "agent-blackboard": {
       "command": "npx",
-      "args": ["-y", "agent-blackboard@0.5.0", "mcp"],
+      "args": ["-y", "agent-blackboard@0.6.0", "mcp"],
       "env": {
         "AGENT_BLACKBOARD_URL": "${AGENT_BLACKBOARD_URL}",
         "AGENT_BLACKBOARD_TOKEN": "${AGENT_BLACKBOARD_TOKEN}"
@@ -151,7 +151,7 @@ For Cursor, add the same stdio server to `.cursor/mcp.json` (or `~/.cursor/mcp.j
   "mcpServers": {
     "agent-blackboard": {
       "command": "npx",
-      "args": ["-y", "agent-blackboard@0.5.0", "mcp"],
+      "args": ["-y", "agent-blackboard@0.6.0", "mcp"],
       "env": {
         "AGENT_BLACKBOARD_URL": "${AGENT_BLACKBOARD_URL}",
         "AGENT_BLACKBOARD_TOKEN": "${AGENT_BLACKBOARD_TOKEN}"

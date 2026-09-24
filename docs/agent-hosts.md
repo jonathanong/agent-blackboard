@@ -37,7 +37,7 @@ conversation, or compacted context does nothing implicitly; the caller must reta
 choose the id it wants to use.
 
 The plugin needs `AGENT_BLACKBOARD_URL` and `AGENT_BLACKBOARD_TOKEN` in the host environment. Its
-MCP configuration runs `npx -y agent-blackboard@0.5.0 mcp`.
+MCP configuration runs `npx -y agent-blackboard@0.6.0 mcp`.
 
 ## Cursor
 
@@ -49,7 +49,7 @@ standard `mcpServers` shape. Add this entry and restart Cursor:
   "mcpServers": {
     "agent-blackboard": {
       "command": "npx",
-      "args": ["-y", "agent-blackboard@0.5.0", "mcp"],
+      "args": ["-y", "agent-blackboard@0.6.0", "mcp"],
       "env": {
         "AGENT_BLACKBOARD_URL": "${env:AGENT_BLACKBOARD_URL}",
         "AGENT_BLACKBOARD_TOKEN": "${env:AGENT_BLACKBOARD_TOKEN}"
@@ -74,7 +74,7 @@ OpenCode v1 uses a local server entry under `mcp` in `opencode.json`:
   "mcp": {
     "agent-blackboard": {
       "type": "local",
-      "command": ["npx", "-y", "agent-blackboard@0.5.0", "mcp"],
+      "command": ["npx", "-y", "agent-blackboard@0.6.0", "mcp"],
       "environment": {
         "AGENT_BLACKBOARD_URL": "{env:AGENT_BLACKBOARD_URL}",
         "AGENT_BLACKBOARD_TOKEN": "{env:AGENT_BLACKBOARD_TOKEN}"
@@ -91,7 +91,7 @@ stdio; a deployed URL alone is not an OpenCode remote MCP endpoint.
 ## Grok
 
 Grok custom connectors accept a public remote MCP URL. This release provides the MCP server as a
-local stdio process (`npx -y agent-blackboard@0.5.0 mcp`), not a remote MCP transport, so there is
+local stdio process (`npx -y agent-blackboard@0.6.0 mcp`), not a remote MCP transport, so there is
 no Grok connector configuration. Do not paste the client token into a public URL. A future remote
 MCP deployment can be added in Grok under Connectors → New Connector → Custom once it has a
 publicly reachable MCP URL and an authentication contract.
