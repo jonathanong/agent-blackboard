@@ -30,17 +30,17 @@
     "lint:links": "lychee --config lychee.toml '**/*.md' '**/*.json'"
   },
   "devDependencies": {
-    "@types/node": "^26.5.1",
-    "@vitest/coverage-v8": "^5.0.0",
+    "@types/node": "^26.6.1",
+    "@vitest/coverage-v8": "^5.0.1",
     "agent-blackboard": "workspace:*",
-    "dependency-cruiser": "^18.2.0",
+    "dependency-cruiser": "^18.3.1",
     "github-actionlint": "^1.7.12",
-    "knip": "^6.35.1",
-    "oxfmt": "^0.67.0",
-    "oxlint": "^1.82.0",
+    "knip": "^6.36.0",
+    "oxfmt": "^0.68.0",
+    "oxlint": "^1.83.0",
     "oxlint-tsgolint": "^7.0.2001",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.1"
   },
   "engines": {
     "node": ">=24.0.0"
