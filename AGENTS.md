@@ -81,7 +81,7 @@ no reason this repo shouldn't use its own tool.
 Dogfood the full loop, not just the write side: run `/retrospective` at the end of a substantial
 session to make its last append a thorough synthesis, and periodically run
 `/retrospective-distill` across accumulated blackboard evidence to turn it into concrete follow-ups
-(a CLAUDE.md edit, a GitHub issue, a lint rule). See
+(a AGENTS.md edit, a GitHub issue, a lint rule). See
 [`.agent/skills/blackboard/SKILL.md`](.agent/skills/blackboard/SKILL.md),
 [`.agent/skills/retrospective/SKILL.md`](.agent/skills/retrospective/SKILL.md) and
 [`.agent/skills/retrospective-distill/SKILL.md`](.agent/skills/retrospective-distill/SKILL.md).
