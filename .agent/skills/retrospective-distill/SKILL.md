@@ -57,7 +57,7 @@ If the scope or mutation authority is missing, perform read-only analysis and pr
      "change": "The concrete change to make",
      "evidence": [{ "sessionId": "...", "createdAt": "...", "summary": "..." }],
      "benefit": "Expected result",
-     "destination": "ticket | CLAUDE.md | test | lint | docs | skill",
+     "destination": "ticket | AGENTS.md | test | lint | docs | skill",
      "status": "proposed | duplicate | no-action | created | completed",
      "reason": null
    }
