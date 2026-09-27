@@ -1,7 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip/schema.json",
   // Not an npm package — a separately-installed Rust binary (brew/cargo/GitHub release
-  // locally, lycheeverse/lychee-action in CI). See CLAUDE.md.
+  // locally, lycheeverse/lychee-action in CI). See AGENTS.md.
   "ignoreBinaries": ["lychee"],
   // A workspace self-dependency of the root, added only so pnpm links its bin into
   // root's node_modules/.bin (`pnpm exec agent-blackboard` locally). Never imported.
