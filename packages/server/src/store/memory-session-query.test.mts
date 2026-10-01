@@ -143,7 +143,7 @@ describe('matchesListFilter', () => {
     ).toBe(false)
   })
 
-  it('filters on strict last-entry inactivity and excludes sessions without entries', () => {
+  it('filters on strict last-entry inactivity, falling back to createdAt without entries', () => {
     const now = new Date('2026-01-01T10:00:00.000Z')
     expect(
       matchesListFilter(
@@ -159,6 +159,19 @@ describe('matchesListFilter', () => {
         now,
       ),
     ).toBe(false)
-    expect(matchesListFilter(session(), { inactiveForHours: 8 }, now)).toBe(false)
+    expect(
+      matchesListFilter(
+        session({ createdAt: '2026-01-01T01:59:59.999Z' }),
+        { inactiveForHours: 8 },
+        now,
+      ),
+    ).toBe(true)
+    expect(
+      matchesListFilter(
+        session({ createdAt: '2026-01-01T02:00:00.000Z' }),
+        { inactiveForHours: 8 },
+        now,
+      ),
+    ).toBe(false)
   })
 })

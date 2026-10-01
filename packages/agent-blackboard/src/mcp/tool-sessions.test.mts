@@ -274,6 +274,9 @@ it('session_search with sessionId does a direct get and filters in-process, neve
     ).toEqual({ sessions: [], nextCursor: null })
     expect(
       await handleSessionSearch({ sessionId: 'empty', inactiveForHours: 8 }, config, SEARCH_NOW),
+    ).toEqual({ sessions: [emptySession], nextCursor: null })
+    expect(
+      await handleSessionSearch({ sessionId: 'empty', inactiveForHours: 11 }, config, SEARCH_NOW),
     ).toEqual({ sessions: [], nextCursor: null })
 
     await expect(handleSessionSearch({ sessionId: 'error-session' }, config)).rejects.toThrow('500')

@@ -156,7 +156,8 @@ interface ListSessionsQuery {
 - `list()` and `list({ archived: false })` return undistilled sessions.
 - `list({ archived: true })` returns archived sessions.
 - `inactiveForHours` must be positive and matches sessions whose `lastEntryAt` is strictly older
-  than the service-calculated cutoff. Sessions without entries do not match.
+  than the service-calculated cutoff. A session without entries is treated as last active at its
+  `createdAt`.
 
 The method buffers the returned session list in memory.
 

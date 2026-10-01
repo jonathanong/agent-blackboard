@@ -61,10 +61,15 @@ export function buildSessionFilter(
   }
   if (query.inactiveForHours !== undefined) {
     names['#lastEntryAt'] = 'lastEntryAt'
+    names['#createdAt'] = 'createdAt'
     values[':lastEntryCutoff'] = new Date(
       now.getTime() - query.inactiveForHours * 60 * 60 * 1000,
     ).toISOString()
-    expressions.push('attribute_exists(#lastEntryAt) AND #lastEntryAt < :lastEntryCutoff')
+    // A session with no entries counts as last active at its creation time.
+    expressions.push(
+      '((attribute_exists(#lastEntryAt) AND #lastEntryAt < :lastEntryCutoff) OR ' +
+        '(attribute_not_exists(#lastEntryAt) AND #createdAt < :lastEntryCutoff))',
+    )
   }
 
   if (expressions.length === 0) return {}

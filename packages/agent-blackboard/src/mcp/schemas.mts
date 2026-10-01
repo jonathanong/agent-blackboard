@@ -55,7 +55,7 @@ export const ENTRY_TOOLS: Tool[] = [
         inactiveForHours: {
           type: 'number',
           exclusiveMinimum: 0,
-          description: 'Only sessions inactive for this many hours.',
+          description: 'Only sessions inactive for this many hours (createdAt if no entries).',
         },
       },
     },
@@ -129,7 +129,7 @@ export const ENTRY_TOOLS: Tool[] = [
           type: 'number',
           exclusiveMinimum: 0,
           description:
-            'Matches sessions whose last entry is strictly older than this many hours; sessions without entries do not match.',
+            'Matches sessions whose last entry (or createdAt, without entries) is strictly older than this many hours.',
         },
         limit: {
           type: 'integer',

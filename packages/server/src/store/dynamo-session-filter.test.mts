@@ -3,6 +3,9 @@ import { buildSessionFilter } from './dynamo-session-filter.mjs'
 
 describe('buildSessionFilter', () => {
   const NOW = new Date('2026-01-01T10:00:00.000Z')
+  const INACTIVITY_FILTER =
+    '((attribute_exists(#lastEntryAt) AND #lastEntryAt < :lastEntryCutoff) OR ' +
+    '(attribute_not_exists(#lastEntryAt) AND #createdAt < :lastEntryCutoff))'
   it('returns an empty filter for an empty query', () => {
     expect(buildSessionFilter({})).toEqual({})
   })
@@ -88,10 +91,10 @@ describe('buildSessionFilter', () => {
     })
   })
 
-  it('filters sessions with entries strictly older than the inactivity cutoff', () => {
+  it('filters sessions last active strictly before the inactivity cutoff', () => {
     expect(buildSessionFilter({ inactiveForHours: 8 }, NOW)).toEqual({
-      FilterExpression: 'attribute_exists(#lastEntryAt) AND #lastEntryAt < :lastEntryCutoff',
-      ExpressionAttributeNames: { '#lastEntryAt': 'lastEntryAt' },
+      FilterExpression: INACTIVITY_FILTER,
+      ExpressionAttributeNames: { '#lastEntryAt': 'lastEntryAt', '#createdAt': 'createdAt' },
       ExpressionAttributeValues: { ':lastEntryCutoff': '2026-01-01T02:00:00.000Z' },
     })
   })
@@ -113,7 +116,7 @@ describe('buildSessionFilter', () => {
       FilterExpression:
         'attribute_not_exists(#archivedAt) AND #agent = :agent AND #version = :version AND ' +
         '#parentSessionId = :parentSessionId AND #data.#dataKey0 = :dataValue0 AND ' +
-        'attribute_exists(#lastEntryAt) AND #lastEntryAt < :lastEntryCutoff',
+        INACTIVITY_FILTER,
       ExpressionAttributeNames: {
         '#archivedAt': 'archivedAt',
         '#agent': 'agent',
@@ -122,6 +125,7 @@ describe('buildSessionFilter', () => {
         '#data': 'data',
         '#dataKey0': 'branch',
         '#lastEntryAt': 'lastEntryAt',
+        '#createdAt': 'createdAt',
       },
       ExpressionAttributeValues: {
         ':agent': 'agent-a',

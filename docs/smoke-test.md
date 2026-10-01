@@ -27,7 +27,7 @@ local server started with `AGENT_BLACKBOARD_STORE=memory pnpm --dir packages/ser
 >    root. Call `session_search` with `archived: 0` and exact root/child metadata filters;
 >    verify it returns the expected complete sessions. Use CLI `sessions get <child>` to verify its
 >    parent, agent, and version. Exercise `inactiveForHours` through MCP and CLI; verify a session
->    with no entries is excluded and the strict cutoff behavior agrees across both interfaces.
+>    with no entries is selected by its `createdAt` and the strict cutoff behavior agrees across both interfaces.
 > 7. Archive the child through MCP. Verify its session and entries remain readable through both MCP
 >    and CLI. Append another child entry and verify it succeeds, advances `lastEntryAt`, and leaves
 >    the original `archivedAt` unchanged. Verify a session data patch fails, while creating a
