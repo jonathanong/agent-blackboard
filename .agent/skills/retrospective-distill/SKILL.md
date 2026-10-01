@@ -29,8 +29,8 @@ If the scope or mutation authority is missing, perform read-only analysis and pr
    `parentSessionId`, or `data` filters when the approved scope requires them. `session_search`
    returns one page at a time as `{ sessions, nextCursor }`; keep calling it with `cursor` set to
    the previous `nextCursor` until `nextCursor` is `null`, and concatenate every page's `sessions`
-   into the undistilled-session worklist. Sessions without entries never match
-   `inactiveForHours`. When the journal supports repository membership search, require the
+   into the undistilled-session worklist. A session without entries is
+   matched by `inactiveForHours` as last active at its `createdAt`. When the journal supports repository membership search, require the
    selected repository in `data.repositories` (for example,
    `dataArrayContains: { "repositories": "owner/name" }`); do not emulate this by exact matching
    the whole array. If MCP is unavailable, use `agent-blackboard sessions list` with

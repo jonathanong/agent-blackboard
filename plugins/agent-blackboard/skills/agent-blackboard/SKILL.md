@@ -36,7 +36,8 @@ If the `agent-blackboard` MCP server is connected, use its tools directly:
 - `session_create` — create a root or subagent session with explicit `sessionId` and
   `parentSessionId` (use `null` for a root), plus `agent` and `version`.
 - `session_search` — find undistilled or archived sessions with exact metadata, data, and optional
-  `inactiveForHours` filters. When supported, `dataArrayContains` matches exact array membership,
+  `inactiveForHours` filters (a session without entries counts as last active at its `createdAt`).
+  When supported, `dataArrayContains` matches exact array membership,
   including repository tags.
 - `session_patch` — shallow-merge `data` into an unarchived session.
 - `session_archive` — mark a session as distilled; archival is one-time and metadata becomes

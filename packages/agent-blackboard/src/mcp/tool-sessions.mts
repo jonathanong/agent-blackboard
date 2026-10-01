@@ -85,9 +85,8 @@ function matchesDataArrayContains(
 
 function isInactiveFor(session: Session, hours: number | undefined, now: Date): boolean {
   if (hours === undefined) return true
-  if (session.lastEntryAt === null) return false
   const cutoff = now.getTime() - hours * 60 * 60 * 1000
-  return Date.parse(session.lastEntryAt) < cutoff
+  return Date.parse(session.lastEntryAt ?? session.createdAt) < cutoff
 }
 
 /** Whether a single directly-fetched session satisfies every supplied `session_search` filter. */

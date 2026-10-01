@@ -89,8 +89,8 @@ Every filter is optional. Supported filters are `sessionId`, `parentSessionId`, 
 `archived`, `data`, `dataArrayContains`, and `inactiveForHours`. A `null` parent matches root sessions. The `data` object
 is a shallow subset filter: every supplied top-level key must have an exactly equal JSON value in
 the session, while additional session data is allowed. `dataArrayContains` matches exact string membership in array-valued session data fields. `inactiveForHours` must be positive and
-matches sessions whose `lastEntryAt` is strictly older than the calculated cutoff; sessions with no
-entries do not match.
+matches sessions whose `lastEntryAt` is strictly older than the calculated cutoff; a session with no
+entries is treated as last active at its `createdAt`.
 
 Omitting `archived`, or setting it to `0`, searches undistilled sessions. Set it to `1` to search archived
 sessions. To search both states, call the tool twice. With no filters, the tool lists all active
