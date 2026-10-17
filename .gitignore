@@ -4,6 +4,8 @@ coverage/
 *.log
 .env
 .env.local
+# Per-worktree session-id persistence (see docs/session-id-resolution.md)
+.local/
 .DS_Store
 .terraform/
 *.tfplan

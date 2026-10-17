@@ -20,7 +20,7 @@ Usage:
 
 Omitted session ids and agents resolve from the harness environment (CLAUDE_CODE_SESSION_ID,
 CODEX_THREAD_ID, CURSOR_SESSION_ID, GROK_SESSION_ID) or <worktree>/.local/<harness>-session-id.
-Interactive root Codex: --root-codex --new-root-codex-session once, then --root-codex.
+Interactive root Codex: --root-codex creates or reuses the worktree id; --new-root-codex-session rotates it.
 
 Env:
   AGENT_BLACKBOARD_URL            Server base URL

@@ -21,7 +21,7 @@ itself.
    (`CLAUDECODE=1`, which Cursor and Grok also set), Grok and Codex ids are trusted only when
    unambiguous. Otherwise the order is `GROK_SESSION_ID`/`GROK_HOOK_EVENT` (unless
    `CODEX_THREAD_ID` is also set), then the `runtime` hint, then `CODEX_THREAD_ID`, then
-   `GROK_SESSION_ID`, then `CURSOR_SESSION_ID`.
+   `CURSOR_SESSION_ID`.
 4. **Per-worktree persisted id.** `.local/grok-session-id` when `GROK_AGENT` is set, otherwise
    `.local/cursor-session-id`.
 5. **Transcript path hint.** `~/.codex/**/*.jsonl`, `~/.grok/**/updates.jsonl`, or
@@ -54,6 +54,7 @@ the same file.
 - **Root Codex:** `--root-codex` adopts `CODEX_THREAD_ID` when it is set, otherwise reuses the
   persisted id, otherwise mints `codex-<uuid>`. `--new-root-codex-session` ignores the persisted id
   and mints a fresh one. Write and read-back failures surface as errors here.
+- Add `.local/` to your repository's `.gitignore`, so persisted ids are never committed.
 - **One file per harness per worktree.** Two Cursor or Grok sessions running in the same worktree
   share `.local/<harness>-session-id`, so the most recent SessionStart wins. Give concurrent
   sessions separate worktrees, or pass explicit ids.

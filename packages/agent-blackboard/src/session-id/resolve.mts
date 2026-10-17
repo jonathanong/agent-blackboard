@@ -37,7 +37,7 @@ export interface ResolveSessionIdentityOptions {
 }
 
 const MISSING_SESSION_ID_ERROR =
-  'no session id (set CLAUDE_CODE_SESSION_ID, CODEX_THREAD_ID, CURSOR_SESSION_ID, GROK_SESSION_ID, or pass --session-id; interactive root Codex without CODEX_THREAD_ID: use --root-codex --new-root-codex-session once, then --root-codex)'
+  'no session id (set CLAUDE_CODE_SESSION_ID, CODEX_THREAD_ID, CURSOR_SESSION_ID, GROK_SESSION_ID, or pass --session-id; interactive root Codex without CODEX_THREAD_ID: use --root-codex, which creates or reuses the worktree id; add --new-root-codex-session to rotate it)'
 const MISSING_AGENT_ERROR =
   'no agent identity (set CLAUDE_CODE_SESSION_ID, CURSOR_SESSION_ID, GROK_SESSION_ID, GROK_AGENT, CODEX_THREAD_ID, or pass --agent)'
 

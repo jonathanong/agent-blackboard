@@ -21,9 +21,9 @@ agent-blackboard sessions get worker-456
 agent-blackboard sessions archive worker-456
 ```
 
-`sessions create` requires caller-supplied `--agent` and `--version` and always sends
-`parentSessionId`: it is `null` when the parent flag is omitted. An omitted `<session-id>` or
-`--agent` is resolved from the harness environment (see
+`sessions create` requires `--version` and always sends `parentSessionId`: it is `null` when the
+parent flag is omitted. An omitted `<session-id>` or `--agent` is resolved from the harness
+environment (see
 [session-id resolution](session-id-resolution.md), including `--root-codex`). `sessions ensure` takes the same flags as `sessions create` but is idempotent: if the
 session already exists, it verifies `parentSessionId`/`agent`/`version` match instead of erroring,
 returning `{"status":"created"|"exists","session":...}` either way — a mismatch still throws.
