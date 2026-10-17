@@ -3,7 +3,7 @@
     "agent-blackboard": {
       "command": "npx",
       "args": ["-y", "agent-blackboard@0.6.1", "mcp"],
-      "env_vars": ["AGENT_BLACKBOARD_URL", "AGENT_BLACKBOARD_TOKEN"]
+      "env_vars": ["AGENT_BLACKBOARD_URL", "AGENT_BLACKBOARD_TOKEN", "CODEX_THREAD_ID"]
     }
   }
 }

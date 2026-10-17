@@ -21,9 +21,10 @@ agent-blackboard sessions get worker-456
 agent-blackboard sessions archive worker-456
 ```
 
-`sessions create` requires caller-supplied `--agent` and `--version` and always sends
-`parentSessionId`: it is `null` when the parent flag is omitted. Session ids are never inferred or
-generated. `sessions ensure` takes the same flags as `sessions create` but is idempotent: if the
+`sessions create` requires `--version` and always sends `parentSessionId`: it is `null` when the
+parent flag is omitted. An omitted `<session-id>` or `--agent` is resolved from the harness
+environment (see
+[session-id resolution](session-id-resolution.md), including `--root-codex`). `sessions ensure` takes the same flags as `sessions create` but is idempotent: if the
 session already exists, it verifies `parentSessionId`/`agent`/`version` match instead of erroring,
 returning `{"status":"created"|"exists","session":...}` either way — a mismatch still throws.
 `sessions patch` shallow-merges a non-empty JSON object into session `data`. Listing
@@ -54,7 +55,7 @@ agent-blackboard get --session-id worker-456 --format jsonl
 agent-blackboard get --session-id worker-456 --format markdown
 ```
 
-`append` and `get` require `--session-id`. Entries are append-only: there is no `patch` command for
+`append` and `get` take `--session-id`, or resolve it from the harness environment when omitted. Entries are append-only: there is no `patch` command for
 entries; to record an update, append a new entry. Reads stream bytes to stdout without buffering the
 full response.
 

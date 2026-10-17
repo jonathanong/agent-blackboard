@@ -9,17 +9,19 @@ import {
   handleSessionSearch,
 } from './tool-sessions.mjs'
 import type { ClientConfig } from '../client/types.mjs'
+import type { SessionResolutionContext } from './session-resolution.mjs'
 
 export function dispatchTool(
   name: string,
   args: Record<string, unknown>,
   config: ClientConfig,
+  resolution?: SessionResolutionContext,
 ): Promise<unknown> {
   switch (name) {
     case 'session_create':
-      return handleSessionCreate(args, config)
+      return handleSessionCreate(args, config, resolution)
     case 'session_ensure':
-      return handleSessionEnsure(args, config)
+      return handleSessionEnsure(args, config, resolution)
     case 'session_archive':
       return handleSessionArchive(args, config)
     case 'session_search':
@@ -27,9 +29,9 @@ export function dispatchTool(
     case 'session_patch':
       return handleSessionPatch(args, config)
     case 'entry_append':
-      return handleEntryAppend(args, config)
+      return handleEntryAppend(args, config, resolution)
     case 'entry_get':
-      return handleEntryGet(args, config)
+      return handleEntryGet(args, config, resolution)
     case 'snapshot_export':
       return handleSnapshotExport(args, config)
     default:

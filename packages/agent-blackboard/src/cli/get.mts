@@ -1,9 +1,10 @@
 import { getEntriesRaw } from '../client/stream.mjs'
 import type { EntryWireFormat } from '../client/types.mjs'
-import { parseArgs, stringFlag } from './args.mjs'
+import { parseArgs } from './args.mjs'
 import type { CliContext } from './context.mjs'
 import { clientConfigFromEnv } from './env.mjs'
 import { CliError } from './errors.mjs'
+import { cliSessionId, SESSION_BOOLEAN_FLAGS } from './session-resolution.mjs'
 
 const VALID_FORMATS: readonly EntryWireFormat[] = ['json', 'jsonl', 'markdown']
 
@@ -16,9 +17,8 @@ function parseFormat(value: string | boolean | undefined): EntryWireFormat {
 }
 
 export async function runGet(argv: string[], ctx: CliContext): Promise<void> {
-  const { flags } = parseArgs(argv)
-  const sessionId = stringFlag(flags, 'session-id')
-  if (!sessionId) throw new CliError('get requires --session-id <id>.')
+  const { flags } = parseArgs(argv, SESSION_BOOLEAN_FLAGS)
+  const sessionId = cliSessionId('get', flags, ctx)
   const response = await getEntriesRaw(clientConfigFromEnv(ctx.env), {
     sessionId,
     format: parseFormat(flags.format),

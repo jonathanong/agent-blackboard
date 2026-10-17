@@ -15,6 +15,7 @@ import type {
   Session,
 } from '../client/types.mjs'
 import type { EnsureSessionResult } from '../client/sessions.mjs'
+import { toolSessionIdentity, type SessionResolutionContext } from './session-resolution.mjs'
 
 /** Parsed, validated `session_search` args, shared by the direct-get and list paths. */
 interface SessionSearchArgs {
@@ -149,27 +150,30 @@ export async function handleSessionSearch(
 }
 
 /** Shared by `session_create` and `session_ensure`, which take identical args. */
-function parseCreateSessionArgs(args: Record<string, unknown>): CreateSessionInput {
-  return {
-    id: requiredString(args.sessionId, 'sessionId'),
-    parentSessionId: nullableString(args.parentSessionId, 'parentSessionId'),
-    agent: requiredString(args.agent, 'agent'),
-    version: requiredString(args.version, 'version'),
-  }
+function parseCreateSessionArgs(
+  args: Record<string, unknown>,
+  resolution: SessionResolutionContext | undefined,
+): CreateSessionInput {
+  const parentSessionId = nullableString(args.parentSessionId, 'parentSessionId')
+  const version = requiredString(args.version, 'version')
+  const { sessionId, agent } = toolSessionIdentity(args, resolution)
+  return { id: sessionId, parentSessionId, agent, version }
 }
 
 export function handleSessionCreate(
   args: Record<string, unknown>,
   config: ClientConfig,
+  resolution?: SessionResolutionContext,
 ): Promise<Session> {
-  return new Sessions(config).create(parseCreateSessionArgs(args))
+  return new Sessions(config).create(parseCreateSessionArgs(args, resolution))
 }
 
 export function handleSessionEnsure(
   args: Record<string, unknown>,
   config: ClientConfig,
+  resolution?: SessionResolutionContext,
 ): Promise<EnsureSessionResult> {
-  return new Sessions(config).ensure(parseCreateSessionArgs(args))
+  return new Sessions(config).ensure(parseCreateSessionArgs(args, resolution))
 }
 
 export function handleSessionPatch(

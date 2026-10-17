@@ -19,12 +19,14 @@ export function fakeStdin(chunks: Array<string | Buffer>): AsyncIterable<Buffer 
 }
 
 export function createFakeContext(
-  overrides: Pick<CliContext, 'env'> & Partial<Pick<CliContext, 'stdin'>>,
+  overrides: Pick<CliContext, 'env'> & Partial<Pick<CliContext, 'stdin' | 'cwd'>>,
 ): FakeCliContext {
   const stdoutLines: string[] = []
   const stderrLines: string[] = []
   return {
     env: overrides.env,
+    // A path with no `.git` or `.local` beneath it, so no persisted id leaks into tests.
+    cwd: overrides.cwd ?? '/nonexistent-agent-blackboard-test-cwd',
     stdin: overrides.stdin ?? emptyStdin(),
     stdout: {
       write: (chunk: string) => {

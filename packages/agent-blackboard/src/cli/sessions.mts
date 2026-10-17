@@ -5,37 +5,47 @@ import type { CliContext } from './context.mjs'
 import { clientConfigFromEnv } from './env.mjs'
 import { CliError } from './errors.mjs'
 import { writeLine } from './output.mjs'
+import { cliSessionIdentity, SESSION_BOOLEAN_FLAGS } from './session-resolution.mjs'
 
-/** Shared by `create` and `ensure`, which take identical flags. */
+/**
+ * Shared by `create` and `ensure`, which take identical flags. A missing `<session-id>` or
+ * `--agent` is resolved from the harness environment (see `session-resolution.mts`).
+ */
 function parseCreateSessionInput(
   subcommand: string,
   positional: string[],
   flags: ParsedArgs['flags'],
+  ctx: CliContext,
 ): CreateSessionInput {
-  const id = positional[0]
-  if (!id) throw new CliError(`sessions ${subcommand} requires <session-id>.`)
+  const command = `sessions ${subcommand}`
   const parentFlag = stringFlag(flags, 'parent-session-id')
   if (Object.hasOwn(flags, 'parent-session-id') && !parentFlag) {
-    throw new CliError(`sessions ${subcommand} --parent-session-id requires <session-id>.`)
+    throw new CliError(`${command} --parent-session-id requires <session-id>.`)
   }
-  const agent = stringFlag(flags, 'agent')
+  if (Object.hasOwn(flags, 'agent') && !stringFlag(flags, 'agent')) {
+    throw new CliError(`${command} --agent requires <name>.`)
+  }
   const version = stringFlag(flags, 'version')
-  if (!agent) throw new CliError(`sessions ${subcommand} requires --agent <name>.`)
-  if (!version) throw new CliError(`sessions ${subcommand} requires --version <version>.`)
-  return { id, parentSessionId: parentFlag ?? null, agent, version }
+  if (!version) throw new CliError(`${command} requires --version <version>.`)
+  const { sessionId, agent } = cliSessionIdentity(command, flags, ctx, {
+    sessionIdArg: positional[0],
+    agentArg: stringFlag(flags, 'agent'),
+    parentSessionId: parentFlag,
+  })
+  return { id: sessionId, parentSessionId: parentFlag ?? null, agent, version }
 }
 
 export async function runSessions(argv: string[], ctx: CliContext): Promise<void> {
   const [subcommand, ...rest] = argv
-  const { positional, flags } = parseArgs(rest)
+  const { positional, flags } = parseArgs(rest, SESSION_BOOLEAN_FLAGS)
   const sessions = new Sessions(clientConfigFromEnv(ctx.env))
   if (subcommand === 'create') {
-    const input = parseCreateSessionInput('create', positional, flags)
+    const input = parseCreateSessionInput('create', positional, flags, ctx)
     writeLine(ctx.stdout, JSON.stringify(await sessions.create(input)))
     return
   }
   if (subcommand === 'ensure') {
-    const input = parseCreateSessionInput('ensure', positional, flags)
+    const input = parseCreateSessionInput('ensure', positional, flags, ctx)
     writeLine(ctx.stdout, JSON.stringify(await sessions.ensure(input)))
     return
   }

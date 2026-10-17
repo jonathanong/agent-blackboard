@@ -1,8 +1,9 @@
 # Agent hosts
 
 The plugin registers the `agent-blackboard` stdio MCP server and a usage skill for Claude Code and
-Codex. It deliberately has no session hook or state file: host session identifiers are not a stable
-cross-host contract, and the service must never infer ids.
+Codex. It has no session hook. Pass explicit ids where you can: the service never infers ids. When a
+tool call omits `sessionId`, the MCP server resolves it from its own harness environment or
+per-worktree file (see [session-id resolution](session-id-resolution.md)).
 
 At the start of work, the root agent chooses an id and calls:
 
