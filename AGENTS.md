@@ -42,8 +42,9 @@ for the product description.
   ids use URL-safe letters, numbers, `.`, `_`, `:`, and `-`. Client-side resolution
   (`packages/agent-blackboard/src/session-id/`) is the only place that infers an id from harness env
   markers or `.local/<harness>-session-id` files, and it runs only when the caller omits one. An
-  explicit id always wins. Only the explicit `--root-codex --new-root-codex-session` path mints an
-  id (`codex-<uuid>`). Library functions take `env`/`cwd` as parameters and never read
+  explicit id always wins. Ids are minted only by `--root-codex` when no thread or persisted id
+  exists (`codex-<uuid>`), and by the Cursor/Grok SessionStart hook helpers when the payload has none
+  (`<harness>-<uuid>`). Ordinary resolution never mints. Library functions take `env`/`cwd` as parameters and never read
   `process.env` themselves. See [`docs/session-id-resolution.md`](docs/session-id-resolution.md).
 - Sessions are first-class records. A root session has `parentSessionId: null`; every subagent
   creates its own session with its direct parent's id. Parent links are immutable, must reference

@@ -45,10 +45,15 @@ worktree root is the nearest ancestor of `cwd` that contains `.git`.
 
 - Hook callers use `persistHookSessionStart` and `persistHookRealSessionId`, which take a plain
   `Record<string, unknown>` payload (`session_id`, `sessionId`, and for Cursor `conversation_id`).
-  Write failures are swallowed so hooks never fail closed.
-- **Root Codex:** run `--root-codex --new-root-codex-session` once to mint `codex-<uuid>` (or adopt
-  `CODEX_THREAD_ID` when it is set), then `--root-codex` to reuse it. Write and read-back failures
-  surface as errors here.
+  When a SessionStart payload has no valid id and nothing is persisted, `persistHookSessionStart`
+  mints and writes `<harness>-<uuid>`. Later hooks only overwrite the file with a real id. Write
+  failures are swallowed so hooks never fail closed.
+- **Root Codex:** `--root-codex` adopts `CODEX_THREAD_ID` when it is set, otherwise reuses the
+  persisted id, otherwise mints `codex-<uuid>`. `--new-root-codex-session` ignores the persisted id
+  and mints a fresh one. Write and read-back failures surface as errors here.
+- **One file per harness per worktree.** Two Cursor or Grok sessions running in the same worktree
+  share `.local/<harness>-session-id`, so the most recent SessionStart wins. Give concurrent
+  sessions separate worktrees, or pass explicit ids.
 
 ## CLI and MCP
 
