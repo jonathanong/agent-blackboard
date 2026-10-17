@@ -9,13 +9,14 @@ const tempDir = useTempDirs()
 const worktree = () => tempDir({ git: true })
 
 describe('resolveSessionId persist fallback', () => {
-  it('reads the cursor persist file when no session env is set, from any subdirectory', async () => {
+  it('reads the cursor persist file only when CURSOR_AGENT is set, from any subdirectory', async () => {
     const cwd = await worktree()
     await writePersisted(cwd, 'cursor', 'cursor-file\n')
     const nested = join(cwd, 'nested')
     await mkdir(nested)
-    expect(resolveSessionId({ cwd: nested, env: {} })).toBe('cursor-file')
-    expect(resolveSessionIdentity({ cwd, env: {} })?.agent).toBe('cursor')
+    expect(resolveSessionId({ cwd: nested, env: { CURSOR_AGENT: '1' } })).toBe('cursor-file')
+    expect(resolveSessionIdentity({ cwd, env: { CURSOR_AGENT: '1' } })?.agent).toBe('cursor')
+    expect(resolveSessionIdentity({ cwd: nested, env: {} })).toBeUndefined()
   })
 
   it('reads the grok persist file only when GROK_AGENT is set', async () => {
@@ -79,7 +80,7 @@ describe('resolveSessionId persist fallback', () => {
     await mkdir(deep, { recursive: true })
     persistRealSessionId(deep, 'cursor', 'cursor-from-deep')
     expect(readPersistedSessionId(cwd, 'cursor')).toBe('cursor-from-deep')
-    expect(resolveSessionId({ cwd, env: {} })).toBe('cursor-from-deep')
+    expect(resolveSessionId({ cwd, env: { CURSOR_AGENT: '1' } })).toBe('cursor-from-deep')
   })
 
   it('does not let a stale persisted file override a transcript naming another harness', async () => {

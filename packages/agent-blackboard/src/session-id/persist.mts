@@ -27,7 +27,8 @@ export function enclosingWorktreeRoot(cwd: string): string {
 /**
  * The persisted-file path for `harness`. `root` may be any directory inside the worktree: it is
  * normalized through `enclosingWorktreeRoot`, so every read and write in this module agrees on the
- * same file regardless of which subdirectory a caller runs from.
+ * same file regardless of which subdirectory a caller runs from. A directory without its own
+ * `.git` inside a repository therefore maps to that repository's `.local/`.
  */
 export function sessionPersistPath(root: string, harness: PersistedHarness): string {
   return join(enclosingWorktreeRoot(root), SESSION_PERSIST_RELATIVE[harness])

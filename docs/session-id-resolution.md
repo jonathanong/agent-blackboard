@@ -22,8 +22,9 @@ itself.
    unambiguous. Otherwise the order is `GROK_SESSION_ID`/`GROK_HOOK_EVENT` (unless
    `CODEX_THREAD_ID` is also set), then the `runtime` hint, then `CODEX_THREAD_ID`, then
    `CURSOR_SESSION_ID`.
-4. **Per-worktree persisted id.** `.local/grok-session-id` when `GROK_AGENT` is set, otherwise
-   `.local/cursor-session-id`.
+4. **Per-worktree persisted id.** `.local/grok-session-id` when `GROK_AGENT` is set, or
+   `.local/cursor-session-id` when `CURSOR_AGENT` is set. A file is never read without its
+   harness's marker.
 5. **Transcript path hint.** `~/.codex/**/*.jsonl`, `~/.grok/**/updates.jsonl`, or
    `~/.claude/projects/**/*.jsonl` give the agent but no id.
 6. **Agent markers.** `GROK_AGENT` or `CURSOR_AGENT` give the agent but no id.
@@ -44,7 +45,9 @@ Cursor, Grok, and an interactive root Codex process don't expose their id to eve
 so it is written to `<worktree>/.local/<harness>-session-id`: one id and a trailing newline. The
 worktree root is the nearest ancestor of `cwd` that contains `.git`. Every persistence function
 normalizes the directory it is given to that root, so reads and writes from any subdirectory use
-the same file.
+the same file. A directory with no `.git` of its own inside a repository maps to that repository's
+`.local/`. The hook helpers write under the payload's `cwd` when it has one, so a nested worktree
+(for example one under `<main>/.claude/worktrees/`) reads and writes its own file.
 
 - Hook callers use `persistHookSessionStart` and `persistHookRealSessionId`, which take a plain
   `Record<string, unknown>` payload (`session_id`, `sessionId`, and for Cursor `conversation_id`).

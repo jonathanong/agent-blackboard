@@ -6,7 +6,7 @@ import {
 } from './persist.mjs'
 import { sanitizeSessionId } from './valid-id.mjs'
 
-/** A harness hook's JSON payload. Only its session-id keys are read. */
+/** A harness hook's JSON payload. Only its session-id keys and `cwd` are read. */
 export type HookPayload = Readonly<Record<string, unknown>>
 
 type Env = Readonly<Record<string, string | undefined>>
@@ -31,6 +31,12 @@ export function grokHookSessionId(payload: HookPayload, env: Env): string {
   return sanitizeSessionId(env.GROK_SESSION_ID) || hookPayloadSessionId(payload)
 }
 
+// The payload's own `cwd` (when present) decides the worktree, so a hook process launched from an
+// outer checkout still writes where resolution from that cwd will read.
+function hookRoot(payload: HookPayload, root: string): string {
+  return typeof payload.cwd === 'string' && payload.cwd !== '' ? payload.cwd : root
+}
+
 // Claude and Codex expose their session id to every process through env, so only the
 // Claude-compat runtimes without one (Grok and Cursor) persist it for later hook-less readers.
 function hookRuntimeSessionId(
@@ -43,7 +49,10 @@ function hookRuntimeSessionId(
   return undefined
 }
 
-/** SessionStart hook: persists (or generates) the Cursor/Grok id. No-op for other runtimes. */
+/**
+ * SessionStart hook: persists (or generates) the Cursor/Grok id. No-op for other runtimes. Writes
+ * under the payload's `cwd` when present, else `root`; either is normalized to its worktree root.
+ */
 export function persistHookSessionStart(
   runtime: HarnessId | undefined,
   payload: HookPayload,
@@ -55,7 +64,7 @@ export function persistHookSessionStart(
   if (hook === undefined) return undefined
   return resolveAndPersistSessionStartId({
     harness: hook.harness,
-    root,
+    root: hookRoot(payload, root),
     generateId,
     payloadId: hook.sessionId,
   })
@@ -69,5 +78,6 @@ export function persistHookRealSessionId(
   root: string,
 ): void {
   const hook = hookRuntimeSessionId(runtime, payload, env)
-  if (hook !== undefined) persistRealSessionId(root, hook.harness, hook.sessionId)
+  if (hook !== undefined)
+    persistRealSessionId(hookRoot(payload, root), hook.harness, hook.sessionId)
 }

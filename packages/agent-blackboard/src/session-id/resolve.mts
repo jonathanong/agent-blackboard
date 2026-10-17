@@ -122,16 +122,17 @@ export function resolveSessionIdentity(
   if (options.runtime) return fromHarness(options.runtime)
   const direct = selectHarnessSession(environment, ['codex', 'grok', 'cursor'])
   if (direct) return fromHarness(direct.harness, direct.sessionId)
-  const persistedHarness = environment.grok.agentMarker ? 'grok' : 'cursor'
-  // A transcript naming another harness is a positive signal for this process; a leftover
-  // persisted file for a different harness must not override it.
+  // A persisted file is only read when its harness's own marker is set, so a leftover file never
+  // speaks for a process with no harness signal. A transcript naming another harness wins too.
+  const persistedHarness = environment.grok.agentMarker
+    ? 'grok'
+    : environment.cursor.agentMarker
+      ? 'cursor'
+      : undefined
   const transcript = transcriptPathHarness(options.transcriptPath)
   if (transcript && transcript !== persistedHarness) return fromHarness(transcript)
-  const sessionId = readPersistedSessionId(cwd, persistedHarness)
-  if (sessionId) return fromHarness(persistedHarness, sessionId)
-  if (transcript) return fromHarness(transcript)
-  if (environment.grok.agentMarker) return fromHarness('grok')
-  return environment.cursor.agentMarker ? fromHarness('cursor') : undefined
+  if (persistedHarness === undefined) return undefined
+  return fromHarness(persistedHarness, readPersistedSessionId(cwd, persistedHarness))
 }
 
 /** The explicit id if given, else the resolved one. Does not validate. */

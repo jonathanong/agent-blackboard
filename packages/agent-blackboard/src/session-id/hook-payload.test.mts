@@ -1,3 +1,5 @@
+import { mkdir, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { useTempDirs } from '../__tests__/temp-worktree.mjs'
 import {
@@ -8,6 +10,7 @@ import {
   persistHookSessionStart,
 } from './hook-payload.mjs'
 import { readPersistedSessionId } from './persist.mjs'
+import { resolveSessionId } from './resolve.mjs'
 
 const tempDir = useTempDirs()
 
@@ -77,5 +80,20 @@ describe('hook runtime persist', () => {
     expect(readPersistedSessionId(root, 'cursor')).toBe('cursor-conv')
     persistHookRealSessionId('cursor', {}, {}, root)
     expect(readPersistedSessionId(root, 'cursor')).toBe('cursor-conv')
+  })
+
+  it('writes under the payload cwd, so a nested worktree reads its own file', async () => {
+    const outer = await tempDir({ git: true })
+    const nested = join(outer, 'nested')
+    await mkdir(nested)
+    await writeFile(join(nested, '.git'), 'gitdir: /synthetic/nested\n', 'utf8')
+    const payload = { session_id: 'cur-real', cwd: nested }
+    persistHookSessionStart('cursor', payload, { CURSOR_AGENT: '1' }, outer)
+    expect(resolveSessionId({ cwd: nested, env: { CURSOR_AGENT: '1' } })).toBe('cur-real')
+    expect(readPersistedSessionId(outer, 'cursor')).toBeUndefined()
+    persistHookRealSessionId('cursor', { conversation_id: 'cur-conv', cwd: nested }, {}, outer)
+    expect(readPersistedSessionId(nested, 'cursor')).toBe('cur-conv')
+    persistHookRealSessionId('cursor', { conversation_id: 'outer-conv', cwd: '' }, {}, outer)
+    expect(readPersistedSessionId(outer, 'cursor')).toBe('outer-conv')
   })
 })
