@@ -5,11 +5,7 @@ import {
   type HarnessEnvironment,
   type HarnessId,
 } from './harness.mjs'
-import {
-  enclosingWorktreeRoot,
-  readPersistedSessionId,
-  resolveAndPersistRootCodexSessionId,
-} from './persist.mjs'
+import { readPersistedSessionId, resolveAndPersistRootCodexSessionId } from './persist.mjs'
 import { validateRootCodexOptions } from './root-codex-options.mjs'
 import { isValidSessionId } from './valid-id.mjs'
 
@@ -78,7 +74,7 @@ function compatModeIdentity(
     return environment.grok.hookEvent ? fromHarness('grok') : undefined
   // A leaked Codex or Cursor id alongside a Grok marker is ambiguous: fail closed.
   if (environment.codex.sessionId || environment.cursor.sessionId) return undefined
-  const sessionId = readPersistedSessionId(enclosingWorktreeRoot(cwd), 'grok')
+  const sessionId = readPersistedSessionId(cwd, 'grok')
   return fromHarness('grok', sessionId)
 }
 
@@ -113,7 +109,7 @@ export function resolveSessionIdentity(
   // identity.
   if (options.rootCodex) {
     const resolved = resolveAndPersistRootCodexSessionId({
-      root: enclosingWorktreeRoot(cwd),
+      root: cwd,
       newSession: options.newRootCodexSession,
       payloadId: env.CODEX_THREAD_ID,
     })
@@ -127,9 +123,12 @@ export function resolveSessionIdentity(
   const direct = selectHarnessSession(environment, ['codex', 'grok', 'cursor'])
   if (direct) return fromHarness(direct.harness, direct.sessionId)
   const persistedHarness = environment.grok.agentMarker ? 'grok' : 'cursor'
-  const sessionId = readPersistedSessionId(enclosingWorktreeRoot(cwd), persistedHarness)
-  if (sessionId) return fromHarness(persistedHarness, sessionId)
+  // A transcript naming another harness is a positive signal for this process; a leftover
+  // persisted file for a different harness must not override it.
   const transcript = transcriptPathHarness(options.transcriptPath)
+  if (transcript && transcript !== persistedHarness) return fromHarness(transcript)
+  const sessionId = readPersistedSessionId(cwd, persistedHarness)
+  if (sessionId) return fromHarness(persistedHarness, sessionId)
   if (transcript) return fromHarness(transcript)
   if (environment.grok.agentMarker) return fromHarness('grok')
   return environment.cursor.agentMarker ? fromHarness('cursor') : undefined
@@ -141,15 +140,19 @@ export function resolveSessionId(options: ResolveSessionIdentityOptions): string
   return options.sessionIdArg ?? identity?.sessionId
 }
 
-/** Like `resolveSessionId`, but throws when no id resolves or the id is not a plain token. */
+/**
+ * Like `resolveSessionId`, but throws when no id resolves. An explicit `sessionIdArg` is returned
+ * as-is (the server validates it); only a resolved id must be a plain token.
+ */
 export function requireSessionId(options: ResolveSessionIdentityOptions): string {
-  return checkedSessionId(resolveSessionId(options))
+  return checkedSessionId(options.sessionIdArg, resolveSessionIdentity(options)?.sessionId)
 }
 
-function checkedSessionId(sessionId: string | undefined): string {
-  if (!sessionId) throw new Error(MISSING_SESSION_ID_ERROR)
-  if (!isValidSessionId(sessionId)) throw new Error(`invalid session id format: ${sessionId}`)
-  return sessionId
+function checkedSessionId(explicit: string | undefined, resolved: string | undefined): string {
+  if (explicit) return explicit
+  if (!resolved) throw new Error(MISSING_SESSION_ID_ERROR)
+  if (!isValidSessionId(resolved)) throw new Error(`invalid session id format: ${resolved}`)
+  return resolved
 }
 
 /** The explicit `agentArg` if given, else the resolved agent; throws when neither exists. */
@@ -165,7 +168,7 @@ export function requireSessionIdentity(options: ResolveSessionIdentityOptions): 
   sessionId: string
 } {
   const identity = resolveSessionIdentity(options)
-  const sessionId = checkedSessionId(options.sessionIdArg ?? identity?.sessionId)
+  const sessionId = checkedSessionId(options.sessionIdArg, identity?.sessionId)
   const agent = options.agentArg ?? identity?.agent
   if (!agent) throw new Error(MISSING_AGENT_ERROR)
   return { agent, sessionId }

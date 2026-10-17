@@ -24,8 +24,13 @@ export function enclosingWorktreeRoot(cwd: string): string {
   return candidate
 }
 
+/**
+ * The persisted-file path for `harness`. `root` may be any directory inside the worktree: it is
+ * normalized through `enclosingWorktreeRoot`, so every read and write in this module agrees on the
+ * same file regardless of which subdirectory a caller runs from.
+ */
 export function sessionPersistPath(root: string, harness: PersistedHarness): string {
-  return join(root, SESSION_PERSIST_RELATIVE[harness])
+  return join(enclosingWorktreeRoot(root), SESSION_PERSIST_RELATIVE[harness])
 }
 
 /**
@@ -49,8 +54,9 @@ export function readPersistedSessionId(
 }
 
 function writePersistFile(root: string, harness: PersistedHarness, sessionId: string): void {
-  mkdirSync(join(root, '.local'), { recursive: true })
-  writeFileSync(sessionPersistPath(root, harness), `${sessionId}\n`, { encoding: 'utf8' })
+  const path = sessionPersistPath(root, harness)
+  mkdirSync(dirname(path), { recursive: true })
+  writeFileSync(path, `${sessionId}\n`, { encoding: 'utf8' })
 }
 
 function tryWritePersistFile(root: string, harness: PersistedHarness, sessionId: string): void {

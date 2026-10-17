@@ -4,6 +4,7 @@ import { useTempDirs } from '../__tests__/temp-worktree.mjs'
 import type { HarnessEnvironment } from './harness.mjs'
 import {
   requireSessionAgent,
+  requireSessionId,
   requireSessionIdentity,
   resolveSessionId,
   resolveSessionIdentity,
@@ -133,6 +134,17 @@ describe('resolveSessionIdentity', () => {
         inspectEnvironment,
       }),
     ).toEqual({ agent: 'codex', harness: 'codex', sessionId: 'from-override' })
+  })
+
+  it('returns explicit ids as-is, leaving their validation to the server', () => {
+    expect(requireSessionId({ env: {}, cwd, sessionIdArg: 'a.b:c' })).toBe('a.b:c')
+    expect(
+      requireSessionIdentity({ env: {}, cwd, sessionIdArg: 'a.b:c', agentArg: 'custom' }),
+    ).toEqual({ agent: 'custom', sessionId: 'a.b:c' })
+    expect(() => requireSessionId({ env: {}, cwd, sessionIdArg: '' })).toThrow(/no session id/)
+    expect(() => requireSessionId({ env: { CODEX_THREAD_ID: 'bad.id' }, cwd })).toThrow(
+      'invalid session id format: bad.id',
+    )
   })
 
   it('pairs explicit agents and ids without consulting the environment', () => {

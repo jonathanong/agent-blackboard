@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { useTempDirs, writePersisted } from '../__tests__/temp-worktree.mjs'
-import { readPersistedSessionId } from './persist.mjs'
+import { persistRealSessionId, readPersistedSessionId } from './persist.mjs'
 import { requireSessionId, resolveSessionId, resolveSessionIdentity } from './resolve.mjs'
 
 const tempDir = useTempDirs()
@@ -68,7 +68,43 @@ describe('resolveSessionId persist fallback', () => {
     await mkdir(nested, { recursive: true })
     const sessionId = resolveSessionId({ cwd: nested, env: {}, rootCodex: true })
     expect(readPersistedSessionId(cwd, 'codex')).toBe(sessionId)
-    expect(readPersistedSessionId(nested, 'codex')).toBeUndefined()
+    // Reads from any subdirectory normalize to the same worktree-root file.
+    expect(readPersistedSessionId(nested, 'codex')).toBe(sessionId)
+    expect(resolveSessionId({ cwd: nested, env: {}, rootCodex: true })).toBe(sessionId)
+  })
+
+  it('reads hook writes made from a subdirectory, at the same worktree root', async () => {
+    const cwd = await worktree()
+    const deep = join(cwd, 'src', 'deep')
+    await mkdir(deep, { recursive: true })
+    persistRealSessionId(deep, 'cursor', 'cursor-from-deep')
+    expect(readPersistedSessionId(cwd, 'cursor')).toBe('cursor-from-deep')
+    expect(resolveSessionId({ cwd, env: {} })).toBe('cursor-from-deep')
+  })
+
+  it('does not let a stale persisted file override a transcript naming another harness', async () => {
+    const cwd = await worktree()
+    const deep = join(cwd, 'src', 'deep')
+    await mkdir(deep, { recursive: true })
+    await writePersisted(cwd, 'cursor', 'stale-cursor\n')
+    expect(
+      resolveSessionIdentity({ cwd: deep, env: {}, transcriptPath: '/u/.codex/s/x.jsonl' }),
+    ).toEqual({ agent: 'codex', harness: 'codex' })
+    await writePersisted(cwd, 'grok', 'grok-file\n')
+    expect(
+      resolveSessionIdentity({
+        cwd: deep,
+        env: { GROK_AGENT: '1' },
+        transcriptPath: '/u/.grok/sessions/r/s/updates.jsonl',
+      }),
+    ).toEqual({ agent: 'grok', harness: 'grok', sessionId: 'grok-file' })
+    expect(
+      resolveSessionIdentity({
+        cwd: await worktree(),
+        env: { GROK_AGENT: '1' },
+        transcriptPath: '/u/.grok/sessions/r/s/updates.jsonl',
+      }),
+    ).toEqual({ agent: 'grok', harness: 'grok' })
   })
 
   it('lets a real Codex thread id win, replacing a generated one', async () => {

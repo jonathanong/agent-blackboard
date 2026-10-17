@@ -28,6 +28,7 @@ itself.
    `~/.claude/projects/**/*.jsonl` give the agent but no id.
 6. **Agent markers.** `GROK_AGENT` or `CURSOR_AGENT` give the agent but no id.
 
+A leftover persisted file never overrides a transcript hint that names a different harness.
 Resolved ids (from env, files, or hook payloads) must match `^[a-zA-Z0-9_-]+$`, because consumers
 use them in glob patterns and file paths. `requireSessionId` and `requireSessionIdentity` throw
 when no valid id resolves.
@@ -41,7 +42,9 @@ replace the built-in detection.
 
 Cursor, Grok, and an interactive root Codex process don't expose their id to every child process,
 so it is written to `<worktree>/.local/<harness>-session-id`: one id and a trailing newline. The
-worktree root is the nearest ancestor of `cwd` that contains `.git`.
+worktree root is the nearest ancestor of `cwd` that contains `.git`. Every persistence function
+normalizes the directory it is given to that root, so reads and writes from any subdirectory use
+the same file.
 
 - Hook callers use `persistHookSessionStart` and `persistHookRealSessionId`, which take a plain
   `Record<string, unknown>` payload (`session_id`, `sessionId`, and for Cursor `conversation_id`).
@@ -68,4 +71,7 @@ worktree root is the nearest ancestor of `cwd` that contains `.git`.
   require an explicit `sessionId`.
 
 Prefer explicit ids when an agent already knows its id, and always use explicit ids for
-subagents. Each subagent needs its own session, but it inherits its parent's environment.
+subagents. Each subagent needs its own session, but it inherits its parent's environment. The MCP
+server resolves from the environment it was launched with, so it can't see a session id that
+changes later in the same process (for example after a `/clear`). Pass an explicit `sessionId`
+once the host's id may have changed.
