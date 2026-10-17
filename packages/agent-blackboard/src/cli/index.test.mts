@@ -40,7 +40,10 @@ describe('runCli', () => {
       env: { AGENT_BLACKBOARD_URL: 'http://h', AGENT_BLACKBOARD_TOKEN: 't' },
     })
     expect(await runCli(['mcp'], { ...ctx, startMcpServer })).toBe(0)
-    expect(startMcpServer).toHaveBeenCalledWith({ baseUrl: 'http://h', token: 't' })
+    expect(startMcpServer).toHaveBeenCalledWith(
+      { baseUrl: 'http://h', token: 't' },
+      { env: ctx.env, cwd: ctx.cwd },
+    )
   })
 
   it('dispatches snapshot export', async () => {

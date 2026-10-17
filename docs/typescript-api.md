@@ -116,7 +116,8 @@ await sessions.archive('root-123')
 ```
 
 All session ids, parent relationships, agent names, and versions come from the caller. The service
-generates timestamps only.
+generates timestamps only. To resolve an id from a harness environment, use
+`resolveSessionIdentity`. See [session-id resolution](session-id-resolution.md).
 
 ## `Sessions`
 

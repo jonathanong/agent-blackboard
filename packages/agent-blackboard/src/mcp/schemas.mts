@@ -1,38 +1,13 @@
 import type { Tool } from '@modelcontextprotocol/sdk/types.js'
-
-const SESSION_ID = {
-  type: 'string' as const,
-  description: 'Caller-supplied session id. Never inferred or generated.',
-}
-
-// Keep all four hints explicit so clients do not rely on protocol defaults.
-const READ_ONLY = {
-  readOnlyHint: true,
-  destructiveHint: false,
-  idempotentHint: true,
-  openWorldHint: false,
-} as const
-
-const ADDITIVE = {
-  readOnlyHint: false,
-  destructiveHint: false,
-  idempotentHint: false,
-  openWorldHint: false,
-} as const
-
-const IDEMPOTENT_ADDITIVE = {
-  readOnlyHint: false,
-  destructiveHint: false,
-  idempotentHint: true,
-  openWorldHint: false,
-} as const
-
-const MUTATING = {
-  readOnlyHint: false,
-  destructiveHint: true,
-  idempotentHint: true,
-  openWorldHint: false,
-} as const
+import {
+  ADDITIVE,
+  AGENT,
+  IDEMPOTENT_ADDITIVE,
+  MUTATING,
+  READ_ONLY,
+  RESOLVABLE_SESSION_ID,
+  SESSION_ID,
+} from './schema-fields.mjs'
 
 export const ENTRY_TOOLS: Tool[] = [
   {
@@ -67,15 +42,15 @@ export const ENTRY_TOOLS: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        sessionId: SESSION_ID,
+        sessionId: RESOLVABLE_SESSION_ID,
         parentSessionId: {
           type: ['string', 'null'],
           description: 'Null for a root session; the direct parent session id for a subagent.',
         },
-        agent: { type: 'string', description: 'Agent name, for example claude-code.' },
+        agent: AGENT,
         version: { type: 'string', description: 'Agent version, for example 1.0.13.' },
       },
-      required: ['sessionId', 'parentSessionId', 'agent', 'version'],
+      required: ['parentSessionId', 'version'],
     },
     annotations: ADDITIVE,
   },
@@ -87,15 +62,15 @@ export const ENTRY_TOOLS: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        sessionId: SESSION_ID,
+        sessionId: RESOLVABLE_SESSION_ID,
         parentSessionId: {
           type: ['string', 'null'],
           description: 'Null for a root session; the direct parent session id for a subagent.',
         },
-        agent: { type: 'string', description: 'Agent name, for example claude-code.' },
+        agent: AGENT,
         version: { type: 'string', description: 'Agent version, for example 1.0.13.' },
       },
-      required: ['sessionId', 'parentSessionId', 'agent', 'version'],
+      required: ['parentSessionId', 'version'],
     },
     annotations: IDEMPOTENT_ADDITIVE,
   },
@@ -177,10 +152,10 @@ export const ENTRY_TOOLS: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        sessionId: SESSION_ID,
+        sessionId: RESOLVABLE_SESSION_ID,
         data: { type: 'object', description: 'Unstructured JSON payload.' },
       },
-      required: ['sessionId', 'data'],
+      required: ['data'],
     },
     annotations: ADDITIVE,
   },
@@ -190,10 +165,9 @@ export const ENTRY_TOOLS: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        sessionId: SESSION_ID,
+        sessionId: RESOLVABLE_SESSION_ID,
         format: { type: 'string', enum: ['json', 'jsonl'] },
       },
-      required: ['sessionId'],
     },
     annotations: READ_ONLY,
   },

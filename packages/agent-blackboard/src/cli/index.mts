@@ -18,6 +18,7 @@ const HELP_COMMANDS = new Set(['help', '--help', '-h'])
 
 export interface RunCliOptions {
   env?: NodeJS.ProcessEnv
+  cwd?: string
   stdin?: AsyncIterable<Buffer | string>
   stdout?: { write: (chunk: string) => void }
   stderr?: { write: (chunk: string) => void }
@@ -31,6 +32,7 @@ export interface RunCliOptions {
 export async function runCli(argv: string[], options: RunCliOptions = {}): Promise<number> {
   const ctx: CliContext = {
     env: options.env ?? process.env,
+    cwd: options.cwd ?? process.cwd(),
     stdin: options.stdin ?? process.stdin,
     stdout: options.stdout ?? process.stdout,
     stderr: options.stderr ?? process.stderr,
@@ -58,7 +60,10 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
         await runSnapshot(rest, ctx)
         break
       case 'mcp':
-        await (options.startMcpServer ?? startMcpServer)(clientConfigFromEnv(ctx.env))
+        await (options.startMcpServer ?? startMcpServer)(clientConfigFromEnv(ctx.env), {
+          env: ctx.env,
+          cwd: ctx.cwd,
+        })
         break
       default:
         throw new CliError(

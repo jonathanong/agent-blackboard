@@ -6,9 +6,13 @@ export interface ParsedArgs {
 /**
  * A minimal, zero-dependency `argv` parser. Supports `--flag value`,
  * `--flag=value`, and bare boolean flags (`--flag` with no following
- * value, or immediately followed by another `--flag`).
+ * value, or immediately followed by another `--flag`). Names in `booleanFlags` never consume
+ * the following token, so `--root-codex '{"a":1}'` keeps the JSON positional.
  */
-export function parseArgs(argv: string[]): ParsedArgs {
+export function parseArgs(
+  argv: string[],
+  booleanFlags: ReadonlySet<string> = new Set(),
+): ParsedArgs {
   const positional: string[] = []
   const flags: Record<string, string | boolean> = {}
   for (let i = 0; i < argv.length; i++) {
@@ -24,7 +28,7 @@ export function parseArgs(argv: string[]): ParsedArgs {
       continue
     }
     const next = argv[i + 1]
-    if (next !== undefined && !next.startsWith('--')) {
+    if (next !== undefined && !next.startsWith('--') && !booleanFlags.has(body)) {
       flags[body] = next
       i += 1
     } else {

@@ -185,6 +185,7 @@ unless `--sentry=required` is supplied explicitly.
 - [CLI](docs/cli.md)
 - [MCP tools](docs/mcp.md)
 - [Agent hosts](docs/agent-hosts.md)
+- [Session-id resolution](docs/session-id-resolution.md)
 - [End-to-end smoke test](docs/smoke-test.md)
 - [Loop engineering](docs/loop-engineering.md)
 

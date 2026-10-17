@@ -6,6 +6,7 @@ import type { CliContext } from './context.mjs'
 import { clientConfigFromEnv } from './env.mjs'
 import { CliError } from './errors.mjs'
 import { writeLine } from './output.mjs'
+import { cliSessionId, SESSION_BOOLEAN_FLAGS } from './session-resolution.mjs'
 
 async function readStdin(stdin: AsyncIterable<Buffer | string>): Promise<string> {
   const chunks: Buffer[] = []
@@ -48,9 +49,8 @@ async function readFileData(path: string): Promise<Record<string, unknown>> {
 }
 
 export async function runAppend(argv: string[], ctx: CliContext): Promise<void> {
-  const { positional, flags } = parseArgs(argv)
-  const sessionId = stringFlag(flags, 'session-id')
-  if (!sessionId) throw new CliError('append requires --session-id <id>.')
+  const { positional, flags } = parseArgs(argv, SESSION_BOOLEAN_FLAGS)
+  const sessionId = cliSessionId('append', flags, ctx)
   const file = stringFlag(flags, 'file')
   if (flags.file !== undefined && !file) throw new CliError('append requires a path after --file.')
   if (file && positional.length > 0)

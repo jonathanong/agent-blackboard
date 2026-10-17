@@ -6,6 +6,7 @@ import { dispatchTool } from './dispatch.mjs'
 import { ENTRY_TOOLS } from './schemas.mjs'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import type { ClientConfig } from '../client/types.mjs'
+import type { SessionResolutionContext } from './session-resolution.mjs'
 
 const SERVER_INFO = { name: 'agent-blackboard', version: '0.0.0' }
 
@@ -14,14 +15,22 @@ const SERVER_INFO = { name: 'agent-blackboard', version: '0.0.0' }
  * not connect a transport — kept separate so tests can drive it over an
  * `InMemoryTransport` instead of real stdio.
  */
-export function createMcpServer(config: ClientConfig): Server {
+export function createMcpServer(
+  config: ClientConfig,
+  resolution?: SessionResolutionContext,
+): Server {
   const server = new Server(SERVER_INFO, { capabilities: { tools: {} } })
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: ENTRY_TOOLS }))
 
   server.setRequestHandler(CallToolRequestSchema, async (request): Promise<CallToolResult> => {
     try {
-      const result = await dispatchTool(request.params.name, request.params.arguments ?? {}, config)
+      const result = await dispatchTool(
+        request.params.name,
+        request.params.arguments ?? {},
+        config,
+        resolution,
+      )
       return { content: [{ type: 'text', text: JSON.stringify(result) }] }
     } catch (err) {
       return { content: [{ type: 'text', text: formatError(err) }], isError: true }
@@ -35,8 +44,11 @@ export function createMcpServer(config: ClientConfig): Server {
    stdin/stdout, which vitest can't drive. `createMcpServer` above (the tested logic) is exercised
    directly via InMemoryTransport in server.test.mts. */
 /** Starts the MCP stdio server — the `agent-blackboard mcp` entrypoint. */
-export async function startMcpServer(config: ClientConfig): Promise<void> {
-  const server = createMcpServer(config)
+export async function startMcpServer(
+  config: ClientConfig,
+  resolution: SessionResolutionContext,
+): Promise<void> {
+  const server = createMcpServer(config, resolution)
   await server.connect(new StdioServerTransport())
 }
 /* v8 ignore stop */

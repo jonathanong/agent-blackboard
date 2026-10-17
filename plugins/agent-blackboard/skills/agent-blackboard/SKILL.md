@@ -10,8 +10,9 @@ skill explains how to use it; project instructions decide what is worth recordin
 
 ## How it works
 
-- **Session ids are explicit.** The caller must choose an id and create the session before writing.
-  The service never infers or generates one.
+- **Session ids are explicit.** Choose an id and create the session before writing. The service
+  never infers or generates one. When an id is omitted, the MCP server or CLI resolves it from the
+  host's harness environment. Never rely on this for subagents.
 - **Subagents get their own sessions.** Create each subagent session with its direct parent's id in
   `parentSessionId`. Root sessions use `parentSessionId: null`.
 - **Agent identity is explicit.** Every session creation includes the actual agent name and version.

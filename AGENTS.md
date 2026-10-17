@@ -38,9 +38,13 @@ for the product description.
 - Token formats: client `abb_sk_<credId>_<secret>`; admin `abb_admin_<name>_<secret>` — never
   confuse the two. Admin credentials live only in the `AGENT_BLACKBOARD_ADMIN_CREDENTIALS` env var, never in
   DynamoDB. Credential management (`/credentials*`) is CLI/admin-only, never exposed over MCP.
-- Session ids are always supplied by the caller. Never infer them from host environment variables,
-  state files, or process context, and never generate session or entry ids. The server may generate
-  timestamps only. Session ids use URL-safe letters, numbers, `.`, `_`, `:`, and `-`.
+- The server never infers or generates session or entry ids; it generates timestamps only. Session
+  ids use URL-safe letters, numbers, `.`, `_`, `:`, and `-`. Client-side resolution
+  (`packages/agent-blackboard/src/session-id/`) is the only place that infers an id from harness env
+  markers or `.local/<harness>-session-id` files, and it runs only when the caller omits one. An
+  explicit id always wins. Only the explicit `--root-codex --new-root-codex-session` path mints an
+  id (`codex-<uuid>`). Library functions take `env`/`cwd` as parameters and never read
+  `process.env` themselves. See [`docs/session-id-resolution.md`](docs/session-id-resolution.md).
 - Sessions are first-class records. A root session has `parentSessionId: null`; every subagent
   creates its own session with its direct parent's id. Parent links are immutable, must reference
   an existing session owned by the same credential, whether archived or not. Every session requires caller-supplied

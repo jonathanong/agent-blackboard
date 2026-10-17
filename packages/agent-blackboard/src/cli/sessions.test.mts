@@ -59,7 +59,9 @@ it('runs every session command and validates subcommands', async () => {
     }
     const ctx = createFakeContext({ env })
     await expect(runSessions(['create'], ctx)).rejects.toThrow()
-    await expect(runSessions(['create', 's'], ctx)).rejects.toThrow('--agent')
+    await expect(runSessions(['create', 's', '--version', '1'], ctx)).rejects.toThrow(
+      'no agent identity',
+    )
     await expect(runSessions(['create', 's', '--agent', 'test'], ctx)).rejects.toThrow('--version')
     await expect(
       runSessions(['create', 's', '--agent', 'test', '--version', '1', '--parent-session-id'], ctx),
@@ -71,7 +73,9 @@ it('runs every session command and validates subcommands', async () => {
       ),
     ).rejects.toThrow('--parent-session-id')
     await expect(runSessions(['ensure'], ctx)).rejects.toThrow()
-    await expect(runSessions(['ensure', 's'], ctx)).rejects.toThrow('--agent')
+    await expect(runSessions(['ensure', 's', '--version', '1'], ctx)).rejects.toThrow(
+      'no agent identity',
+    )
     await expect(runSessions(['ensure', 's', '--agent', 'test'], ctx)).rejects.toThrow('--version')
     await expect(
       runSessions(['ensure', 's', '--agent', 'test', '--version', '1', '--parent-session-id'], ctx),

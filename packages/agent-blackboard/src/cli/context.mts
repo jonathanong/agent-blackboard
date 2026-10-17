@@ -5,6 +5,8 @@
  */
 export interface CliContext {
   env: NodeJS.ProcessEnv
+  /** Where per-worktree persisted session ids are looked up. */
+  cwd: string
   stdin: AsyncIterable<Buffer | string>
   stdout: { write: (chunk: string) => void }
   stderr: { write: (chunk: string) => void }

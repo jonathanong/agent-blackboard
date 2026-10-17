@@ -1,15 +1,17 @@
 import { streamEntries } from '../client/stream.mjs'
-import { optionalEntryFormat, requiredString } from './validate.mjs'
+import { toolSessionId, type SessionResolutionContext } from './session-resolution.mjs'
+import { optionalEntryFormat } from './validate.mjs'
 import type { ClientConfig, SessionEntry } from '../client/types.mjs'
 
 export async function handleEntryGet(
   args: Record<string, unknown>,
   config: ClientConfig,
+  resolution?: SessionResolutionContext,
 ): Promise<{ entries: SessionEntry[] }> {
   const entries: SessionEntry[] = []
   const format = optionalEntryFormat(args.format)
   const query = {
-    sessionId: requiredString(args.sessionId, 'sessionId'),
+    sessionId: toolSessionId(args, resolution),
     ...(format === undefined ? {} : { format }),
   }
   for await (const entry of streamEntries(config, query)) {

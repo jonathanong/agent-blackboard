@@ -63,7 +63,9 @@ const auth = new Auth({ baseUrl, adminToken })
 await auth.createCredentials({ name: 'ci-bot' })
 ```
 
-All session ids, agent names, and versions are caller-provided. `parentSessionId` is required and
+Versions are caller-provided. Session ids and agent names are too, unless the caller opts into
+[session-id resolution](https://github.com/jonathanong/agent-blackboard/blob/main/docs/session-id-resolution.md)
+(`resolveSessionIdentity`, or omitting them in the CLI/MCP). `parentSessionId` is required and
 nullable. The service generates `createdAt`/`lastEntryAt`/`archivedAt` timestamps.
 `Entries.get()` returns an `AsyncIterable<SessionEntry>` and uses incremental JSONL by default.
 Non-2xx responses throw `AgentBlackboardError`. Use the root `formatError(error)` export when
