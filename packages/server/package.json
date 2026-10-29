@@ -12,8 +12,8 @@
     "teardown": "node infra/teardown.mjs"
   },
   "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.1152.0",
-    "@aws-sdk/lib-dynamodb": "^3.1152.0",
+    "@aws-sdk/client-dynamodb": "^3.1156.0",
+    "@aws-sdk/lib-dynamodb": "^3.1156.0",
     "@sentry/aws-serverless": "11.8.0"
   },
   "devDependencies": {
