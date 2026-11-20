@@ -111,7 +111,9 @@ plugin is already active, `/reload-plugins` is unnecessary.
 If you added the old `jonathanong/agent-blackboard` marketplace, migrate. In Claude Code, run
 `claude plugin marketplace remove agent-blackboard` (this uninstalls its plugins), then install from
 `harness-plugins` as above. In Codex, run `codex plugin remove agent-blackboard@agent-blackboard`,
-then `codex plugin marketplace remove agent-blackboard`, then `codex plugin add agent-blackboard@harness-plugins`.
+then `codex plugin marketplace remove agent-blackboard`, then
+`codex plugin marketplace add jonathanong/harness-plugins --ref main`, then
+`codex plugin add agent-blackboard@harness-plugins`.
 
 ### Option 2: install only the MCP server
 
