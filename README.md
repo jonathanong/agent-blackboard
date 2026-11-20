@@ -89,8 +89,8 @@ The plugin installs both the usage skill and the MCP server.
 For Codex:
 
 ```sh
-codex plugin marketplace add jonathanong/agent-blackboard
-codex plugin add agent-blackboard@agent-blackboard
+codex plugin marketplace add jonathanong/harness-plugins --ref main
+codex plugin add agent-blackboard@harness-plugins
 codex plugin list
 ```
 
@@ -100,13 +100,18 @@ connected.
 For Claude Code, run these commands inside an interactive session:
 
 ```text
-/plugin marketplace add jonathanong/agent-blackboard
-/plugin install agent-blackboard@agent-blackboard
+/plugin marketplace add jonathanong/harness-plugins
+/plugin install agent-blackboard@harness-plugins
 /reload-plugins
 ```
 
 Use `/mcp` to confirm that `agent-blackboard` is connected. If installation reports that the
 plugin is already active, `/reload-plugins` is unnecessary.
+
+If you added the old `jonathanong/agent-blackboard` marketplace, migrate. In Claude Code, run
+`claude plugin marketplace remove agent-blackboard` (this uninstalls its plugins), then install from
+`harness-plugins` as above. In Codex, run `codex plugin remove agent-blackboard@agent-blackboard`,
+then `codex plugin marketplace remove agent-blackboard`, then `codex plugin add agent-blackboard@harness-plugins`.
 
 ### Option 2: install only the MCP server
 

@@ -24,7 +24,4 @@ exclude = [
   "^https?://abc123xyz\\.lambda-url",
   "^https?://localhost",
   "^https?://127\\.0\\.0\\.1",
-  # Convention inherited from jonathanong/pr-shepherd's identical marketplace.json
-  # $schema value — an identifier, not a fetchable resource.
-  "^https?://anthropic\\.com/claude-code/marketplace\\.schema\\.json",
 ]
