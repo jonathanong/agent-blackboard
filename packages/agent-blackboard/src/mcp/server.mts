@@ -6,6 +6,7 @@ import { dispatchTool } from './dispatch.mjs'
 import { ENTRY_TOOLS } from './schemas.mjs'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import type { ClientConfig } from '../client/types.mjs'
+import { withClientHarnessMarker } from './session-resolution.mjs'
 import type { SessionResolutionContext } from './session-resolution.mjs'
 
 const SERVER_INFO = { name: 'agent-blackboard', version: '0.0.0' }
@@ -29,7 +30,7 @@ export function createMcpServer(
         request.params.name,
         request.params.arguments ?? {},
         config,
-        resolution,
+        withClientHarnessMarker(resolution, server.getClientVersion()?.name),
       )
       return { content: [{ type: 'text', text: JSON.stringify(result) }] }
     } catch (err) {

@@ -12,6 +12,21 @@ export interface SessionResolutionContext {
 }
 
 /**
+ * A Cursor-launched MCP server usually gets only the URL and token from `mcp.json`, not
+ * `CURSOR_AGENT`. When the MCP client identifies itself as Cursor, mark the resolution env as
+ * Cursor so an omitted `sessionId` can fall back to the persisted Cursor id. Only the marker is
+ * set, never a runtime hint, so explicit harness env still takes precedence as usual.
+ */
+export function withClientHarnessMarker(
+  resolution: SessionResolutionContext | undefined,
+  clientName: string | undefined,
+): SessionResolutionContext | undefined {
+  if (resolution === undefined || resolution.env.CURSOR_AGENT) return resolution
+  if (!clientName?.toLowerCase().includes('cursor')) return resolution
+  return { ...resolution, env: { ...resolution.env, CURSOR_AGENT: '1' } }
+}
+
+/**
  * An explicit `sessionId` wins and is passed through (the server validates it). When omitted and
  * a resolution context is available, the id is resolved from the harness environment or the
  * per-worktree persisted file; otherwise `sessionId` is required.
