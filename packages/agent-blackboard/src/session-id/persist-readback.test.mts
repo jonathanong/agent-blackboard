@@ -8,6 +8,7 @@ vi.mock('node:fs', async (importOriginal) => {
     ...actual,
     mkdirSync: vi.fn(),
     writeFileSync: vi.fn(),
+    renameSync: vi.fn(),
     readFileSync: vi.fn(() => 'someone-else\n'),
   }
 })

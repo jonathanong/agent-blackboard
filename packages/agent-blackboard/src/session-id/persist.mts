@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { isValidSessionId, sanitizeSessionId } from './valid-id.mjs'
 
@@ -54,10 +54,22 @@ export function readPersistedSessionId(
   }
 }
 
+/**
+ * Writes to a unique temp file beside the target and renames it into place, so a concurrent reader
+ * sees either the old or the new id, never a truncated file. `rename` replaces a symlink at the
+ * target instead of following it, and the `wx` flag refuses to follow one at the temp path.
+ */
 function writePersistFile(root: string, harness: PersistedHarness, sessionId: string): void {
   const path = sessionPersistPath(root, harness)
   mkdirSync(dirname(path), { recursive: true })
-  writeFileSync(path, `${sessionId}\n`, { encoding: 'utf8' })
+  const temp = `${path}.${process.pid}.${randomUUID()}.tmp`
+  try {
+    writeFileSync(temp, `${sessionId}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o600 })
+    renameSync(temp, path)
+  } catch (err) {
+    rmSync(temp, { force: true })
+    throw err
+  }
 }
 
 function tryWritePersistFile(root: string, harness: PersistedHarness, sessionId: string): void {
