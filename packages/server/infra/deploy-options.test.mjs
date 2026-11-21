@@ -55,17 +55,13 @@ describe('parseSentryDeployOptions', () => {
   it('rejects dirty or non-commit builds when Sentry is required', () => {
     const env = { AGENT_BLACKBOARD_SENTRY_DSN: 'https://public@example.ingest.sentry.io/123' }
     expect(() =>
-      parseSentryDeployOptions(
-        ['--sentry=required', '--sentry-environment=staging'],
-        env,
-        (args) => (args[0] === 'status' ? ' M src/handler.mts\n' : 'a'.repeat(40)),
+      parseSentryDeployOptions(['--sentry=required', '--sentry-environment=staging'], env, (args) =>
+        args[0] === 'status' ? ' M src/handler.mts\n' : 'a'.repeat(40),
       ),
     ).toThrow('clean Git worktree')
     expect(() =>
-      parseSentryDeployOptions(
-        ['--sentry=required', '--sentry-environment=staging'],
-        env,
-        (args) => (args[0] === 'status' ? '' : 'not-a-sha'),
+      parseSentryDeployOptions(['--sentry=required', '--sentry-environment=staging'], env, (args) =>
+        args[0] === 'status' ? '' : 'not-a-sha',
       ),
     ).toThrow('40-character Git commit')
   })
