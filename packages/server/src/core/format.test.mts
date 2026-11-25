@@ -60,8 +60,14 @@ describe('formatEntries', () => {
   })
 
   it('markdown: a heading and fenced JSON block per entry', async () => {
-    const text = await collect(formatEntries('markdown', entries([ENTRY])))
-    expect(text).toContain('## 2024-01-01T00:00:00.000Z — session s1')
+    const text = await collect(
+      formatEntries(
+        'markdown',
+        entries([ENTRY, { ...ENTRY, schemaId: 'finding', schemaVersion: 2 }]),
+      ),
+    )
+    expect(text).toContain('## 2024-01-01T00:00:00.000Z — session s1\n')
+    expect(text).toContain('## 2024-01-01T00:00:00.000Z — session s1 (finding@2)\n')
     expect(text).toContain('```json')
     expect(text).toContain('"note": "hello"')
   })

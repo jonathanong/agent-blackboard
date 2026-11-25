@@ -32,6 +32,8 @@ export interface SessionEntry {
   sessionId: string
   createdAt: string
   data: Record<string, unknown>
+  schemaId?: string
+  schemaVersion?: number
 }
 
 export interface CreateSessionInput {
@@ -74,6 +76,8 @@ export interface ListSessionsResult {
 export interface AppendEntryInput {
   sessionId: string
   data: Record<string, unknown>
+  schemaId?: string
+  schemaVersion?: number
 }
 
 export type EntryWireFormat = 'json' | 'jsonl' | 'markdown'

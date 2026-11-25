@@ -41,6 +41,8 @@ export interface NewSessionEntry {
   credId: string
   sessionId: string
   data: Record<string, unknown>
+  schemaId?: string
+  schemaVersion?: number
 }
 
 export interface NewSession {

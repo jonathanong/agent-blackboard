@@ -6,10 +6,9 @@
 // that framework-agnostic contract. Streaming primitives live in
 // ./handler-stream.mts (split out to stay under the 200-line file cap).
 import { handleRequest } from './core/handle-request.mjs'
-import type { HandleRequestDeps } from './core/handle-request.mjs'
+import type { HandleRequestDeps, ServerEnv } from './core/handle-request.mjs'
 import type { HandlerRequest, HandlerResponse } from './core/types.mjs'
 import { createDynamoStore } from './store/dynamo.mjs'
-import type { AdminEnv } from './auth/admin.mjs'
 import { errorMessage, nodeStreamSink, streamResponseBody } from './handler-stream.mjs'
 import type { ResponseStreamSink } from './handler-stream.mjs'
 import { reportSentryError } from './sentry.mjs'
@@ -141,10 +140,15 @@ export function realStore(): ReturnType<typeof createDynamoStore> {
   return store
 }
 
-export function adminEnv(): AdminEnv {
-  return process.env.AGENT_BLACKBOARD_ADMIN_CREDENTIALS
-    ? { AGENT_BLACKBOARD_ADMIN_CREDENTIALS: process.env.AGENT_BLACKBOARD_ADMIN_CREDENTIALS }
-    : {}
+export function adminEnv(): ServerEnv {
+  return {
+    ...(process.env.AGENT_BLACKBOARD_ADMIN_CREDENTIALS
+      ? { AGENT_BLACKBOARD_ADMIN_CREDENTIALS: process.env.AGENT_BLACKBOARD_ADMIN_CREDENTIALS }
+      : {}),
+    ...(process.env.AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT
+      ? { AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT: process.env.AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT }
+      : {}),
+  }
 }
 
 export function currentTime(): Date {

@@ -11,8 +11,7 @@ import type { IncomingHttpHeaders, IncomingMessage, Server, ServerResponse } fro
 import { createServer as createHttpServer } from 'node:http'
 import { realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import type { AdminEnv } from './auth/admin.mjs'
-import { handleRequest } from './core/handle-request.mjs'
+import { handleRequest, type ServerEnv } from './core/handle-request.mjs'
 import type { BodyChunk, HandlerRequest, HandlerResponse } from './core/types.mjs'
 import { createDynamoStore } from './store/dynamo.mjs'
 import { MemoryBlackboardStore } from './store/memory.mjs'
@@ -21,7 +20,7 @@ import type { BlackboardStore } from './store/store.mjs'
 export interface ServerDeps {
   store: BlackboardStore
   now?: () => Date
-  env?: AdminEnv
+  env?: ServerEnv
 }
 
 // ---- Pure request/response adapting (unit-testable without a live socket) ----
@@ -118,10 +117,15 @@ export function createServer(deps: ServerDeps): Server {
 
 // ---- Script entrypoint: `node local-server.mts` / `pnpm run dev` ----
 
-export function adminEnvFromProcess(): AdminEnv {
-  return process.env.AGENT_BLACKBOARD_ADMIN_CREDENTIALS
-    ? { AGENT_BLACKBOARD_ADMIN_CREDENTIALS: process.env.AGENT_BLACKBOARD_ADMIN_CREDENTIALS }
-    : {}
+export function adminEnvFromProcess(): ServerEnv {
+  return {
+    ...(process.env.AGENT_BLACKBOARD_ADMIN_CREDENTIALS
+      ? { AGENT_BLACKBOARD_ADMIN_CREDENTIALS: process.env.AGENT_BLACKBOARD_ADMIN_CREDENTIALS }
+      : {}),
+    ...(process.env.AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT
+      ? { AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT: process.env.AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT }
+      : {}),
+  }
 }
 
 export function storeFromProcess(): BlackboardStore {

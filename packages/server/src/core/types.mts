@@ -65,6 +65,8 @@ export interface SessionEntry {
   sessionId: string
   createdAt: string
   data: Record<string, unknown>
+  schemaId?: string
+  schemaVersion?: number
 }
 
 /** A stored API credential. The raw token is never persisted or returned after creation. */

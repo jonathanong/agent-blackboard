@@ -14,6 +14,8 @@ export function itemToEntry(item: Record<string, unknown>): SessionEntry {
     sessionId: item.sessionId as string,
     createdAt: item.createdAt as string,
     data: item.data as Record<string, unknown>,
+    ...(typeof item.schemaId === 'string' ? { schemaId: item.schemaId } : {}),
+    ...(typeof item.schemaVersion === 'number' ? { schemaVersion: item.schemaVersion } : {}),
   }
 }
 
@@ -39,7 +41,13 @@ export async function dynamoAppendEntry(
   for (let offset = 0; offset < TIMESTAMP_RETRIES; offset++) {
     const createdAt = new Date(timestamp).toISOString()
     const ttl = Math.floor(timestamp / 1000) + ttlDays * 86400
-    const entry: SessionEntry = { sessionId: input.sessionId, createdAt, data: input.data }
+    const entry: SessionEntry = {
+      sessionId: input.sessionId,
+      createdAt,
+      data: input.data,
+      ...(input.schemaId !== undefined ? { schemaId: input.schemaId } : {}),
+      ...(input.schemaVersion !== undefined ? { schemaVersion: input.schemaVersion } : {}),
+    }
     try {
       await doc.send(
         new TransactWriteCommand({

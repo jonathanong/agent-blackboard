@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { extname } from 'node:path'
 import { appendEntry } from '../client/append.mjs'
+import { parseSchemaRef } from '../schemas/id.mjs'
 import { parseArgs, stringFlag } from './args.mjs'
 import type { CliContext } from './context.mjs'
 import { clientConfigFromEnv } from './env.mjs'
@@ -56,12 +57,22 @@ export async function runAppend(argv: string[], ctx: CliContext): Promise<void> 
   if (flags.file !== undefined && !file) throw new CliError('append requires a path after --file.')
   if (file && positional.length > 0)
     throw new CliError('append accepts either --file or positional JSON, not both.')
+  const schemaFlag = stringFlag(flags, 'schema')
+  if (flags.schema !== undefined && !schemaFlag) {
+    throw new CliError('append requires <id>[@<version>] after --schema.')
+  }
+  const parsedSchema = schemaFlag === undefined ? undefined : parseSchemaRef(schemaFlag)
+  if (schemaFlag !== undefined && !parsedSchema) {
+    throw new CliError(`Invalid --schema reference: ${schemaFlag}`)
+  }
   const data = file
     ? await readFileData(file)
     : parseJsonObject(positional[0] ?? (await readStdin(ctx.stdin)))
   const entry = await appendEntry(clientConfigFromEnv(ctx.env, createRevisionNotifier(ctx)), {
     sessionId,
     data,
+    ...(parsedSchema ? { schemaId: parsedSchema.id } : {}),
+    ...(parsedSchema?.version !== undefined ? { schemaVersion: parsedSchema.version } : {}),
   })
   writeLine(ctx.stdout, JSON.stringify(entry))
 }

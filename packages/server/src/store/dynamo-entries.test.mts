@@ -44,6 +44,13 @@ describe('DynamoDB entries', () => {
       createdAt: NOW.toISOString(),
       data: { a: 1 },
     })
+    expect(itemToEntry({ ...entry(), schemaId: 'finding', schemaVersion: 2 })).toEqual({
+      sessionId: 's',
+      createdAt: NOW.toISOString(),
+      data: { a: 1 },
+      schemaId: 'finding',
+      schemaVersion: 2,
+    })
     let input: Record<string, unknown> | undefined
     const doc = client((command) => {
       input = command.input
@@ -54,8 +61,16 @@ describe('DynamoDB entries', () => {
         credId: 'c',
         sessionId: 's',
         data: {},
+        schemaId: 'finding',
+        schemaVersion: 1,
       }),
-    ).resolves.toEqual({ sessionId: 's', createdAt: NOW.toISOString(), data: {} })
+    ).resolves.toEqual({
+      sessionId: 's',
+      createdAt: NOW.toISOString(),
+      data: {},
+      schemaId: 'finding',
+      schemaVersion: 1,
+    })
     const operations = input!.TransactItems as Array<{
       Update?: Record<string, unknown>
       Put?: { Item: Record<string, unknown> }

@@ -127,20 +127,28 @@ describe('currentTime', () => {
 
 describe('adminEnvFromProcess / storeFromProcess', () => {
   const ORIGINAL_ADMIN = process.env.AGENT_BLACKBOARD_ADMIN_CREDENTIALS
+  const ORIGINAL_ENFORCEMENT = process.env.AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT
   const ORIGINAL_STORE = process.env.AGENT_BLACKBOARD_STORE
 
   afterEach(() => {
     if (ORIGINAL_ADMIN === undefined) delete process.env.AGENT_BLACKBOARD_ADMIN_CREDENTIALS
     else process.env.AGENT_BLACKBOARD_ADMIN_CREDENTIALS = ORIGINAL_ADMIN
+    if (ORIGINAL_ENFORCEMENT === undefined) delete process.env.AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT
+    else process.env.AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT = ORIGINAL_ENFORCEMENT
     if (ORIGINAL_STORE === undefined) delete process.env.AGENT_BLACKBOARD_STORE
     else process.env.AGENT_BLACKBOARD_STORE = ORIGINAL_STORE
   })
 
-  it('adminEnvFromProcess reflects AGENT_BLACKBOARD_ADMIN_CREDENTIALS presence', () => {
+  it('adminEnvFromProcess reflects AGENT_BLACKBOARD_ADMIN_CREDENTIALS and enforcement presence', () => {
     delete process.env.AGENT_BLACKBOARD_ADMIN_CREDENTIALS
+    delete process.env.AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT
     expect(adminEnvFromProcess()).toEqual({})
     process.env.AGENT_BLACKBOARD_ADMIN_CREDENTIALS = 'abc'
-    expect(adminEnvFromProcess()).toEqual({ AGENT_BLACKBOARD_ADMIN_CREDENTIALS: 'abc' })
+    process.env.AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT = 'required'
+    expect(adminEnvFromProcess()).toEqual({
+      AGENT_BLACKBOARD_ADMIN_CREDENTIALS: 'abc',
+      AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT: 'required',
+    })
   })
 
   it('storeFromProcess picks the in-memory store only when AGENT_BLACKBOARD_STORE=memory', () => {

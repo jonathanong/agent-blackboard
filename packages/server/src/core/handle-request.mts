@@ -9,6 +9,7 @@
  * response carries `x-schema-registry-revision` so clients notice schema drift.
  */
 import type { AdminEnv } from '../auth/admin.mjs'
+import type { SchemaEnforcementEnv } from '../schemas/enforce.mjs'
 import type { BlackboardStore } from '../store/store.mjs'
 import { notFoundResponse } from './response.mjs'
 import { handleCredentialsRoute } from './routes/credentials.mjs'
@@ -19,10 +20,12 @@ import { handleSessionsRoute } from './routes/sessions.mjs'
 import { handleSnapshotRoute } from './routes/snapshot.mjs'
 import type { HandlerRequest, HandlerResponse } from './types.mjs'
 
+export type ServerEnv = AdminEnv & SchemaEnforcementEnv
+
 export interface HandleRequestDeps {
   store: BlackboardStore
   now: () => Date
-  env: AdminEnv
+  env: ServerEnv
 }
 
 function normalizePath(path: string): string {
@@ -56,7 +59,9 @@ async function routeMatched(
   const entriesMatch = /^\/sessions\/([^/]+)\/entries$/.exec(path)
   if (entriesMatch) {
     const sessionId = decodeSegment(entriesMatch[1]!)
-    return sessionId === null ? undefined : handleEntriesRoute(request, deps.store, sessionId)
+    return sessionId === null
+      ? undefined
+      : handleEntriesRoute(request, deps.store, sessionId, deps.env)
   }
   const schemaMatch = /^\/schemas\/([^/]+)$/.exec(path)
   if (schemaMatch) {

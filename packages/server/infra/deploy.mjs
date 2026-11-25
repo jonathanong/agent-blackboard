@@ -135,6 +135,8 @@ export async function deploy(argv = process.argv.slice(2)) {
   ]
   if (process.env.AGENT_BLACKBOARD_TTL_DAYS)
     overrides.push(`AgentBlackboardTtlDays=${process.env.AGENT_BLACKBOARD_TTL_DAYS}`)
+  if (process.env.AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT)
+    overrides.push(`SchemaEnforcement=${process.env.AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT}`)
 
   aws(
     [

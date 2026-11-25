@@ -5,7 +5,11 @@ export async function* formatMarkdown(
   entries: AsyncIterable<SessionEntry>,
 ): AsyncGenerator<string> {
   for await (const entry of entries) {
-    yield `## ${entry.createdAt} — session ${entry.sessionId}\n\n`
+    const schemaSuffix =
+      entry.schemaId !== undefined && entry.schemaVersion !== undefined
+        ? ` (${entry.schemaId}@${entry.schemaVersion})`
+        : ''
+    yield `## ${entry.createdAt} — session ${entry.sessionId}${schemaSuffix}\n\n`
     yield '```json\n'
     yield `${JSON.stringify(entry.data, null, 2)}\n`
     yield '```\n\n'

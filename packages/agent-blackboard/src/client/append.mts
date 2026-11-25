@@ -10,6 +10,10 @@ export async function appendEntry(
   return requestJson(config, `/sessions/${encodeURIComponent(input.sessionId)}/entries`, {
     method: 'POST',
     headers: JSON_HEADERS,
-    body: JSON.stringify({ data: input.data }),
+    body: JSON.stringify({
+      data: input.data,
+      ...(input.schemaId !== undefined ? { schemaId: input.schemaId } : {}),
+      ...(input.schemaVersion !== undefined ? { schemaVersion: input.schemaVersion } : {}),
+    }),
   })
 }

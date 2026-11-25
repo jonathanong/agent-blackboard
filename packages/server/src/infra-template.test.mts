@@ -31,4 +31,14 @@ describe('CloudFormation template', () => {
     expect(template).toContain('          SENTRY_RELEASE: !Ref SentryRelease')
     expect(template).not.toContain('SENTRY_AUTH_TOKEN')
   })
+
+  it('exposes optional SchemaEnforcement parameter defaulting to optional', async () => {
+    const template = await readFile(new URL('../infra/template.yaml', import.meta.url), 'utf8')
+    expect(template).toContain('  SchemaEnforcement:')
+    expect(template).toContain('    Default: optional')
+    expect(template).toContain('    AllowedValues: [optional, required]')
+    expect(template).toContain(
+      '          AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT: !Ref SchemaEnforcement',
+    )
+  })
 })

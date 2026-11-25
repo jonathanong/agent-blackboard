@@ -1,4 +1,5 @@
 import { resolveClientCredential } from '../../auth/client.mjs'
+import { validateEntryWrite, type SchemaEnforcementEnv } from '../../schemas/enforce.mjs'
 import { SessionStoreError } from '../../store/errors.mjs'
 import type { BlackboardStore } from '../../store/store.mjs'
 import { readJsonBody } from '../body.mjs'
@@ -25,6 +26,7 @@ async function appendEntry(
   store: BlackboardStore,
   credId: string,
   sessionId: string,
+  env: SchemaEnforcementEnv,
 ): Promise<HandlerResponse> {
   const parsed = await readJsonBody(request.body)
   if (!parsed.ok) {
@@ -32,11 +34,25 @@ async function appendEntry(
       ? payloadTooLargeResponse()
       : errorResponse(400, 'body must be a JSON object')
   }
-  if (!objectData(parsed.value)) return errorResponse(400, 'body must be a JSON object')
-  const data = objectData((parsed.value as Record<string, unknown>).data)
+  const body = objectData(parsed.value)
+  if (!body) return errorResponse(400, 'body must be a JSON object')
+  const data = objectData(body.data)
   if (!data) return errorResponse(400, 'data must be an object')
+  const validation = await validateEntryWrite(store, body, data, env)
+  if (!validation.ok) return jsonResponse(validation.status, validation.body)
   try {
-    return jsonResponse(201, await store.appendEntry({ credId, sessionId, data }))
+    return jsonResponse(
+      201,
+      await store.appendEntry({
+        credId,
+        sessionId,
+        data,
+        ...(validation.schemaId !== undefined ? { schemaId: validation.schemaId } : {}),
+        ...(validation.schemaVersion !== undefined
+          ? { schemaVersion: validation.schemaVersion }
+          : {}),
+      }),
+    )
   } catch (error) {
     const response = storeErrorResponse(error)
     if (response) return response
@@ -69,10 +85,11 @@ export async function handleEntriesRoute(
   request: HandlerRequest,
   store: BlackboardStore,
   sessionId: string,
+  env: SchemaEnforcementEnv = {},
 ): Promise<HandlerResponse> {
   const cred = await resolveClientCredential(request.headers.authorization, store)
   if (!cred) return unauthorizedResponse()
-  if (request.method === 'POST') return appendEntry(request, store, cred.id, sessionId)
+  if (request.method === 'POST') return appendEntry(request, store, cred.id, sessionId, env)
   if (request.method === 'GET') return getEntries(request, store, cred.id, sessionId)
   return notFoundResponse()
 }
