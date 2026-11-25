@@ -189,9 +189,13 @@ describe('CLI schemas subcommands and revision sync notice', () => {
       expect(JSON.parse(putCtx.stdoutLines[0]!)).toMatchObject({ ref: 'finding@2' })
 
       const putBreakingCtx = createFakeContext({ env, cwd: dir })
-      await runSchemas(['put', 'finding', schemaFile, '--breaking'], putBreakingCtx)
+      await runSchemas(['put', 'finding', schemaFile, '--breaking=true'], putBreakingCtx)
       const putReq = fixture.requests.at(-1)!
       expect(JSON.parse(putReq.body)).toMatchObject({ breaking: true })
+
+      const putFalseBreakingCtx = createFakeContext({ env, cwd: dir })
+      await runSchemas(['put', 'finding', schemaFile, '--breaking=false'], putFalseBreakingCtx)
+      expect(JSON.parse(fixture.requests.at(-1)!.body)).not.toHaveProperty('breaking')
 
       const removeCtx = createFakeContext({ env, cwd: dir })
       await runSchemas(['remove', 'finding'], removeCtx)
@@ -202,8 +206,13 @@ describe('CLI schemas subcommands and revision sync notice', () => {
       // Error handling for bad args and files
       const emptyCtx = createFakeContext({ env, cwd: dir })
       await expect(runSchemas([], emptyCtx)).rejects.toThrow(CliError)
+      await expect(runSchemas(['bogus'], emptyCtx)).rejects.toThrow(CliError)
+      await expect(runSchemas(['pull', '--dir'], emptyCtx)).rejects.toThrow(CliError)
       await expect(runSchemas(['put', 'finding'], emptyCtx)).rejects.toThrow(CliError)
       await expect(runSchemas(['put', 'bad/id', schemaFile], emptyCtx)).rejects.toThrow(CliError)
+      await expect(
+        runSchemas(['put', 'finding', schemaFile, '--breaking=maybe'], emptyCtx),
+      ).rejects.toThrow(CliError)
       await expect(
         runSchemas(['put', 'finding', join(dir, 'missing.json')], emptyCtx),
       ).rejects.toThrow(CliError)
@@ -216,6 +225,12 @@ describe('CLI schemas subcommands and revision sync notice', () => {
       await expect(runSchemas(['get'], emptyCtx)).rejects.toThrow(CliError)
       await expect(runSchemas(['get', 'bad/id'], emptyCtx)).rejects.toThrow(CliError)
       await expect(runSchemas(['validate', 'finding'], emptyCtx)).rejects.toThrow(CliError)
+      await expect(
+        runSchemas(['validate', 'finding', validEntryFile, '--dir'], emptyCtx),
+      ).rejects.toThrow(CliError)
+      await expect(
+        runSchemas(['validate', 'finding', arrayJsonFile, '--dir', cacheDir], emptyCtx),
+      ).rejects.toThrow(CliError)
     } finally {
       await fixture.close()
     }

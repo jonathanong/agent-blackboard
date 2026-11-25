@@ -143,10 +143,35 @@ describe('offline schema validation', () => {
     expect(invalid.errors.length).toBeGreaterThan(0)
   })
 
-  it('rejects invalid refs, missing schemas/versions, and deprecated schemas', () => {
+  it('rejects invalid refs, missing schemas/versions, deprecated schemas, and corrupt uncompilable caches', () => {
     expect(() => validateAgainstBundle(BUNDLE, 'bad/ref', {})).toThrow(/Invalid schema reference/)
     expect(() => validateAgainstBundle(BUNDLE, 'missing', {})).toThrow(/not found/)
     expect(() => validateAgainstBundle(BUNDLE, 'old', {})).toThrow(/deprecated/)
     expect(() => validateAgainstBundle(BUNDLE, 'finding@99', {})).toThrow(/version not found/)
+    expect(() =>
+      validateAgainstBundle(
+        {
+          revision: 1,
+          schemas: [
+            {
+              ...BUNDLE.schemas[0]!,
+              id: 'broken',
+              versions: [
+                {
+                  id: 'broken',
+                  version: 1,
+                  ref: 'broken@1',
+                  schema: { type: 'object', unknownKeyword: true },
+                  createdAt: '2026-01-01T00:00:00.000Z',
+                  createdBy: 'ops',
+                },
+              ],
+            },
+          ],
+        },
+        'broken',
+        {},
+      ),
+    ).toThrow(/failed to compile/)
   })
 })

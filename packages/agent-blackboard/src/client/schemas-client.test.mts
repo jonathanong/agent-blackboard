@@ -66,6 +66,9 @@ describe('schemas HTTP client', () => {
         version: 3,
       })
       expect(await deprecateSchemaRequest(config, 'finding')).toMatchObject({ id: 'finding' })
+      await expect(getSchemaRequest(config, '')).rejects.toThrow(TypeError)
+      await expect(putSchemaRequest(config, '../bad', { schema: {} })).rejects.toThrow(TypeError)
+      await expect(deprecateSchemaRequest(config, 'constructor')).rejects.toThrow(TypeError)
       expect(seenRevisions.length).toBeGreaterThanOrEqual(7)
     } finally {
       await fixture.close()

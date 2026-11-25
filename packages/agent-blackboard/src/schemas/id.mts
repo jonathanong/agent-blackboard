@@ -12,6 +12,8 @@ export function isValidSchemaId(value: string): boolean {
     value.length > 0 &&
     value.length <= MAX_SCHEMA_ID_LENGTH &&
     !value.includes('..') &&
+    value !== '__proto__' &&
+    !Object.hasOwn(Object.prototype, value) &&
     SCHEMA_ID_PATTERN.test(value)
   )
 }

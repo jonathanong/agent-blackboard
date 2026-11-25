@@ -13,6 +13,7 @@ import { formatSchemaRef, isValidSchemaId } from './id.mjs'
 export const DEFAULT_SCHEMAS_RELATIVE = '.local/agent-blackboard/schemas'
 const MANIFEST_FILE = 'manifest.json'
 const VERSIONS_DIR = 'versions'
+const LATEST_DIR = 'latest'
 
 export interface LocalSchemaManifest {
   revision: number
@@ -74,18 +75,29 @@ export function writeLocalBundle(
   bundle: SchemaBundle,
   now: () => Date = () => new Date(),
 ): { schemaCount: number; versionCount: number } {
-  const versionsDir = join(dir, VERSIONS_DIR)
-  mkdirSync(versionsDir, { recursive: true })
+  // Validate all ids and version numbers before writing any file so a bad bundle never leaves torn state.
+  for (const entry of bundle.schemas) {
+    if (!isValidSchemaId(entry.id)) {
+      throw new Error(`refusing to write unsafe schema id: ${entry.id}`)
+    }
+    for (const versionRecord of entry.versions) {
+      if (!Number.isSafeInteger(versionRecord.version) || versionRecord.version < 1) {
+        throw new Error(`refusing to write invalid schema version for ${entry.id}`)
+      }
+    }
+  }
 
-  const keepTop = new Set<string>([MANIFEST_FILE])
+  const versionsDir = join(dir, VERSIONS_DIR)
+  const latestDir = join(dir, LATEST_DIR)
+  mkdirSync(versionsDir, { recursive: true })
+  mkdirSync(latestDir, { recursive: true })
+
+  const keepLatest = new Set<string>()
   const keepVersions = new Set<string>()
   let versionCount = 0
 
   const manifestSchemas: LocalSchemaManifest['schemas'] = []
   for (const entry of bundle.schemas) {
-    if (!isValidSchemaId(entry.id)) {
-      throw new Error(`refusing to write unsafe schema id: ${entry.id}`)
-    }
     const versionNumbers: number[] = []
     for (const versionRecord of entry.versions) {
       const fileName = `${formatSchemaRef(entry.id, versionRecord.version)}.json`
@@ -96,16 +108,19 @@ export function writeLocalBundle(
     }
     const latestRecord = entry.versions.find((v) => v.version === entry.latestVersion)
     if (latestRecord) {
-      const topFile = `${entry.id}.json`
-      keepTop.add(topFile)
-      writeFileAtomic(join(dir, topFile), `${JSON.stringify(latestRecord.schema, null, 2)}\n`)
+      const latestFile = `${entry.id}.json`
+      keepLatest.add(latestFile)
+      writeFileAtomic(
+        join(latestDir, latestFile),
+        `${JSON.stringify(latestRecord.schema, null, 2)}\n`,
+      )
     }
     const { versions: _omit, ...summary } = entry
     manifestSchemas.push({ ...summary, versions: versionNumbers })
   }
 
   removeStaleJsonFiles(versionsDir, keepVersions)
-  removeStaleJsonFiles(dir, keepTop)
+  removeStaleJsonFiles(latestDir, keepLatest)
 
   const manifest: LocalSchemaManifest = {
     revision: bundle.revision,
@@ -121,16 +136,20 @@ export function readLocalBundle(dir: string): SchemaBundle | undefined {
   if (!manifest) return undefined
   const versionsDir = join(dir, VERSIONS_DIR)
   const schemas: SchemaWithVersions[] = []
-  for (const entry of manifest.schemas) {
-    if (!isValidSchemaId(entry.id)) return undefined
-    const versions: SchemaVersionRecord[] = []
-    for (const versionNum of entry.versions) {
-      const filePath = join(versionsDir, `${formatSchemaRef(entry.id, versionNum)}.json`)
-      const raw = readFileSync(filePath, 'utf8')
-      versions.push(JSON.parse(raw) as SchemaVersionRecord)
+  try {
+    for (const entry of manifest.schemas) {
+      if (!isValidSchemaId(entry.id) || !Array.isArray(entry.versions)) return undefined
+      const versions: SchemaVersionRecord[] = []
+      for (const versionNum of entry.versions) {
+        const filePath = join(versionsDir, `${formatSchemaRef(entry.id, versionNum)}.json`)
+        const raw = readFileSync(filePath, 'utf8')
+        versions.push(JSON.parse(raw) as SchemaVersionRecord)
+      }
+      const { versions: _v, ...summary } = entry
+      schemas.push({ ...summary, versions })
     }
-    const { versions: _v, ...summary } = entry
-    schemas.push({ ...summary, versions })
+  } catch {
+    return undefined
   }
   return { revision: manifest.revision, schemas }
 }

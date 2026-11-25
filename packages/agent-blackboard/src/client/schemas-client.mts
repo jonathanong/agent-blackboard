@@ -1,3 +1,4 @@
+import { isValidSchemaId } from '../schemas/id.mjs'
 import { rawConditionalGet, requestJson } from './http.mjs'
 import type {
   DeprecateSchemaResult,
@@ -10,6 +11,11 @@ import type { ClientConfig } from './types.mjs'
 
 const JSON_HEADERS = { 'content-type': 'application/json' }
 
+function requireValidSchemaId(id: string): string {
+  if (!isValidSchemaId(id)) throw new TypeError(`Invalid schema id: ${id}`)
+  return encodeURIComponent(id)
+}
+
 export async function listSchemasRequest(config: ClientConfig): Promise<ListSchemasResult> {
   return requestJson(config, '/schemas', { method: 'GET' })
 }
@@ -19,7 +25,7 @@ export async function getSchemaRequest(
   id: string,
   version?: number,
 ): Promise<SchemaVersionDetail> {
-  const encodedId = encodeURIComponent(id)
+  const encodedId = requireValidSchemaId(id)
   const path =
     version === undefined ? `/schemas/${encodedId}` : `/schemas/${encodedId}/versions/${version}`
   return requestJson(config, path, { method: 'GET' })
@@ -58,7 +64,7 @@ export async function putSchemaRequest(
   id: string,
   input: { schema: Record<string, unknown>; breaking?: boolean },
 ): Promise<PutSchemaResult> {
-  return requestJson(config, `/schemas/${encodeURIComponent(id)}`, {
+  return requestJson(config, `/schemas/${requireValidSchemaId(id)}`, {
     method: 'PUT',
     headers: JSON_HEADERS,
     body: JSON.stringify(input),
@@ -69,5 +75,5 @@ export async function deprecateSchemaRequest(
   config: ClientConfig,
   id: string,
 ): Promise<DeprecateSchemaResult> {
-  return requestJson(config, `/schemas/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  return requestJson(config, `/schemas/${requireValidSchemaId(id)}`, { method: 'DELETE' })
 }

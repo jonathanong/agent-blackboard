@@ -79,25 +79,57 @@ describe('local schema store', () => {
     expect(resolveSchemasDir(nested, {})).toBe(join(dir, DEFAULT_SCHEMAS_RELATIVE))
   })
 
-  it('writes and reads bundles atomically, removing stale files', () => {
+  it('writes and reads bundles atomically, removing stale files and avoiding manifest collision', () => {
     const dir = makeTempDir()
     const versionsDir = join(dir, 'versions')
+    const latestDir = join(dir, 'latest')
     mkdirSync(versionsDir, { recursive: true })
-    writeFileSync(join(dir, 'stale.json'), '{}')
-    writeFileSync(join(dir, 'notes.txt'), 'keep')
+    mkdirSync(latestDir, { recursive: true })
+    writeFileSync(join(latestDir, 'stale.json'), '{}')
+    writeFileSync(join(latestDir, 'notes.txt'), 'keep')
     writeFileSync(join(versionsDir, 'stale@1.json'), '{}')
 
-    const counts = writeLocalBundle(dir, SAMPLE_BUNDLE, () => new Date('2026-01-03T00:00:00.000Z'))
-    expect(counts).toEqual({ schemaCount: 1, versionCount: 2 })
+    const withManifestSchema: SchemaBundle = {
+      revision: 2,
+      schemas: [
+        ...SAMPLE_BUNDLE.schemas,
+        {
+          ...SAMPLE_BUNDLE.schemas[0]!,
+          id: 'manifest',
+          latestVersion: 1,
+          versions: [
+            {
+              id: 'manifest',
+              version: 1,
+              ref: 'manifest@1',
+              schema: { type: 'object' },
+              createdAt: '2026-01-01T00:00:00.000Z',
+              createdBy: 'ops',
+            },
+          ],
+        },
+      ],
+    }
+
+    const counts = writeLocalBundle(
+      dir,
+      withManifestSchema,
+      () => new Date('2026-01-03T00:00:00.000Z'),
+    )
+    expect(counts).toEqual({ schemaCount: 2, versionCount: 3 })
 
     const manifest = readLocalManifest(dir)
     expect(manifest?.revision).toBe(2)
     expect(manifest?.pulledAt).toBe('2026-01-03T00:00:00.000Z')
 
     const readBack = readLocalBundle(dir)
-    expect(readBack).toEqual(SAMPLE_BUNDLE)
+    expect(readBack).toEqual(withManifestSchema)
 
-    // Write bundle with schema missing its latestVersion record covers optional top-file branch
+    // Missing version file makes readLocalBundle return undefined so pull heals the cache
+    rmSync(join(versionsDir, 'finding@1.json'))
+    expect(readLocalBundle(dir)).toBeUndefined()
+
+    // Write bundle with schema missing its latestVersion record covers optional latest-file branch
     const emptyLatest = writeLocalBundle(dir, {
       revision: 3,
       schemas: [{ ...SAMPLE_BUNDLE.schemas[0]!, latestVersion: 99, versions: [] }],
@@ -125,6 +157,18 @@ describe('local schema store', () => {
         schemas: [{ ...SAMPLE_BUNDLE.schemas[0]!, id: '../bad' }],
       }),
     ).toThrow(/unsafe schema id/)
+
+    expect(() =>
+      writeLocalBundle(dir, {
+        revision: 1,
+        schemas: [
+          {
+            ...SAMPLE_BUNDLE.schemas[0]!,
+            versions: [{ ...SAMPLE_BUNDLE.schemas[0]!.versions[0]!, version: 0 }],
+          },
+        ],
+      }),
+    ).toThrow(/invalid schema version/)
 
     // Atomic write failure cleans up temp file and rethrows
     const blocked = join(dir, 'blocked')

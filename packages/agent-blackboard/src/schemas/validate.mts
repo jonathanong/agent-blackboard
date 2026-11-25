@@ -41,24 +41,32 @@ export function validateAgainstBundle(
     strictRequired: false,
     allErrors: true,
   })
+  ajv.addKeyword('$anchor')
   registerFormats(ajv)
 
-  for (const schemaEntry of bundle.schemas) {
-    for (const ver of schemaEntry.versions) {
-      ajv.addSchema(ver.schema, formatSchemaRef(schemaEntry.id, ver.version))
+  const ref = formatSchemaRef(entry.id, targetRecord.version)
+  let validate: ReturnType<Ajv2020['getSchema']>
+  try {
+    for (const schemaEntry of bundle.schemas) {
+      for (const ver of schemaEntry.versions) {
+        ajv.addSchema(structuredClone(ver.schema), formatSchemaRef(schemaEntry.id, ver.version))
+      }
+      const latest = schemaEntry.versions.find((v) => v.version === schemaEntry.latestVersion)
+      if (latest) {
+        ajv.addSchema(structuredClone(latest.schema), schemaEntry.id)
+      }
     }
-    const latest = schemaEntry.versions.find((v) => v.version === schemaEntry.latestVersion)
-    if (latest) {
-      ajv.addSchema(latest.schema, schemaEntry.id)
-    }
+    validate = ajv.getSchema(ref)
+  } catch (error) {
+    throw new Error(`Local schema ${ref} failed to compile: ${(error as Error).message}`, {
+      cause: error,
+    })
   }
 
-  const ref = formatSchemaRef(entry.id, targetRecord.version)
-  const validate = ajv.getSchema(ref)!
-  const valid = Boolean(validate(data))
+  const valid = Boolean(validate!(data))
   const errors: SchemaValidationIssue[] = valid
     ? []
-    : validate.errors!.map((err) => ({
+    : validate!.errors!.map((err) => ({
         instancePath: err.instancePath,
         schemaPath: err.schemaPath,
         keyword: err.keyword,
@@ -76,7 +84,7 @@ export function validateAgainstLocalSchemas(
   const bundle = readLocalBundle(dir)
   if (!bundle) {
     throw new Error(
-      `No local schema registry copy found in ${dir}. Run: agent-blackboard schemas pull`,
+      `No valid local schema registry copy found in ${dir}. Run: agent-blackboard schemas pull`,
     )
   }
   return validateAgainstBundle(bundle, schemaRefRaw, data)

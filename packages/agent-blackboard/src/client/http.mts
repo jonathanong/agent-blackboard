@@ -131,10 +131,14 @@ async function fetchWithRetry(
       await delay(retryDelay(retry, attempt))
       continue
     }
-    notifySchemaRevision(config, response)
-    if (response.ok || (allowNotModified && response.status === 304)) return response
-    if (!retry || attempt === retry.maxRetries || !RETRYABLE_READ_STATUSES.has(response.status))
+    if (response.ok || (allowNotModified && response.status === 304)) {
+      notifySchemaRevision(config, response)
+      return response
+    }
+    if (!retry || attempt === retry.maxRetries || !RETRYABLE_READ_STATUSES.has(response.status)) {
+      notifySchemaRevision(config, response)
       return errorFor(response, options.method, path)
+    }
     await discard(response)
     await delay(retryDelay(retry, attempt))
   }

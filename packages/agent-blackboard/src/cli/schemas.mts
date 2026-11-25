@@ -8,9 +8,9 @@ import {
   putSchemaRequest,
 } from '../client/schemas-client.mjs'
 import { isValidSchemaId, parseSchemaRef } from '../schemas/id.mjs'
-import { readLocalManifest, resolveSchemasDir, writeLocalBundle } from '../schemas/local-store.mjs'
+import { readLocalBundle, resolveSchemasDir, writeLocalBundle } from '../schemas/local-store.mjs'
 import { validateAgainstLocalSchemas } from '../schemas/validate.mjs'
-import { parseArgs, stringFlag } from './args.mjs'
+import { parseArgs, stringFlag, type ParsedArgs } from './args.mjs'
 import type { CliContext } from './context.mjs'
 import { adminConfigFromEnv, clientConfigFromEnv } from './env.mjs'
 import { CliError } from './errors.mjs'
@@ -19,25 +19,48 @@ import { createRevisionNotifier } from './revision-notice.mjs'
 
 const PUT_BOOLEAN_FLAGS = new Set(['breaking'])
 
-async function readJsonFile(filePath: string, label: string): Promise<unknown> {
+function optionalDirFlag(flags: ParsedArgs['flags'], subcommand: string): string | undefined {
+  const dir = stringFlag(flags, 'dir')
+  if (Object.hasOwn(flags, 'dir') && !dir) {
+    throw new CliError(`schemas ${subcommand} requires a path after --dir.`)
+  }
+  return dir
+}
+
+function parseBreakingFlag(flags: ParsedArgs['flags']): boolean {
+  const raw = flags.breaking
+  if (raw === undefined || raw === false || raw === 'false') return false
+  if (raw === true || raw === 'true') return true
+  throw new CliError('schemas put --breaking must be a boolean flag.')
+}
+
+async function readJsonObjectFile(
+  filePath: string,
+  label: string,
+): Promise<Record<string, unknown>> {
   let raw: string
   try {
     raw = await readFile(filePath, 'utf8')
   } catch (error) {
     throw new CliError(`could not read ${label} ${filePath}: ${String(error)}`)
   }
+  let parsed: unknown
   try {
-    return JSON.parse(raw) as unknown
+    parsed = JSON.parse(raw) as unknown
   } catch {
     throw new CliError(`${label} ${filePath} must contain valid JSON.`)
   }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new CliError(`${label} ${filePath} must contain a JSON object.`)
+  }
+  return parsed as Record<string, unknown>
 }
 
 async function runPull(args: string[], ctx: CliContext): Promise<void> {
   const { flags } = parseArgs(args)
-  const dir = resolveSchemasDir(ctx.cwd, ctx.env, stringFlag(flags, 'dir'))
-  const local = readLocalManifest(dir)
-  // `pull` updates the local copy itself, so omit the out-of-date revision notice.
+  const dir = resolveSchemasDir(ctx.cwd, ctx.env, optionalDirFlag(flags, 'pull'))
+  // Validate the full local bundle before sending If-None-Match so a missing/corrupt version file heals on pull.
+  const local = readLocalBundle(dir)
   const config = clientConfigFromEnv(ctx.env)
   const fetched = await fetchSchemaBundleRequest(config, local?.revision)
   if (fetched.notModified) {
@@ -68,20 +91,14 @@ async function runPull(args: string[], ctx: CliContext): Promise<void> {
 async function runPut(args: string[], ctx: CliContext): Promise<void> {
   const { positional, flags } = parseArgs(args, PUT_BOOLEAN_FLAGS)
   const [id, filePath] = positional
-  if (!id || !filePath) {
-    throw new CliError('schemas put requires <id> <file>.')
-  }
-  if (!isValidSchemaId(id)) {
-    throw new CliError(`Invalid schema id: ${id}`)
-  }
-  const parsed = await readJsonFile(filePath, 'schema file')
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new CliError(`schema file ${filePath} must contain a JSON object.`)
-  }
+  if (!id || !filePath) throw new CliError('schemas put requires <id> <file>.')
+  if (!isValidSchemaId(id)) throw new CliError(`Invalid schema id: ${id}`)
+  const breaking = parseBreakingFlag(flags)
+  const schema = await readJsonObjectFile(filePath, 'schema file')
   const config = adminConfigFromEnv(ctx.env, createRevisionNotifier(ctx))
   const result = await putSchemaRequest(config, id, {
-    schema: parsed as Record<string, unknown>,
-    ...(flags.breaking === true ? { breaking: true } : {}),
+    schema,
+    ...(breaking ? { breaking: true } : {}),
   })
   writeLine(ctx.stdout, JSON.stringify(result))
 }
@@ -117,8 +134,8 @@ async function runValidate(args: string[], ctx: CliContext): Promise<void> {
   if (!schemaRef || !filePath) {
     throw new CliError('schemas validate requires <schema-id>[@<version>] <file>.')
   }
-  const dir = resolveSchemasDir(ctx.cwd, ctx.env, stringFlag(flags, 'dir'))
-  const payload = await readJsonFile(filePath, 'entry file')
+  const dir = resolveSchemasDir(ctx.cwd, ctx.env, optionalDirFlag(flags, 'validate'))
+  const payload = await readJsonObjectFile(filePath, 'entry file')
   const result = validateAgainstLocalSchemas(dir, schemaRef, payload)
   writeLine(ctx.stdout, JSON.stringify(result))
   if (!result.valid) {
