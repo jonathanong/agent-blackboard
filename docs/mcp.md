@@ -145,7 +145,8 @@ to the archived parent.
 
 `schemaId` (and optional `schemaVersion`, which requires `schemaId`) validates the entry against a
 registered JSON Schema on the server before writing. Returns the created `SessionEntry` (including
-resolved `schemaId` and `schemaVersion` when validated). The server supplies `createdAt`; the caller
+resolved `schemaId` and `schemaVersion` when validated, plus a non-blocking `warning` object if a
+shadow-mode validation failed). The server supplies `createdAt`; the caller
 supplies everything else. Appending also updates the session's `lastEntryAt`, including for archived
 sessions, without changing `archivedAt`.
 
@@ -187,5 +188,6 @@ copy avoids rewriting disk.
 { "schema": "finding", "data": { "title": "flaky retry" } }
 ```
 
-Validates `data` offline against a locally pulled schema (`<id>` or `<id>@<version>`). Schema
-mutations (`put`, `remove`) are intentionally CLI/admin-only and are never exposed over MCP.
+Validates `data` offline against a locally pulled schema (`<id>` or `<id>@<version>`). Admin
+operations (`put`, `promote`, `report`, `remove`) are intentionally CLI/admin-only and are never
+exposed over MCP.

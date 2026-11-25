@@ -28,10 +28,12 @@ export type {
   ListSchemaVersionsResult,
   PullSchemasResult,
   SchemaBundle,
+  SchemaShadowWarning,
   SchemaSummary,
   SchemaValidationIssue,
   SchemaValidationResult,
   SchemaVersionDetail,
+  SchemaVersionMode,
   SchemaVersionRecord,
   SchemaWithVersions,
 } from './client/schema-types.mjs'
@@ -85,6 +87,7 @@ export type { RootCodexOptions } from './session-id/root-codex-options.mjs'
 export { isValidSessionId, sanitizeSessionId } from './session-id/valid-id.mjs'
 export type {
   AppendEntryInput,
+  AppendEntryResult,
   ClientConfig,
   CreateSessionInput,
   CredentialCreated,

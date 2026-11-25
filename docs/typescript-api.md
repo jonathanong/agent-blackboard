@@ -323,6 +323,10 @@ interface SessionEntry {
   schemaId?: string
   schemaVersion?: number
 }
+
+interface AppendEntryResult extends SessionEntry {
+  warning?: SchemaShadowWarning // present when accepted under per-version or global shadow mode
+}
 ```
 
 `data` is JSON-serializable object data; when validated against a registered schema, `schemaId` and
@@ -332,7 +336,8 @@ functions, symbols, `BigInt`, circular references, and other non-JSON values.
 ## `Schemas`
 
 `Schemas` exposes read operations plus local pull and offline validation against the JSON Schema
-2020-12 registry. Schema writes (`put`, `remove`) are CLI/admin-only and are not exported here.
+2020-12 registry. Admin operations (`put`, `promote`, `report`, `remove`) are CLI/admin-only and
+are not exported here.
 
 ```ts
 interface LocalSchemaOptions {

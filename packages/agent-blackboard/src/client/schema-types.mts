@@ -9,7 +9,7 @@ export interface SchemaSummary {
   updatedBy: string
 }
 
-type SchemaVersionMode = 'enforced' | 'shadow'
+export type SchemaVersionMode = 'enforced' | 'shadow'
 
 export interface SchemaVersionRecord {
   id: string

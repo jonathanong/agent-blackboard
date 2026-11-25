@@ -69,14 +69,16 @@ flowchart LR
 
 One DynamoDB table stores multiple item types. There are no joins and no nested entry arrays.
 
-| Entity          | Partition key                        | Sort key                           | Public fields                                                                                 |
-| --------------- | ------------------------------------ | ---------------------------------- | --------------------------------------------------------------------------------------------- |
-| Session         | `SESSIONS#<credentialId>`            | `SESSION#<sessionId>`              | `id`, `parentSessionId`, `agent`, `version`, `createdAt`, `lastEntryAt`, `archivedAt`, `data` |
-| Entry           | `ENTRIES#<credentialId>#<sessionId>` | `ENTRY#<createdAt>`                | `sessionId`, `createdAt`, `data`, optional `schemaId`, `schemaVersion`                        |
-| Credential      | internal credential partition        | internal credential sort key       | `id`, `name`, `createdAt`                                                                     |
-| Schema registry | `SCHEMA_REGISTRY`                    | `META`                             | monotonic `revision`, `updatedAt`                                                             |
-| Schema head     | `SCHEMAS`                            | `SCHEMA#<schemaId>`                | `id`, `latestVersion`, `deprecatedAt`, `deprecatedBy`, audit timestamps/actors                |
-| Schema version  | `SCHEMA_VERSIONS`                    | `SCHEMA#<schemaId>#V#<padded-ver>` | `id`, `version`, `ref`, `schema`, `createdAt`, `createdBy`                                    |
+| Entity          | Partition key                        | Sort key                           | Public fields                                                                                  |
+| --------------- | ------------------------------------ | ---------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Session         | `SESSIONS#<credentialId>`            | `SESSION#<sessionId>`              | `id`, `parentSessionId`, `agent`, `version`, `createdAt`, `lastEntryAt`, `archivedAt`, `data`  |
+| Entry           | `ENTRIES#<credentialId>#<sessionId>` | `ENTRY#<createdAt>`                | `sessionId`, `createdAt`, `data`, optional `schemaId`, `schemaVersion`                         |
+| Credential      | internal credential partition        | internal credential sort key       | `id`, `name`, `createdAt`                                                                      |
+| Schema registry | `SCHEMA_REGISTRY`                    | `META`                             | monotonic `revision`, `updatedAt`                                                              |
+| Schema head     | `SCHEMAS`                            | `SCHEMA#<schemaId>`                | `id`, `latestVersion`, `deprecatedAt`, `deprecatedBy`, audit timestamps/actors                 |
+| Schema version  | `SCHEMA_VERSIONS`                    | `SCHEMA#<schemaId>#V#<padded-ver>` | `id`, `version`, `ref`, `schema`, `mode`, `createdAt`, `createdBy`, `promotedAt`, `promotedBy` |
+| Shadow count    | `SCHEMA_SHADOW_COUNTS#<schemaId>`    | `V#<padded-ver>`                   | `schemaId`, `schemaVersion`, `failureCount`, `lastFailureAt`                                   |
+| Shadow failure  | `SCHEMA_SHADOW_FAILURES#<id>#V#<v>`  | `<occurredAt>#<uuid>`              | `schemaId`, `schemaVersion`, `sessionId`, `occurredAt`, `code`, `message`, `details` (TTL)     |
 
 Each entry is independently writable and queryable. Entry identity is `(sessionId, createdAt)`;
 timestamps are allocated by the service and are collision-safe within a session. TTL is an internal
@@ -103,40 +105,49 @@ DynamoDB transactions combine the session metadata update with each entry write,
 
 ## HTTP API
 
-| Method          | Path                             | Purpose                                                                        |
-| --------------- | -------------------------------- | ------------------------------------------------------------------------------ |
-| `POST`          | `/sessions`                      | Create `{ id, parentSessionId, agent, version }`                               |
-| `GET`           | `/sessions`                      | List sessions; supports archive and inactivity filters                         |
-| `GET`           | `/sessions/:id`                  | Get session metadata                                                           |
-| `PATCH`         | `/sessions/:id`                  | Patch `{ data }` or archive with `{ archived: true }`                          |
-| `POST`          | `/sessions/:id/entries`          | Append `{ data, schemaId?, schemaVersion? }` (validates against registry)      |
-| `GET`           | `/sessions/:id/entries`          | Stream entries (`json`, `jsonl`, or `markdown`)                                |
-| `GET`           | `/snapshot`                      | Stream all selected active sessions and entries as JSONL                       |
-| `GET`           | `/schemas`                       | List schema summaries (`?include=versions` returns full bundle; supports ETag) |
-| `GET`           | `/schemas/:id`                   | Get latest version and metadata for a schema                                   |
-| `GET`           | `/schemas/:id/versions`          | List immutable version history for a schema                                    |
-| `GET`           | `/schemas/:id/versions/:version` | Get a specific immutable schema version                                        |
-| `PUT`           | `/schemas/:id`                   | Admin-only: publish next JSON Schema 2020-12 version with compatibility check  |
-| `DELETE`        | `/schemas/:id`                   | Admin-only: deprecate a schema without deleting its history                    |
-| `/credentials*` | admin routes                     | Manage client credentials                                                      |
+| Method          | Path                                     | Purpose                                                                        |
+| --------------- | ---------------------------------------- | ------------------------------------------------------------------------------ |
+| `POST`          | `/sessions`                              | Create `{ id, parentSessionId, agent, version }`                               |
+| `GET`           | `/sessions`                              | List sessions; supports archive and inactivity filters                         |
+| `GET`           | `/sessions/:id`                          | Get session metadata                                                           |
+| `PATCH`         | `/sessions/:id`                          | Patch `{ data }` or archive with `{ archived: true }`                          |
+| `POST`          | `/sessions/:id/entries`                  | Append `{ data, schemaId?, schemaVersion? }` (validates against registry)      |
+| `GET`           | `/sessions/:id/entries`                  | Stream entries (`json`, `jsonl`, or `markdown`)                                |
+| `GET`           | `/snapshot`                              | Stream all selected active sessions and entries as JSONL                       |
+| `GET`           | `/schemas`                               | List schema summaries (`?include=versions` returns full bundle; supports ETag) |
+| `GET`           | `/schemas/:id`                           | Get latest version and metadata for a schema                                   |
+| `GET`           | `/schemas/:id/versions`                  | List immutable version history for a schema                                    |
+| `GET`           | `/schemas/:id/versions/:version`         | Get a specific immutable schema version                                        |
+| `PUT`           | `/schemas/:id`                           | Admin-only: publish next JSON Schema 2020-12 version (`breaking?`, `shadow?`)  |
+| `POST`          | `/schemas/:id/versions/:version/promote` | Admin-only: switch a shadow schema version to `enforced`                       |
+| `GET`           | `/schemas/:id/report`                    | Admin-only: shadow failure counts and recent examples across schema versions   |
+| `GET`           | `/schemas/:id/versions/:version/report`  | Admin-only: shadow failure counts and recent examples for one schema version   |
+| `DELETE`        | `/schemas/:id`                           | Admin-only: deprecate a schema without deleting its history                    |
+| `/credentials*` | admin routes                             | Manage client credentials                                                      |
 
 Every authenticated response includes `x-schema-registry-revision: <n>` so clients can detect when
 their local pulled schema cache is behind the server. `GET /schemas` and
 `GET /schemas?include=versions` emit `ETag: "rev-<n>"` and honor `If-None-Match` with `304 Not
 Modified`.
 
-Entry writes naming `schemaId` are always validated against the registered JSON Schema 2020-12
-document (rejecting unknown, invalid, or deprecated schemas). Setting
-`AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT=required` (default `optional`) also rejects entries that omit
-`schemaId`.
+Entry writes naming `schemaId` are validated against the registered JSON Schema 2020-12 document.
+`AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT` controls the server-wide policy: `optional` (default — allows
+entries without `schemaId`, enforces named schemas unless that version is in `shadow` mode),
+`shadow` (validates every entry naming a schema but rejects nothing), or `required` (also rejects
+entries missing `schemaId`). When a validation fails in per-version or global shadow mode, the
+server accepts the entry (`201`), attaches a `warning` object (`code`, `message`, and diagnostic
+`details`) to the write response, and records metadata plus diagnostics server-side without the
+entry payload.
 
 ## Authentication
 
 Client tokens use `abb_sk_<credentialId>_<secret>` and are hashed in DynamoDB. Admin tokens use
 `abb_admin_<name>_<secret>` and exist only in the server's
 `AGENT_BLACKBOARD_ADMIN_CREDENTIALS` environment variable. Client tokens cannot access credential
-routes or schema write routes (`PUT`/`DELETE /schemas/:id`); admin tokens cannot access session or
-entry routes. Schema read routes (`GET /schemas*`) accept either a client token or an admin token.
+routes, schema write routes (`PUT`/`DELETE /schemas/:id`, `POST /schemas/:id/versions/:version/promote`),
+or admin shadow report routes (`GET /schemas/:id[/versions/:version]/report`); admin tokens cannot
+access session or entry routes. Other schema read routes (`GET /schemas*`) accept either a client
+token or an admin token.
 
 ## Streaming
 

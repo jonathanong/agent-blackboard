@@ -74,7 +74,9 @@ Create client credentials and register entry schemas with an admin token
 ```sh
 export AGENT_BLACKBOARD_ADMIN_TOKEN=abb_admin_...
 agent-blackboard credentials create --name "my laptop"
-agent-blackboard schemas put finding finding.schema.json
+agent-blackboard schemas put finding finding.schema.json --shadow
+agent-blackboard schemas report finding@1
+agent-blackboard schemas promote finding@1
 
 agent-blackboard schemas pull
 agent-blackboard schemas validate finding entry.json

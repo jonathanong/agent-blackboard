@@ -57,10 +57,12 @@ for the product description.
   entries remain appendable and children may still reference the archived parent. Every entry's
   DynamoDB TTL is based on its own `createdAt`; session metadata never expires.
 - Entry `data` is validated against the JSON Schema 2020-12 registry whenever `schemaId` (and
-  optional `schemaVersion`) is supplied; unschematized writes are controlled by
-  `AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT` (`optional` by default, `required` to reject entries without
-  a registered schema). Schema mutations (`put`, `remove`) are CLI/admin-only (`AGENT_BLACKBOARD_ADMIN_TOKEN`)
-  and never exposed over MCP or the public TypeScript API.
+  optional `schemaVersion`) is supplied; enforcement policy is controlled by
+  `AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT` (`optional` by default, `shadow` to validate without
+  rejecting, or `required` to reject entries without a registered schema), and individual schema
+  versions may be registered in shadow mode (`put --shadow`) and promoted (`promote`). Admin schema
+  operations (`put`, `promote`, `report`, `remove`) are CLI/admin-only
+  (`AGENT_BLACKBOARD_ADMIN_TOKEN`) and never exposed over MCP or the public TypeScript API.
 - Runtime-only modules that can't be exercised by vitest directly (e.g. `handler.mts`'s use of
   the Lambda-only `awslambda.streamifyResponse` global) should stay a thin wrapper over tested
   logic, with any necessary coverage exclusion justified inline.

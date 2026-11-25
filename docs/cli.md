@@ -116,6 +116,10 @@ agent-blackboard schemas validate finding@1 entry.json
 # Admin commands (AGENT_BLACKBOARD_ADMIN_TOKEN)
 agent-blackboard schemas put finding finding.schema.json
 agent-blackboard schemas put finding finding.schema.json --breaking
+agent-blackboard schemas put finding finding.schema.json --shadow
+agent-blackboard schemas report finding
+agent-blackboard schemas report finding@1 --limit 25
+agent-blackboard schemas promote finding@1
 agent-blackboard schemas remove finding
 ```
 
@@ -124,16 +128,21 @@ disallows remote `$ref`s (only internal `#...` pointers and references to other 
 `<id>` or `<id>@<version>` are permitted). Every `put` publishes a new immutable version `<id>@<n>`
 and advances the server's registry revision. Breaking changes (new required fields, removed
 properties, narrowed types or constraints) are refused with HTTP `409` unless `--breaking` is
-passed. `remove` marks a schema deprecated so new writes against it are rejected while keeping all
-historical versions readable.
+passed. Passing `--shadow` registers the version in shadow mode: entries naming it are validated,
+but failures are accepted (`201`) with a `warning` in the write response and recorded server-side
+(schema id, version, session, time, and validation diagnostics — never the entry payload). Admins
+can inspect counts and recent failures with `schemas report <id>[@<version>]` and switch a shadow
+version to enforced with `schemas promote <id>@<version>`. `remove` marks a schema deprecated so
+new writes against it are rejected while keeping all historical versions readable.
 
 `schemas pull` stores the local copy under `<worktree>/.local/agent-blackboard/schemas` (override
 with `AGENT_BLACKBOARD_SCHEMAS_DIR` or `--dir`) with `manifest.json`, `latest/<id>.json`, and
 `versions/<id>@<version>.json`, sending `If-None-Match` so an up-to-date client receives
 `304 Not Modified`. Whenever another network CLI command (`sessions`, `append`, `get`,
-`snapshot export`, `schemas list|get|put|remove`) observes a newer `x-schema-registry-revision`
-header than the local manifest, it prints one notice line on `stderr` telling you to run
-`agent-blackboard schemas pull` (`credentials` and `mcp` do not emit this notice).
+`snapshot export`, `schemas list|get|put|promote|report|remove`) observes a newer
+`x-schema-registry-revision` header than the local manifest, it prints one notice line on `stderr`
+telling you to run `agent-blackboard schemas pull` (`credentials` and `mcp` do not emit this
+notice).
 
 ## Credentials
 
