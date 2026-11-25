@@ -12,9 +12,20 @@ describe('validateEntryWrite', () => {
         store,
         {},
         { note: 'x' },
+        { AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT: 'optional' },
+      ),
+    ).toEqual({ ok: true })
+    expect(
+      await validateEntryWrite(
+        store,
+        {},
+        { note: 'x' },
         { AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT: 'required' },
       ),
     ).toMatchObject({ ok: false, status: 400, body: { code: 'schema_required' } })
+    await expect(
+      validateEntryWrite(store, {}, { note: 'x' }, { AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT: 'true' }),
+    ).rejects.toThrow(/Invalid AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT/)
 
     expect(await validateEntryWrite(store, { schemaVersion: 1 }, {}, {})).toMatchObject({
       ok: false,
@@ -45,7 +56,12 @@ describe('validateEntryWrite', () => {
       expectedVersion: 0,
     })
 
-    // Missing schema and missing version
+    // Missing schema and missing version (also cached per revision — only one bundle fetch)
+    const bundleSpy = vi.spyOn(store, 'getSchemaBundle')
+    expect(await validateEntryWrite(store, { schemaId: 'missing' }, {}, {})).toMatchObject({
+      ok: false,
+      body: { code: 'schema_not_found' },
+    })
     expect(await validateEntryWrite(store, { schemaId: 'missing' }, {}, {})).toMatchObject({
       ok: false,
       body: { code: 'schema_not_found' },
@@ -55,14 +71,27 @@ describe('validateEntryWrite', () => {
     ).toMatchObject({ ok: false, body: { code: 'schema_not_found' } })
 
     // Valid latest write + cache hit on second call
-    const bundleSpy = vi.spyOn(store, 'getSchemaBundle')
     expect(
       await validateEntryWrite(store, { schemaId: 'finding' }, { title: 'first' }, {}),
-    ).toEqual({ ok: true, schemaId: 'finding', schemaVersion: 1 })
+    ).toEqual({ ok: true, schemaId: 'finding', schemaVersion: 1, revision: 1 })
     expect(
       await validateEntryWrite(store, { schemaId: 'finding' }, { title: 'second' }, {}),
-    ).toEqual({ ok: true, schemaId: 'finding', schemaVersion: 1 })
+    ).toEqual({ ok: true, schemaId: 'finding', schemaVersion: 1, revision: 1 })
     expect(bundleSpy).toHaveBeenCalledTimes(1)
+
+    // Monotonic cache: a slower concurrent getSchemaBundle resolving an older revision never downgrades a newer cache
+    const revSpy = vi.spyOn(store, 'getSchemaRegistryRevision')
+    revSpy.mockResolvedValueOnce(5)
+    bundleSpy.mockResolvedValueOnce({ revision: 1, schemas: [] })
+    expect(
+      await validateEntryWrite(store, { schemaId: 'finding' }, { title: 'still-cached' }, {}),
+    ).toEqual({
+      ok: true,
+      schemaId: 'finding',
+      schemaVersion: 1,
+      revision: 1,
+    })
+    revSpy.mockRestore()
 
     // Invalid payload returns structured validation details
     const failed = await validateEntryWrite(store, { schemaId: 'finding' }, { title: 42 }, {})
@@ -96,7 +125,7 @@ describe('validateEntryWrite', () => {
         { title: 'v1-ok' },
         {},
       ),
-    ).toEqual({ ok: true, schemaId: 'finding', schemaVersion: 1 })
+    ).toEqual({ ok: true, schemaId: 'finding', schemaVersion: 1, revision: 2 })
 
     // Deprecate schema -> new writes rejected
     await store.deprecateSchema('finding', 'ops')

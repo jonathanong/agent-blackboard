@@ -11,6 +11,7 @@
 // Usage: pnpm --filter agent-blackboard-server run deploy
 // Env: AWS_REGION or AWS_DEFAULT_REGION (or `aws configure`'s default),
 //      AGENT_BLACKBOARD_ADMIN_CREDENTIALS (required), AGENT_BLACKBOARD_TTL_DAYS (optional),
+//      AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT (optional, "optional" or "required"),
 //      STACK_NAME (optional, default "agent-blackboard").
 import { bundle } from './bundle.mjs'
 import { parseSentryDeployOptions } from './deploy-options.mjs'

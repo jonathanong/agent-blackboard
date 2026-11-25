@@ -13,6 +13,7 @@ import {
   unauthorizedResponse,
 } from '../response.mjs'
 import type { HandlerRequest, HandlerResponse } from '../types.mjs'
+import { revisionHeaders } from './schemas-etag.mjs'
 import { storeErrorResponse } from './store-error.mjs'
 
 function objectData(value: unknown): Record<string, unknown> | undefined {
@@ -52,6 +53,7 @@ async function appendEntry(
           ? { schemaVersion: validation.schemaVersion }
           : {}),
       }),
+      validation.revision !== undefined ? revisionHeaders(validation.revision) : undefined,
     )
   } catch (error) {
     const response = storeErrorResponse(error)
