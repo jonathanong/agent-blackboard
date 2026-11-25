@@ -309,6 +309,23 @@ describe('DynamoDB schemas write helpers', () => {
       }),
     ).rejects.toMatchObject({ code: 'schema_conflict' })
 
+    // ValidationError inside TransactionCanceledException (e.g. oversized item) is rethrown without retry
+    const validationErr = Object.assign(canceledError(), {
+      CancellationReasons: [{ Code: 'None' }, { Code: 'ValidationError' }],
+    })
+    const oversizedDoc = mockDoc((command) => {
+      if (command.constructor.name === 'GetCommand') return {}
+      throw validationErr
+    })
+    await expect(
+      dynamoPutSchemaVersion(oversizedDoc, 'T', NOW, {
+        id: 'a',
+        schema: { type: 'object' },
+        actor: 'alice',
+        expectedVersion: 0,
+      }),
+    ).rejects.toBe(validationErr)
+
     // Non-TransactionCanceledException bubbles
     const fatalDoc = mockDoc((command) => {
       if (command.constructor.name === 'GetCommand') return {}

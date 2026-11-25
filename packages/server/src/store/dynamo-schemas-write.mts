@@ -14,8 +14,10 @@ import type {
 
 const REVISION_RETRIES = 20
 
-function isTransactionCanceled(error: unknown): boolean {
-  return error instanceof Error && error.name === 'TransactionCanceledException'
+function isRetryableTransactionCanceled(error: unknown): boolean {
+  if (!(error instanceof Error) || error.name !== 'TransactionCanceledException') return false
+  const reasons = (error as { CancellationReasons?: Array<{ Code?: string }> }).CancellationReasons
+  return !(reasons?.some((reason) => reason.Code === 'ValidationError') ?? false)
 }
 
 export async function dynamoPutSchemaVersion(
@@ -84,7 +86,7 @@ export async function dynamoPutSchemaVersion(
       )
       return { revision: nextRevision, summary, versionRecord }
     } catch (error) {
-      if (!isTransactionCanceled(error)) throw error
+      if (!isRetryableTransactionCanceled(error)) throw error
       const head = await dynamoGetSchemaHead(doc, tableName, input.id)
       if (head !== undefined && head.deprecatedAt !== null) {
         throw new SessionStoreError('schema_deprecated', `schema is deprecated: ${input.id}`)
@@ -136,8 +138,14 @@ export async function dynamoDeprecateSchema(
                 Key: { PK: SCHEMAS_PK, SK: schemaSk(id) },
                 UpdateExpression:
                   'SET deprecatedAt = :now, deprecatedBy = :actor, updatedAt = :now, updatedBy = :actor',
-                ConditionExpression: 'attribute_exists(PK) AND deprecatedAt = :null',
-                ExpressionAttributeValues: { ':now': timestamp, ':actor': actor, ':null': null },
+                ConditionExpression:
+                  'attribute_exists(PK) AND deprecatedAt = :null AND latestVersion = :expectedVersion',
+                ExpressionAttributeValues: {
+                  ':now': timestamp,
+                  ':actor': actor,
+                  ':null': null,
+                  ':expectedVersion': existing.latestVersion,
+                },
               },
             },
           ],
@@ -155,7 +163,7 @@ export async function dynamoDeprecateSchema(
         alreadyDeprecated: false,
       }
     } catch (error) {
-      if (!isTransactionCanceled(error)) throw error
+      if (!isRetryableTransactionCanceled(error)) throw error
     }
   }
   throw new SessionStoreError(
