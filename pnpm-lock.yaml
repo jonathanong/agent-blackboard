@@ -59,6 +59,12 @@ importers:
       '@sentry/aws-serverless':
         specifier: 11.15.0
         version: 11.15.0
+      ajv:
+        specifier: 8.20.0
+        version: 8.20.0
+      ajv-formats:
+        specifier: 3.0.1
+        version: 3.0.1(ajv@8.20.0)
     devDependencies:
       esbuild:
         specifier: ^0.28.2

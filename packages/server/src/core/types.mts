@@ -74,3 +74,36 @@ export interface CredentialRecord {
   tokenHash: string
   createdAt: string
 }
+
+/** Registry summary for one registered JSON Schema id. */
+export interface SchemaRecord {
+  id: string
+  latestVersion: number
+  deprecatedAt: string | null
+  deprecatedBy: string | null
+  createdAt: string
+  createdBy: string
+  updatedAt: string
+  updatedBy: string
+}
+
+/** One immutable version of a registered JSON Schema (`<id>@<version>`). */
+export interface SchemaVersionRecord {
+  id: string
+  version: number
+  ref: string
+  schema: Record<string, unknown>
+  createdAt: string
+  createdBy: string
+}
+
+/** A schema summary paired with all of its immutable versions in ascending order. */
+export interface SchemaWithVersions extends SchemaRecord {
+  versions: SchemaVersionRecord[]
+}
+
+/** Complete snapshot of the schema registry at one revision, used by `pull` and compilation. */
+export interface SchemaBundle {
+  revision: number
+  schemas: SchemaWithVersions[]
+}

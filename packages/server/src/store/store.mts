@@ -1,4 +1,11 @@
-import type { CredentialRecord, Session, SessionEntry } from '../core/types.mjs'
+import type {
+  CredentialRecord,
+  SchemaBundle,
+  SchemaRecord,
+  SchemaVersionRecord,
+  Session,
+  SessionEntry,
+} from '../core/types.mjs'
 
 export const DEFAULT_SESSIONS_LIMIT = 50
 export const MAX_SESSIONS_LIMIT = 200
@@ -59,6 +66,43 @@ export interface CredentialIdOrName {
   name?: string
 }
 
+export interface PutSchemaVersionInput {
+  id: string
+  schema: Record<string, unknown>
+  actor: string
+  /** Expected current `latestVersion` (0 when creating a new schema). */
+  expectedVersion: number
+}
+
+export interface PutSchemaVersionResult {
+  revision: number
+  summary: SchemaRecord
+  versionRecord: SchemaVersionRecord
+}
+
+export interface DeprecateSchemaResult {
+  revision: number
+  summary: SchemaRecord
+  alreadyDeprecated: boolean
+}
+
+export interface ListSchemasResult {
+  revision: number
+  schemas: SchemaRecord[]
+}
+
+export interface GetSchemaResult {
+  revision: number
+  summary: SchemaRecord
+  versionRecord: SchemaVersionRecord
+}
+
+export interface ListSchemaVersionsResult {
+  revision: number
+  summary: SchemaRecord
+  versions: SchemaVersionRecord[]
+}
+
 /**
  * Framework-agnostic blackboard storage interface. All methods are async so a
  * DynamoDB-backed implementation and an in-memory test double can share one
@@ -88,4 +132,12 @@ export interface BlackboardStore {
 
   /** Deletes by `id` if given, else deletes ALL credentials matching `name` (names are not unique). Returns whether anything was deleted. */
   deleteCredential(idOrName: CredentialIdOrName): Promise<boolean>
+
+  getSchemaRegistryRevision(): Promise<number>
+  putSchemaVersion(input: PutSchemaVersionInput): Promise<PutSchemaVersionResult>
+  deprecateSchema(id: string, actor: string): Promise<DeprecateSchemaResult>
+  listSchemas(): Promise<ListSchemasResult>
+  getSchema(id: string, version?: number): Promise<GetSchemaResult | undefined>
+  listSchemaVersions(id: string): Promise<ListSchemaVersionsResult | undefined>
+  getSchemaBundle(): Promise<SchemaBundle>
 }

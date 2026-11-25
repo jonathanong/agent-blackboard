@@ -76,6 +76,13 @@ function notImplementedStore(overrides: Partial<BlackboardStore> = {}): Blackboa
     listCredentials: notImplemented('listCredentials'),
     getCredentialById: notImplemented('getCredentialById'),
     deleteCredential: notImplemented('deleteCredential'),
+    getSchemaRegistryRevision: async () => 0,
+    putSchemaVersion: notImplemented('putSchemaVersion'),
+    deprecateSchema: notImplemented('deprecateSchema'),
+    listSchemas: notImplemented('listSchemas'),
+    getSchema: notImplemented('getSchema'),
+    listSchemaVersions: notImplemented('listSchemaVersions'),
+    getSchemaBundle: notImplemented('getSchemaBundle'),
     ...overrides,
   } as BlackboardStore
 }
@@ -249,7 +256,10 @@ describe('respond (unit, fake req/res)', () => {
 
     await respond(req, res as unknown as ServerResponse, { store })
 
-    expect(res.written[0]).toEqual({ status: 200, headers: { 'content-type': 'application/json' } })
+    expect(res.written[0]).toEqual({
+      status: 200,
+      headers: { 'content-type': 'application/json', 'x-schema-registry-revision': '0' },
+    })
     expect(res.written).toContain('[')
     expect(res.isEnded()).toBe(false)
     expect(res.destroyedWith()?.message).toBe('scan broke')

@@ -5,6 +5,9 @@ export type SessionStoreErrorCode =
   | 'session_archived'
   | 'timestamp_exhausted'
   | 'invalid_cursor'
+  | 'schema_not_found'
+  | 'schema_deprecated'
+  | 'schema_conflict'
 
 export class SessionStoreError extends Error {
   constructor(

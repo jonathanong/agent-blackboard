@@ -4,49 +4,17 @@
  * `local-server.mts`) calls — it contains all routing/auth/business logic
  * and has zero knowledge of Lambda or Node's HTTP module.
  *
- * REQUEST — `HandlerRequest` (see `core/types.mts`):
- *   - `method`: already upper-cased, e.g. "GET".
- *   - `path`: URL path only, no query string, e.g. "/sessions/s1/entries".
- *   - `query`: parsed query params, `Record<string, string | undefined>`.
- *     Repeated keys: last value wins (adapter's responsibility).
- *   - `headers`: `Record<string, string>`, keys already lower-cased by the
- *     adapter. Multi-valued headers should be joined by the adapter (", ").
- *   - `body`: one of — `undefined` (no body); `string | Uint8Array` (fully
- *     buffered by the adapter); `AsyncIterable<string | Uint8Array>` (a
- *     streamed/chunked body); or an already-JSON-parsed value if the
- *     adapter chose to parse upstream itself. `handleRequest` discriminates
- *     these at runtime (see `core/body.mts`) and buffers/parses per-route
- *     as needed — every current route needs the full body before responding.
- *
- * RESPONSE — `HandlerResponse`:
- *   - `status`, `headers`.
- *   - `body`: ALWAYS an `AsyncIterable<string | Uint8Array>`, even for a
- *     small non-streaming response (a single-chunk generator) — so adapters
- *     can consume every response the same way. In practice every response
- *     produced here yields `string` chunks only.
- *
- * DEPS:
- *   - `store`: a `BlackboardStore` (see `store/store.mts`) — in-memory for
- *     tests/local dev, DynamoDB-backed in production.
- *   - `now`: `() => Date`. Accepted for contract stability with the rest of
- *     the server (and so adapters have one clock-injection point to reach
- *     for), but NOT currently read by any routing logic here — entry
- *     timestamps are the store's responsibility (it owns its own `now`).
- *   - `env`: `{ AGENT_BLACKBOARD_ADMIN_CREDENTIALS?: string }` — passed through to
- *     `resolveAdminCredential` for `/credentials*` routes.
- *
  * ROUTING: unknown paths -> 404. A method not implemented on a known path
- * is also 404 (not 405) — kept simple and documented per-route. Missing or
- * invalid auth -> 401. A credential of the wrong type for the route (e.g. a
- * client token on `/credentials`) is ALSO 401, not 403 — chosen for
- * consistency (one auth-failure status across this API) rather than to hide
- * route existence, since route existence isn't secret here.
+ * is also 404 (not 405). Missing or invalid auth -> 401. Every authenticated
+ * response carries `x-schema-registry-revision` so clients notice schema drift.
  */
 import type { AdminEnv } from '../auth/admin.mjs'
 import type { BlackboardStore } from '../store/store.mjs'
 import { notFoundResponse } from './response.mjs'
 import { handleCredentialsRoute } from './routes/credentials.mjs'
 import { handleEntriesRoute } from './routes/entries.mjs'
+import { SCHEMA_REVISION_HEADER } from './routes/schemas-etag.mjs'
+import { handleSchemasRoute } from './routes/schemas.mjs'
 import { handleSessionsRoute } from './routes/sessions.mjs'
 import { handleSnapshotRoute } from './routes/snapshot.mjs'
 import type { HandlerRequest, HandlerResponse } from './types.mjs'
@@ -62,14 +30,6 @@ function normalizePath(path: string): string {
   return path
 }
 
-// `request.path` is `url.pathname` (see local-server.mts/handler.mts): the
-// WHATWG URL parser preserves percent-encoding in `.pathname` rather than
-// decoding it, so a client-side `encodeURIComponent(sessionId)` (needed for
-// ids containing e.g. `:`) survives verbatim into a captured route segment.
-// Decode it here, once, before it reaches route handlers or the store. A
-// malformed escape (e.g. a bare `%`) makes decodeURIComponent throw; treat
-// that the same as any other id no route/store will ever match: `null`,
-// signalling the caller to 404 rather than let the URIError become a 500.
 function decodeSegment(segment: string): string | null {
   try {
     return decodeURIComponent(segment)
@@ -78,14 +38,16 @@ function decodeSegment(segment: string): string | null {
   }
 }
 
-export async function handleRequest(
+async function routeMatched(
+  path: string,
   request: HandlerRequest,
   deps: HandleRequestDeps,
-): Promise<HandlerResponse> {
-  const path = normalizePath(request.path)
+): Promise<HandlerResponse | undefined> {
   if (path === '/credentials') return handleCredentialsRoute(request, deps.store, deps.env)
   if (path === '/snapshot') return handleSnapshotRoute(request, deps.store, deps.now)
   if (path === '/sessions') return handleSessionsRoute(request, deps.store)
+  if (path === '/schemas') return handleSchemasRoute(request, deps.store, deps.env)
+
   const sessionMatch = /^\/sessions\/([^/]+)$/.exec(path)
   if (sessionMatch) {
     const sessionId = decodeSegment(sessionMatch[1]!)
@@ -100,5 +62,44 @@ export async function handleRequest(
       ? notFoundResponse()
       : handleEntriesRoute(request, deps.store, sessionId)
   }
-  return notFoundResponse()
+  const schemaMatch = /^\/schemas\/([^/]+)$/.exec(path)
+  if (schemaMatch) {
+    const id = decodeSegment(schemaMatch[1]!)
+    return id === null
+      ? notFoundResponse()
+      : handleSchemasRoute(request, deps.store, deps.env, { id })
+  }
+  const schemaVersionsMatch = /^\/schemas\/([^/]+)\/versions$/.exec(path)
+  if (schemaVersionsMatch) {
+    const id = decodeSegment(schemaVersionsMatch[1]!)
+    return id === null
+      ? notFoundResponse()
+      : handleSchemasRoute(request, deps.store, deps.env, { id, versionsList: true })
+  }
+  const schemaVersionMatch = /^\/schemas\/([^/]+)\/versions\/([^/]+)$/.exec(path)
+  if (schemaVersionMatch) {
+    const id = decodeSegment(schemaVersionMatch[1]!)
+    const versionRaw = decodeSegment(schemaVersionMatch[2]!)
+    return id === null || versionRaw === null
+      ? notFoundResponse()
+      : handleSchemasRoute(request, deps.store, deps.env, { id, versionRaw })
+  }
+  return undefined
+}
+
+export async function handleRequest(
+  request: HandlerRequest,
+  deps: HandleRequestDeps,
+): Promise<HandlerResponse> {
+  const path = normalizePath(request.path)
+  const response = await routeMatched(path, request, deps)
+  if (!response) return notFoundResponse()
+  if (response.status !== 401 && response.headers[SCHEMA_REVISION_HEADER] === undefined) {
+    const revision = await deps.store.getSchemaRegistryRevision()
+    return {
+      ...response,
+      headers: { ...response.headers, [SCHEMA_REVISION_HEADER]: String(revision) },
+    }
+  }
+  return response
 }
