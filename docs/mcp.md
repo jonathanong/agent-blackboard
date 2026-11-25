@@ -135,12 +135,19 @@ to the archived parent.
 ## `entry_append`
 
 ```json
-{ "sessionId": "worker-456", "data": { "note": "found the edge case" } }
+{
+  "sessionId": "worker-456",
+  "schemaId": "finding",
+  "schemaVersion": 1,
+  "data": { "title": "found the edge case" }
+}
 ```
 
-Returns the created `SessionEntry`. The server supplies `createdAt`; the caller supplies everything
-else. Appending also updates the session's `lastEntryAt`, including for archived sessions, without
-changing `archivedAt`.
+`schemaId` (and optional `schemaVersion`, which requires `schemaId`) validates the entry against a
+registered JSON Schema on the server before writing. Returns the created `SessionEntry` (including
+resolved `schemaId` and `schemaVersion` when validated). The server supplies `createdAt`; the caller
+supplies everything else. Appending also updates the session's `lastEntryAt`, including for archived
+sessions, without changing `archivedAt`.
 
 ## `entry_get`
 
@@ -150,3 +157,35 @@ changing `archivedAt`.
 
 `format` is optional and may be `json` or `jsonl`. Returns `{ "entries": SessionEntry[] }`. Entries
 are append-only: once written, an entry's `data` cannot be changed in place.
+
+## `schema_list`
+
+Lists all registered JSON Schema summaries and the current registry revision (`{ "revision", "schemas" }`).
+
+## `schema_get`
+
+```json
+{ "id": "finding", "version": 1 }
+```
+
+Fetches a registered JSON Schema by `id`. Omit `version` to fetch the latest version, or supply a
+positive integer `version` for an immutable historical version.
+
+## `schema_pull`
+
+```json
+{ "dir": "/optional/override/path" }
+```
+
+Pulls the full schema registry into the local cache directory (`<worktree>/.local/agent-blackboard/schemas`
+by default, or `AGENT_BLACKBOARD_SCHEMAS_DIR` / `dir`) using `If-None-Match` so an up-to-date local
+copy avoids rewriting disk.
+
+## `schema_validate`
+
+```json
+{ "schema": "finding", "data": { "title": "flaky retry" } }
+```
+
+Validates `data` offline against a locally pulled schema (`<id>` or `<id>@<version>`). Schema
+mutations (`put`, `remove`) are intentionally CLI/admin-only and are never exposed over MCP.

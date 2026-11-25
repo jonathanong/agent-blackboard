@@ -7,8 +7,12 @@ import {
   Entries,
   formatError,
   partitionSnapshot,
+  resolveSchemasDir,
+  Schemas,
   Sessions,
   Snapshots,
+  validateAgainstBundle,
+  validateAgainstLocalSchemas,
 } from './index.mjs'
 
 describe('public API', () => {
@@ -37,7 +41,11 @@ describe('public API', () => {
         }),
       ).toEqual(session)
       expect(new Entries({ baseUrl: fixture.baseUrl, token: 't' })).toBeInstanceOf(Entries)
+      expect(new Schemas({ baseUrl: fixture.baseUrl, token: 't' })).toBeInstanceOf(Schemas)
       expect(new Snapshots({ baseUrl: fixture.baseUrl, token: 't' })).toBeInstanceOf(Snapshots)
+      expect(resolveSchemasDir).toBeTypeOf('function')
+      expect(validateAgainstBundle).toBeTypeOf('function')
+      expect(validateAgainstLocalSchemas).toBeTypeOf('function')
       expect(partitionSnapshot).toBeTypeOf('function')
       expect(cleanupSnapshotPartitions).toBeTypeOf('function')
       await expect(

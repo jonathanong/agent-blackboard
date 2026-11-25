@@ -49,6 +49,11 @@ export interface SchemaVersionDetail extends SchemaSummary {
   revision: number
 }
 
+export interface ListSchemaVersionsResult extends SchemaSummary {
+  versions: SchemaVersionRecord[]
+  revision: number
+}
+
 interface BreakingChange {
   path: string
   kind: string

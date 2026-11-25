@@ -12,6 +12,23 @@ it('requires sessionId/data and appends one entry', async () => {
         { baseUrl: fixture.baseUrl, token: 't' },
       ),
     ).toEqual(entry)
+    expect(
+      await handleEntryAppend(
+        { sessionId: 's', data: { title: 'x' }, schemaId: 'finding', schemaVersion: 2 },
+        { baseUrl: fixture.baseUrl, token: 't' },
+      ),
+    ).toEqual(entry)
+    expect(JSON.parse(fixture.requests.at(-1)!.body)).toEqual({
+      data: { title: 'x' },
+      schemaId: 'finding',
+      schemaVersion: 2,
+    })
+    expect(() =>
+      handleEntryAppend(
+        { sessionId: 's', data: {}, schemaVersion: 1 },
+        { baseUrl: 'http://h', token: 't' },
+      ),
+    ).toThrow(/schemaId/)
     expect(() => handleEntryAppend({ data: {} }, { baseUrl: 'http://h', token: 't' })).toThrow()
     expect(() =>
       handleEntryAppend({ sessionId: 's' }, { baseUrl: 'http://h', token: 't' }),

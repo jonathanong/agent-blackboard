@@ -1,5 +1,11 @@
 import { handleEntryAppend } from './tool-append.mjs'
 import { handleEntryGet } from './tool-get.mjs'
+import {
+  handleSchemaGet,
+  handleSchemaList,
+  handleSchemaPull,
+  handleSchemaValidate,
+} from './tool-schemas.mjs'
 import { handleSnapshotExport } from './tool-snapshot.mjs'
 import {
   handleSessionArchive,
@@ -34,6 +40,14 @@ export function dispatchTool(
       return handleEntryGet(args, config, resolution)
     case 'snapshot_export':
       return handleSnapshotExport(args, config)
+    case 'schema_list':
+      return handleSchemaList(config)
+    case 'schema_get':
+      return handleSchemaGet(args, config)
+    case 'schema_pull':
+      return handleSchemaPull(args, config, resolution)
+    case 'schema_validate':
+      return handleSchemaValidate(args, config, resolution)
     default:
       throw new Error(`Unknown tool: ${name}`)
   }

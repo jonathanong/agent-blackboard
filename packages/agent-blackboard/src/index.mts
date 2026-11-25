@@ -17,8 +17,24 @@ export type { AuthOptions } from './client/auth.mjs'
 export { AgentBlackboardError } from './client/errors.mjs'
 export { Entries } from './client/entries.mjs'
 export { formatError } from './format-error.mjs'
+export { Schemas } from './client/schemas.mjs'
+export type { LocalSchemaOptions } from './client/schemas.mjs'
 export { Sessions } from './client/sessions.mjs'
 export { Snapshots } from './client/snapshots.mjs'
+export { resolveSchemasDir } from './schemas/local-store.mjs'
+export { validateAgainstBundle, validateAgainstLocalSchemas } from './schemas/validate.mjs'
+export type {
+  ListSchemasResult,
+  ListSchemaVersionsResult,
+  PullSchemasResult,
+  SchemaBundle,
+  SchemaSummary,
+  SchemaValidationIssue,
+  SchemaValidationResult,
+  SchemaVersionDetail,
+  SchemaVersionRecord,
+  SchemaWithVersions,
+} from './client/schema-types.mjs'
 export { cleanupSnapshotPartitions } from './client/snapshot-partition-cleanup.mjs'
 export { partitionSnapshot } from './client/snapshot-partitions.mjs'
 export {

@@ -3,6 +3,7 @@ import { rawConditionalGet, requestJson } from './http.mjs'
 import type {
   DeprecateSchemaResult,
   ListSchemasResult,
+  ListSchemaVersionsResult,
   PromoteSchemaResult,
   PutSchemaResult,
   SchemaBundle,
@@ -31,6 +32,13 @@ export async function getSchemaRequest(
   const path =
     version === undefined ? `/schemas/${encodedId}` : `/schemas/${encodedId}/versions/${version}`
   return requestJson(config, path, { method: 'GET' })
+}
+
+export async function listSchemaVersionsRequest(
+  config: ClientConfig,
+  id: string,
+): Promise<ListSchemaVersionsResult> {
+  return requestJson(config, `/schemas/${encodeURIComponent(id)}/versions`, { method: 'GET' })
 }
 
 export type FetchSchemaBundleResult =
