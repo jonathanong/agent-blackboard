@@ -102,6 +102,17 @@ describe('Schemas client', () => {
         revision: 2,
         errors: [],
       })
+
+      rmSync(join(dir, 'versions', 'finding@1.json'))
+      expect(await schemas.pull({ dir })).toEqual({
+        upToDate: false,
+        revision: 2,
+        schemaCount: 1,
+        versionCount: 1,
+        dir,
+      })
+
+      await expect(schemas.listVersions('')).rejects.toThrow(TypeError)
     } finally {
       await fixture.close()
     }

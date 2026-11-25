@@ -335,6 +335,12 @@ functions, symbols, `BigInt`, circular references, and other non-JSON values.
 2020-12 registry. Schema writes (`put`, `remove`) are CLI/admin-only and are not exported here.
 
 ```ts
+interface LocalSchemaOptions {
+  dir?: string // explicit cache directory override
+  cwd?: string // base directory for worktree-root lookup; defaults to process.cwd()
+  env?: NodeJS.ProcessEnv // checked for AGENT_BLACKBOARD_SCHEMAS_DIR; defaults to {}
+}
+
 const schemas = new Schemas(config)
 
 const { revision, schemas: summaries } = await schemas.list()
@@ -345,6 +351,11 @@ const history = await schemas.listVersions('finding')
 const pull = await schemas.pull({ dir: '/path/to/cache' })
 const result = schemas.validateLocal('finding', { title: 'flaky retry' }, { dir: pull.dir })
 ```
+
+`LocalSchemaOptions.env` defaults to `{}` rather than reading `process.env` implicitly.
+`validateLocal` and `validateAgainstLocalSchemas` throw when no valid local pull exists, when the
+requested schema or version is missing, or when the schema is deprecated; schema validation
+failures return `{ valid: false, schema, revision, errors }` instead of throwing.
 
 Pure helpers `resolveSchemasDir`, `validateAgainstBundle`, and `validateAgainstLocalSchemas` are
 also exported from the package root for offline workflows.

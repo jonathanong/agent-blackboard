@@ -68,11 +68,14 @@ agent-blackboard append --session-id worker-456 '{"note":"found a flaky retry"}'
 agent-blackboard get --session-id worker-456 --format markdown
 ```
 
-Create client credentials and register entry schemas with an admin token:
+Create client credentials and register entry schemas with an admin token
+(`AGENT_BLACKBOARD_ADMIN_TOKEN`), then pull and validate with a client token:
 
 ```sh
+export AGENT_BLACKBOARD_ADMIN_TOKEN=abb_admin_...
 agent-blackboard credentials create --name "my laptop"
 agent-blackboard schemas put finding finding.schema.json
+
 agent-blackboard schemas pull
 agent-blackboard schemas validate finding entry.json
 agent-blackboard append --session-id worker-456 --schema finding '{"title":"flaky retry"}'

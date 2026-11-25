@@ -39,14 +39,12 @@ export function handleSchemaPull(
   return new Schemas(config).pull(localOptions(args, resolution))
 }
 
-export function handleSchemaValidate(
+export async function handleSchemaValidate(
   args: Record<string, unknown>,
   config: ClientConfig,
   resolution?: SessionResolutionContext,
 ): Promise<SchemaValidationResult> {
   const schema = requiredString(args.schema, 'schema')
   const data = expectObject(args.data, 'data')
-  return Promise.resolve(
-    new Schemas(config).validateLocal(schema, data, localOptions(args, resolution)),
-  )
+  return new Schemas(config).validateLocal(schema, data, localOptions(args, resolution))
 }

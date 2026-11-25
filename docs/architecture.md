@@ -56,11 +56,13 @@ flowchart LR
         Sessions[(Session items)]
         Entries[(Entry items)]
         Credentials[(Credential items)]
+        Schemas[(Schema registry items)]
     end
 
     Dynamo --> Sessions
     Dynamo --> Entries
     Dynamo --> Credentials
+    Dynamo --> Schemas
 ```
 
 ## Data model

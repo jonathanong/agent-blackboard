@@ -19,7 +19,7 @@ function text(content: unknown): string {
   return (content as Array<{ text: string }>)[0]!.text
 }
 
-it('lists eight tools and returns JSON text or MCP errors', async () => {
+it('lists twelve tools and returns JSON text or MCP errors', async () => {
   const entry = { sessionId: 's', createdAt: 'now', data: {} }
   const fixture = await startHttpFixture((req, res) => {
     if (new URL(req.url, 'http://localhost').pathname !== '/snapshot') {

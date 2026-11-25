@@ -128,10 +128,12 @@ passed. `remove` marks a schema deprecated so new writes against it are rejected
 historical versions readable.
 
 `schemas pull` stores the local copy under `<worktree>/.local/agent-blackboard/schemas` (override
-with `AGENT_BLACKBOARD_SCHEMAS_DIR` or `--dir`) and sends `If-None-Match` so an up-to-date client
-receives `304 Not Modified`. Whenever another CLI command observes a newer
-`x-schema-registry-revision` header from the server than the local manifest, it prints one notice
-line on `stderr` telling you to run `agent-blackboard schemas pull`.
+with `AGENT_BLACKBOARD_SCHEMAS_DIR` or `--dir`) with `manifest.json`, `latest/<id>.json`, and
+`versions/<id>@<version>.json`, sending `If-None-Match` so an up-to-date client receives
+`304 Not Modified`. Whenever another network CLI command (`sessions`, `append`, `get`,
+`snapshot export`, `schemas list|get|put|remove`) observes a newer `x-schema-registry-revision`
+header than the local manifest, it prints one notice line on `stderr` telling you to run
+`agent-blackboard schemas pull` (`credentials` and `mcp` do not emit this notice).
 
 ## Credentials
 

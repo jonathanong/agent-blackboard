@@ -1,4 +1,4 @@
-import { readLocalManifest, resolveSchemasDir, writeLocalBundle } from '../schemas/local-store.mjs'
+import { readLocalBundle, resolveSchemasDir, writeLocalBundle } from '../schemas/local-store.mjs'
 import { validateAgainstLocalSchemas } from '../schemas/validate.mjs'
 import type {
   ListSchemasResult,
@@ -49,7 +49,7 @@ export class Schemas {
 
   async pull(options: LocalSchemaOptions = {}): Promise<PullSchemasResult> {
     const dir = resolveSchemasDir(options.cwd ?? process.cwd(), options.env ?? {}, options.dir)
-    const local = readLocalManifest(dir)
+    const local = readLocalBundle(dir)
     const fetched = await fetchSchemaBundleRequest(this.#config, local?.revision)
     if (fetched.notModified) {
       const versionCount = local

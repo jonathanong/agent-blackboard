@@ -38,7 +38,7 @@ export async function listSchemaVersionsRequest(
   config: ClientConfig,
   id: string,
 ): Promise<ListSchemaVersionsResult> {
-  return requestJson(config, `/schemas/${encodeURIComponent(id)}/versions`, { method: 'GET' })
+  return requestJson(config, `/schemas/${requireValidSchemaId(id)}/versions`, { method: 'GET' })
 }
 
 export type FetchSchemaBundleResult =
