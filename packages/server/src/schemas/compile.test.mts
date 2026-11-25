@@ -25,8 +25,11 @@ function makeBundle(
         version: v.version,
         ref: `${item.id}@${v.version}`,
         schema: v.schema,
+        mode: 'enforced',
         createdAt: '2026-01-01T00:00:00.000Z',
         createdBy: 'admin',
+        promotedAt: null,
+        promotedBy: null,
       })),
     })),
   }

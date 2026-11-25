@@ -89,14 +89,66 @@ export interface SchemaRecord {
   updatedBy: string
 }
 
+/** Enforcement state for a single immutable schema version. */
+export type SchemaVersionMode = 'enforced' | 'shadow'
+
 /** One immutable version of a registered JSON Schema (`<id>@<version>`). */
 export interface SchemaVersionRecord {
   id: string
   version: number
   ref: string
   schema: Record<string, unknown>
+  mode: SchemaVersionMode
   createdAt: string
   createdBy: string
+  promotedAt: string | null
+  promotedBy: string | null
+}
+
+/** A single Ajv validation diagnostic (never carries the raw entry payload). */
+export interface SchemaValidationIssue {
+  instancePath: string
+  schemaPath: string
+  keyword: string
+  message: string
+}
+
+/** Non-blocking warning attached to an accepted entry write in shadow mode. */
+export interface SchemaShadowWarning {
+  code: string
+  message: string
+  schema?: string
+  details?: SchemaValidationIssue[]
+}
+
+/** Server-recorded shadow validation failure (metadata + diagnostics only, no entry payload). */
+export interface SchemaShadowFailureRecord {
+  schemaId: string
+  schemaVersion: number
+  sessionId: string
+  occurredAt: string
+  code: string
+  message: string
+  details: SchemaValidationIssue[]
+}
+
+/** Per-version failure summary included in a shadow report. */
+export interface SchemaShadowVersionCount {
+  version: number
+  ref: string
+  mode: SchemaVersionMode
+  failureCount: number
+  lastFailureAt: string | null
+}
+
+/** Admin report summarizing shadow failures for one schema or schema version. */
+export interface SchemaShadowReport {
+  id: string
+  version: number | null
+  totalFailures: number
+  versions: SchemaShadowVersionCount[]
+  recentFailures: SchemaShadowFailureRecord[]
+  revision: number
 }
 
 /** A schema summary paired with all of its immutable versions in ascending order. */

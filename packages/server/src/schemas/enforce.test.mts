@@ -152,4 +152,108 @@ describe('validateEntryWrite', () => {
       body: { code: 'schema_invalid' },
     })
   })
+
+  it('supports per-version shadow mode and global AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT=shadow', async () => {
+    const store = new MemoryBlackboardStore({ now: () => new Date('2026-01-01T00:00:00.000Z') })
+    await store.putSchemaVersion({
+      id: 'finding',
+      schema: {
+        type: 'object',
+        properties: { title: { type: 'string' } },
+        required: ['title'],
+      },
+      actor: 'ops',
+      expectedVersion: 0,
+      mode: 'shadow',
+    })
+    await store.putSchemaVersion({
+      id: 'strict',
+      schema: {
+        type: 'object',
+        properties: { title: { type: 'string' } },
+        required: ['title'],
+      },
+      actor: 'ops',
+      expectedVersion: 0,
+    })
+
+    // Per-version shadow: valid entry passes cleanly with no warning
+    expect(await validateEntryWrite(store, { schemaId: 'finding' }, { title: 'ok' }, {})).toEqual({
+      ok: true,
+      schemaId: 'finding',
+      schemaVersion: 1,
+      revision: 2,
+    })
+
+    // Per-version shadow: invalid entry is accepted with warning + pending shadowFailure
+    const perSchemaFail = await validateEntryWrite(
+      store,
+      { schemaId: 'finding' },
+      { secretPayload: 'do-not-log' },
+      {},
+    )
+    expect(perSchemaFail).toMatchObject({
+      ok: true,
+      schemaId: 'finding',
+      schemaVersion: 1,
+      warning: { code: 'schema_validation_failed', schema: 'finding@1' },
+      shadowFailure: {
+        schemaId: 'finding',
+        schemaVersion: 1,
+        code: 'schema_validation_failed',
+      },
+    })
+
+    // Promoting switches the version from shadow to enforced (revision bumps -> cache invalidates)
+    await store.promoteSchemaVersion('finding', 1, 'ops')
+    expect(
+      await validateEntryWrite(store, { schemaId: 'finding' }, { wrong: true }, {}),
+    ).toMatchObject({ ok: false, status: 400, body: { code: 'schema_validation_failed' } })
+
+    // Global shadow mode validates every named schema and rejects nothing
+    const shadowEnv = { AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT: 'shadow' }
+    expect(await validateEntryWrite(store, {}, { free: true }, shadowEnv)).toEqual({ ok: true })
+    expect(await validateEntryWrite(store, { schemaVersion: 1 }, {}, shadowEnv)).toMatchObject({
+      ok: true,
+      warning: { code: 'invalid_schema_ref' },
+    })
+    expect(await validateEntryWrite(store, { schemaId: 'bad/id' }, {}, shadowEnv)).toMatchObject({
+      ok: true,
+      warning: { code: 'invalid_schema_ref' },
+    })
+    expect(
+      await validateEntryWrite(store, { schemaId: 'strict', schemaVersion: 0 }, {}, shadowEnv),
+    ).toMatchObject({ ok: true, warning: { code: 'invalid_schema_ref' } })
+    expect(await validateEntryWrite(store, { schemaId: 'missing' }, {}, shadowEnv)).toMatchObject({
+      ok: true,
+      warning: { code: 'schema_not_found' },
+    })
+    expect(
+      await validateEntryWrite(store, { schemaId: 'strict' }, { bad: true }, shadowEnv),
+    ).toMatchObject({
+      ok: true,
+      schemaId: 'strict',
+      schemaVersion: 1,
+      warning: { code: 'schema_validation_failed', schema: 'strict@1' },
+      shadowFailure: { schemaId: 'strict', schemaVersion: 1, code: 'schema_validation_failed' },
+    })
+
+    // Deprecated schema under global shadow: accepted with warning + shadowFailure (for existing version) or without (for unknown version)
+    await store.deprecateSchema('strict', 'ops')
+    expect(
+      await validateEntryWrite(store, { schemaId: 'strict' }, { title: 'late' }, shadowEnv),
+    ).toMatchObject({
+      ok: true,
+      warning: { code: 'schema_deprecated' },
+      shadowFailure: { schemaId: 'strict', schemaVersion: 1, code: 'schema_deprecated' },
+    })
+    const depUnknownVer = await validateEntryWrite(
+      store,
+      { schemaId: 'strict', schemaVersion: 99 },
+      { title: 'late' },
+      shadowEnv,
+    )
+    expect(depUnknownVer).toMatchObject({ ok: true, warning: { code: 'schema_deprecated' } })
+    if (depUnknownVer.ok) expect(depUnknownVer.shadowFailure).toBeUndefined()
+  })
 })

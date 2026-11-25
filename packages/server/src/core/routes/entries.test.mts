@@ -163,4 +163,58 @@ describe('entries route', () => {
     expect(readBack.status).toBe(200)
     expect(await json(readBack)).toHaveLength(1)
   })
+
+  it('accepts shadow validation failures with a warning, records metadata without payload, and isolates recording errors', async () => {
+    await store.putSchemaVersion({
+      id: 'finding',
+      schema: {
+        type: 'object',
+        properties: { title: { type: 'string' } },
+        required: ['title'],
+      },
+      actor: 'ops',
+      expectedVersion: 0,
+      mode: 'shadow',
+    })
+
+    const res = await handleEntriesRoute(
+      request({
+        method: 'POST',
+        body: { data: { sensitiveNote: 'secret-value-123' }, schemaId: 'finding' },
+      }),
+      store,
+      's',
+    )
+    expect(res.status).toBe(201)
+    expect(await json(res)).toMatchObject({
+      sessionId: 's',
+      schemaId: 'finding',
+      schemaVersion: 1,
+      warning: {
+        code: 'schema_validation_failed',
+        schema: 'finding@1',
+        details: [expect.objectContaining({ keyword: 'required' })],
+      },
+    })
+
+    const report = await store.getSchemaShadowReport('finding', { version: 1 })
+    expect(report?.totalFailures).toBe(1)
+    expect(report?.recentFailures[0]).toMatchObject({
+      schemaId: 'finding',
+      schemaVersion: 1,
+      sessionId: 's',
+      code: 'schema_validation_failed',
+    })
+    expect(JSON.stringify(report)).not.toContain('secret-value-123')
+
+    // Recording errors never fail the accepted entry write
+    vi.spyOn(store, 'recordSchemaShadowFailure').mockRejectedValueOnce(new Error('telemetry down'))
+    const isolated = await handleEntriesRoute(
+      request({ method: 'POST', body: { data: { bad: true }, schemaId: 'finding' } }),
+      store,
+      's',
+    )
+    expect(isolated.status).toBe(201)
+    expect(await json(isolated)).toMatchObject({ warning: { code: 'schema_validation_failed' } })
+  })
 })

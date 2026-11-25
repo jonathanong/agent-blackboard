@@ -9,13 +9,18 @@ export interface SchemaSummary {
   updatedBy: string
 }
 
+type SchemaVersionMode = 'enforced' | 'shadow'
+
 export interface SchemaVersionRecord {
   id: string
   version: number
   ref: string
   schema: Record<string, unknown>
+  mode?: SchemaVersionMode
   createdAt: string
   createdBy: string
+  promotedAt?: string | null
+  promotedBy?: string | null
 }
 
 export interface SchemaWithVersions extends SchemaSummary {
@@ -36,8 +41,11 @@ export interface SchemaVersionDetail extends SchemaSummary {
   version: number
   ref: string
   schema: Record<string, unknown>
+  mode?: SchemaVersionMode
   versionCreatedAt: string
   versionCreatedBy: string
+  promotedAt?: string | null
+  promotedBy?: string | null
   revision: number
 }
 
@@ -81,4 +89,43 @@ export interface SchemaValidationResult {
   schema: string
   revision: number
   errors: SchemaValidationIssue[]
+}
+
+export interface SchemaShadowWarning {
+  code: string
+  message: string
+  schema?: string
+  details?: SchemaValidationIssue[]
+}
+
+export interface PromoteSchemaResult extends SchemaVersionRecord {
+  revision: number
+  alreadyEnforced: boolean
+}
+
+interface SchemaShadowFailureRecord {
+  schemaId: string
+  schemaVersion: number
+  sessionId: string
+  occurredAt: string
+  code: string
+  message: string
+  details: SchemaValidationIssue[]
+}
+
+interface SchemaShadowVersionCount {
+  version: number
+  ref: string
+  mode: SchemaVersionMode
+  failureCount: number
+  lastFailureAt: string | null
+}
+
+export interface SchemaShadowReport {
+  id: string
+  version: number | null
+  totalFailures: number
+  versions: SchemaShadowVersionCount[]
+  recentFailures: SchemaShadowFailureRecord[]
+  revision: number
 }

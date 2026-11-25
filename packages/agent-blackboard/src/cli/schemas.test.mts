@@ -121,6 +121,37 @@ describe('CLI schemas subcommands and revision sync notice', () => {
         serverRevision += 1
         return sendJson(res, 200, { id: 'finding', deprecatedAt: 'now', revision: serverRevision })
       }
+      if (req.method === 'POST' && url.pathname === '/schemas/finding/versions/2/promote') {
+        serverRevision += 1
+        return sendJson(res, 200, {
+          id: 'finding',
+          version: 2,
+          ref: 'finding@2',
+          mode: 'enforced',
+          alreadyEnforced: false,
+          revision: serverRevision,
+        })
+      }
+      if (req.method === 'GET' && url.pathname === '/schemas/finding/report') {
+        return sendJson(res, 200, {
+          id: 'finding',
+          version: null,
+          totalFailures: 1,
+          versions: [],
+          recentFailures: [],
+          revision: serverRevision,
+        })
+      }
+      if (req.method === 'GET' && url.pathname === '/schemas/finding/versions/2/report') {
+        return sendJson(res, 200, {
+          id: 'finding',
+          version: 2,
+          totalFailures: 1,
+          versions: [],
+          recentFailures: [],
+          revision: serverRevision,
+        })
+      }
       sendJson(res, 200, { sessions: [], nextCursor: null })
     })
 
@@ -197,6 +228,34 @@ describe('CLI schemas subcommands and revision sync notice', () => {
       await runSchemas(['put', 'finding', schemaFile, '--breaking=false'], putFalseBreakingCtx)
       expect(JSON.parse(fixture.requests.at(-1)!.body)).not.toHaveProperty('breaking')
 
+      const putShadowCtx = createFakeContext({ env, cwd: dir })
+      await runSchemas(['put', 'finding', schemaFile, '--shadow'], putShadowCtx)
+      expect(JSON.parse(fixture.requests.at(-1)!.body)).toMatchObject({ shadow: true })
+
+      const promoteCtx = createFakeContext({ env, cwd: dir })
+      await runSchemas(['promote', 'finding@2'], promoteCtx)
+      expect(JSON.parse(promoteCtx.stdoutLines[0]!)).toMatchObject({
+        ref: 'finding@2',
+        mode: 'enforced',
+      })
+
+      const reportAllCtx = createFakeContext({ env, cwd: dir })
+      await runSchemas(['report', 'finding'], reportAllCtx)
+      expect(JSON.parse(reportAllCtx.stdoutLines[0]!)).toMatchObject({
+        id: 'finding',
+        version: null,
+        totalFailures: 1,
+      })
+
+      const reportV2Ctx = createFakeContext({ env, cwd: dir })
+      await runSchemas(['report', 'finding@2', '--limit', '10'], reportV2Ctx)
+      expect(fixture.requests.at(-1)!.url).toBe('/schemas/finding/versions/2/report?limit=10')
+      expect(JSON.parse(reportV2Ctx.stdoutLines[0]!)).toMatchObject({
+        id: 'finding',
+        version: 2,
+        totalFailures: 1,
+      })
+
       const removeCtx = createFakeContext({ env, cwd: dir })
       await runSchemas(['remove', 'finding'], removeCtx)
       expect(JSON.parse(removeCtx.stdoutLines[0]!)).toMatchObject({ id: 'finding' })
@@ -231,6 +290,21 @@ describe('CLI schemas subcommands and revision sync notice', () => {
       await expect(
         runSchemas(['validate', 'finding', arrayJsonFile, '--dir', cacheDir], emptyCtx),
       ).rejects.toThrow(CliError)
+      await expect(
+        runSchemas(['put', 'finding', schemaFile, '--shadow=nope'], emptyCtx),
+      ).rejects.toThrow(CliError)
+      await expect(runSchemas(['promote'], emptyCtx)).rejects.toThrow(CliError)
+      await expect(runSchemas(['promote', 'finding'], emptyCtx)).rejects.toThrow(CliError)
+      await expect(runSchemas(['promote', 'bad/id@1'], emptyCtx)).rejects.toThrow(CliError)
+      await expect(runSchemas(['report'], emptyCtx)).rejects.toThrow(CliError)
+      await expect(runSchemas(['report', 'bad/id'], emptyCtx)).rejects.toThrow(CliError)
+      await expect(runSchemas(['report', 'finding', '--limit'], emptyCtx)).rejects.toThrow(CliError)
+      await expect(runSchemas(['report', 'finding', '--limit', '0'], emptyCtx)).rejects.toThrow(
+        CliError,
+      )
+      await expect(runSchemas(['report', 'finding', '--limit', '101'], emptyCtx)).rejects.toThrow(
+        CliError,
+      )
     } finally {
       await fixture.close()
     }

@@ -3,8 +3,10 @@ import { rawConditionalGet, requestJson } from './http.mjs'
 import type {
   DeprecateSchemaResult,
   ListSchemasResult,
+  PromoteSchemaResult,
   PutSchemaResult,
   SchemaBundle,
+  SchemaShadowReport,
   SchemaVersionDetail,
 } from './schema-types.mjs'
 import type { ClientConfig } from './types.mjs'
@@ -62,12 +64,39 @@ export async function fetchSchemaBundleRequest(
 export async function putSchemaRequest(
   config: ClientConfig,
   id: string,
-  input: { schema: Record<string, unknown>; breaking?: boolean },
+  input: { schema: Record<string, unknown>; breaking?: boolean; shadow?: boolean },
 ): Promise<PutSchemaResult> {
   return requestJson(config, `/schemas/${requireValidSchemaId(id)}`, {
     method: 'PUT',
     headers: JSON_HEADERS,
     body: JSON.stringify(input),
+  })
+}
+
+export async function promoteSchemaRequest(
+  config: ClientConfig,
+  id: string,
+  version: number,
+): Promise<PromoteSchemaResult> {
+  return requestJson(config, `/schemas/${requireValidSchemaId(id)}/versions/${version}/promote`, {
+    method: 'POST',
+  })
+}
+
+export async function getSchemaReportRequest(
+  config: ClientConfig,
+  id: string,
+  version?: number,
+  limit?: number,
+): Promise<SchemaShadowReport> {
+  const encodedId = requireValidSchemaId(id)
+  const path =
+    version === undefined
+      ? `/schemas/${encodedId}/report`
+      : `/schemas/${encodedId}/versions/${version}/report`
+  return requestJson(config, path, {
+    method: 'GET',
+    ...(limit !== undefined ? { query: { limit: String(limit) } } : {}),
   })
 }
 

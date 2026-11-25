@@ -1,4 +1,10 @@
-import type { CredentialRecord, SchemaBundle, Session, SessionEntry } from '../core/types.mjs'
+import type {
+  CredentialRecord,
+  SchemaBundle,
+  SchemaShadowReport,
+  Session,
+  SessionEntry,
+} from '../core/types.mjs'
 import type { DynamoStoreOptions } from './dynamo-client.mjs'
 import { resolveDynamoConfig } from './dynamo-client.mjs'
 import {
@@ -15,6 +21,11 @@ import {
   dynamoListSchemaVersions,
   dynamoListSchemas,
 } from './dynamo-schemas-read.mjs'
+import { dynamoPromoteSchemaVersion } from './dynamo-schemas-promote.mjs'
+import {
+  dynamoGetSchemaShadowReport,
+  dynamoRecordSchemaShadowFailure,
+} from './dynamo-schemas-shadow.mjs'
 import { dynamoDeprecateSchema, dynamoPutSchemaVersion } from './dynamo-schemas-write.mjs'
 import { dynamoListSessions } from './dynamo-session-list.mjs'
 import { dynamoPatchSession } from './dynamo-session-patch.mjs'
@@ -25,14 +36,17 @@ import type {
   DeprecateSchemaResult,
   GetEntriesOptions,
   GetSchemaResult,
+  GetSchemaShadowReportOptions,
   ListSchemaVersionsResult,
   ListSchemasResult,
   ListSessionsQuery,
   ListSessionsResult,
   NewSession,
   NewSessionEntry,
+  PromoteSchemaVersionResult,
   PutSchemaVersionInput,
   PutSchemaVersionResult,
+  RecordSchemaShadowFailureInput,
   SessionPatch,
 } from './store.mjs'
 
@@ -85,6 +99,13 @@ export function createDynamoStore(options: DynamoStoreOptions = {}): BlackboardS
     putSchemaVersion(input: PutSchemaVersionInput): Promise<PutSchemaVersionResult> {
       return dynamoPutSchemaVersion(doc, tableName, now, input)
     },
+    promoteSchemaVersion(
+      id: string,
+      version: number,
+      actor: string,
+    ): Promise<PromoteSchemaVersionResult> {
+      return dynamoPromoteSchemaVersion(doc, tableName, now, id, version, actor)
+    },
     deprecateSchema(id: string, actor: string): Promise<DeprecateSchemaResult> {
       return dynamoDeprecateSchema(doc, tableName, now, id, actor)
     },
@@ -99,6 +120,15 @@ export function createDynamoStore(options: DynamoStoreOptions = {}): BlackboardS
     },
     getSchemaBundle(): Promise<SchemaBundle> {
       return dynamoGetSchemaBundle(doc, tableName)
+    },
+    recordSchemaShadowFailure(input: RecordSchemaShadowFailureInput): Promise<void> {
+      return dynamoRecordSchemaShadowFailure(doc, tableName, ttlDays, now, input)
+    },
+    getSchemaShadowReport(
+      id: string,
+      options?: GetSchemaShadowReportOptions,
+    ): Promise<SchemaShadowReport | undefined> {
+      return dynamoGetSchemaShadowReport(doc, tableName, id, options)
     },
   }
 }

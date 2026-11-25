@@ -68,6 +68,13 @@ async function routeMatched(
     const id = decodeSegment(schemaMatch[1]!)
     return id === null ? undefined : handleSchemasRoute(request, deps.store, deps.env, { id })
   }
+  const schemaReportMatch = /^\/schemas\/([^/]+)\/report$/.exec(path)
+  if (schemaReportMatch) {
+    const id = decodeSegment(schemaReportMatch[1]!)
+    return id === null
+      ? undefined
+      : handleSchemasRoute(request, deps.store, deps.env, { id, report: true })
+  }
   const schemaVersionsMatch = /^\/schemas\/([^/]+)\/versions$/.exec(path)
   if (schemaVersionsMatch) {
     const id = decodeSegment(schemaVersionsMatch[1]!)
@@ -82,6 +89,22 @@ async function routeMatched(
     return id === null || versionRaw === null
       ? undefined
       : handleSchemasRoute(request, deps.store, deps.env, { id, versionRaw })
+  }
+  const schemaPromoteMatch = /^\/schemas\/([^/]+)\/versions\/([^/]+)\/promote$/.exec(path)
+  if (schemaPromoteMatch) {
+    const id = decodeSegment(schemaPromoteMatch[1]!)
+    const versionRaw = decodeSegment(schemaPromoteMatch[2]!)
+    return id === null || versionRaw === null
+      ? undefined
+      : handleSchemasRoute(request, deps.store, deps.env, { id, versionRaw, promote: true })
+  }
+  const schemaVersionReportMatch = /^\/schemas\/([^/]+)\/versions\/([^/]+)\/report$/.exec(path)
+  if (schemaVersionReportMatch) {
+    const id = decodeSegment(schemaVersionReportMatch[1]!)
+    const versionRaw = decodeSegment(schemaVersionReportMatch[2]!)
+    return id === null || versionRaw === null
+      ? undefined
+      : handleSchemasRoute(request, deps.store, deps.env, { id, versionRaw, report: true })
   }
   return undefined
 }

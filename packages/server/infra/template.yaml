@@ -58,10 +58,11 @@ Parameters:
   SchemaEnforcement:
     Type: String
     Default: optional
-    AllowedValues: [optional, required]
+    AllowedValues: [optional, shadow, required]
     Description: >-
-      Controls whether entry writes without schemaId are allowed (optional) or
-      rejected (required). Entries naming a schemaId are always validated.
+      Controls write-time schema enforcement: optional (validate entries that
+      name a schema), shadow (validate every entry naming a schema without
+      rejecting), or required (reject entries missing a schemaId).
 
 Resources:
   AgentBlackboardTable:

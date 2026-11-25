@@ -1,3 +1,5 @@
+import type { SchemaShadowWarning } from './schema-types.mjs'
+
 export interface ClientConfig {
   baseUrl: string
   token: string
@@ -34,6 +36,10 @@ export interface SessionEntry {
   data: Record<string, unknown>
   schemaId?: string
   schemaVersion?: number
+}
+
+export interface AppendEntryResult extends SessionEntry {
+  warning?: SchemaShadowWarning
 }
 
 export interface CreateSessionInput {

@@ -2,6 +2,9 @@ import type {
   CredentialRecord,
   SchemaBundle,
   SchemaRecord,
+  SchemaShadowReport,
+  SchemaValidationIssue,
+  SchemaVersionMode,
   SchemaVersionRecord,
   Session,
   SessionEntry,
@@ -9,6 +12,8 @@ import type {
 
 export const DEFAULT_SESSIONS_LIMIT = 50
 export const MAX_SESSIONS_LIMIT = 200
+export const DEFAULT_SHADOW_REPORT_LIMIT = 20
+export const MAX_SHADOW_REPORT_LIMIT = 100
 
 /**
  * Server-side filter pushdown for `listSessions`. `parentSessionId` and
@@ -76,12 +81,35 @@ export interface PutSchemaVersionInput {
   expectedVersion: number
   /** When provided, binds publication to the exact registry revision used for validation/compilation. */
   expectedRevision?: number
+  /** Defaults to `'enforced'`; `'shadow'` validates entries without rejecting failures. */
+  mode?: SchemaVersionMode
 }
 
 export interface PutSchemaVersionResult {
   revision: number
   summary: SchemaRecord
   versionRecord: SchemaVersionRecord
+}
+
+export interface PromoteSchemaVersionResult {
+  revision: number
+  summary: SchemaRecord
+  versionRecord: SchemaVersionRecord
+  alreadyEnforced: boolean
+}
+
+export interface RecordSchemaShadowFailureInput {
+  schemaId: string
+  schemaVersion: number
+  sessionId: string
+  code: string
+  message: string
+  details: SchemaValidationIssue[]
+}
+
+export interface GetSchemaShadowReportOptions {
+  version?: number
+  limit?: number
 }
 
 export interface DeprecateSchemaResult {
@@ -139,9 +167,19 @@ export interface BlackboardStore {
 
   getSchemaRegistryRevision(): Promise<number>
   putSchemaVersion(input: PutSchemaVersionInput): Promise<PutSchemaVersionResult>
+  promoteSchemaVersion(
+    id: string,
+    version: number,
+    actor: string,
+  ): Promise<PromoteSchemaVersionResult>
   deprecateSchema(id: string, actor: string): Promise<DeprecateSchemaResult>
   listSchemas(): Promise<ListSchemasResult>
   getSchema(id: string, version?: number): Promise<GetSchemaResult | undefined>
   listSchemaVersions(id: string): Promise<ListSchemaVersionsResult | undefined>
   getSchemaBundle(): Promise<SchemaBundle>
+  recordSchemaShadowFailure(input: RecordSchemaShadowFailureInput): Promise<void>
+  getSchemaShadowReport(
+    id: string,
+    options?: GetSchemaShadowReportOptions,
+  ): Promise<SchemaShadowReport | undefined>
 }

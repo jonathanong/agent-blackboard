@@ -78,11 +78,14 @@ function notImplementedStore(overrides: Partial<BlackboardStore> = {}): Blackboa
     deleteCredential: notImplemented('deleteCredential'),
     getSchemaRegistryRevision: async () => 0,
     putSchemaVersion: notImplemented('putSchemaVersion'),
+    promoteSchemaVersion: notImplemented('promoteSchemaVersion'),
     deprecateSchema: notImplemented('deprecateSchema'),
     listSchemas: notImplemented('listSchemas'),
     getSchema: notImplemented('getSchema'),
     listSchemaVersions: notImplemented('listSchemaVersions'),
     getSchemaBundle: notImplemented('getSchemaBundle'),
+    recordSchemaShadowFailure: notImplemented('recordSchemaShadowFailure'),
+    getSchemaShadowReport: notImplemented('getSchemaShadowReport'),
     ...overrides,
   } as BlackboardStore
 }

@@ -42,17 +42,26 @@ async function appendEntry(
   const validation = await validateEntryWrite(store, body, data, env)
   if (!validation.ok) return jsonResponse(validation.status, validation.body)
   try {
+    const entry = await store.appendEntry({
+      credId,
+      sessionId,
+      data,
+      ...(validation.schemaId !== undefined ? { schemaId: validation.schemaId } : {}),
+      ...(validation.schemaVersion !== undefined
+        ? { schemaVersion: validation.schemaVersion }
+        : {}),
+    })
+    if (validation.shadowFailure) {
+      try {
+        await store.recordSchemaShadowFailure({ ...validation.shadowFailure, sessionId })
+      } catch {
+        // Best-effort telemetry: never fail an accepted entry write on shadow recording errors.
+      }
+    }
+    const responseBody = validation.warning ? { ...entry, warning: validation.warning } : entry
     return jsonResponse(
       201,
-      await store.appendEntry({
-        credId,
-        sessionId,
-        data,
-        ...(validation.schemaId !== undefined ? { schemaId: validation.schemaId } : {}),
-        ...(validation.schemaVersion !== undefined
-          ? { schemaVersion: validation.schemaVersion }
-          : {}),
-      }),
+      responseBody,
       validation.revision !== undefined ? revisionHeaders(validation.revision) : undefined,
     )
   } catch (error) {

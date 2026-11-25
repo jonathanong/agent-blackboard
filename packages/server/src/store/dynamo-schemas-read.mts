@@ -1,7 +1,7 @@
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
 import { GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
 import type { SchemaBundle, SchemaRecord, SchemaVersionRecord } from '../core/types.mjs'
-import { formatSchemaRef, isValidSchemaId } from '../schemas/id.mjs'
+import { isValidSchemaId } from '../schemas/id.mjs'
 import {
   SCHEMA_REGISTRY_PK,
   SCHEMA_REGISTRY_SK,
@@ -11,36 +11,11 @@ import {
   schemaVersionPrefix,
   schemaVersionSk,
 } from './dynamo-keys.mjs'
+import { itemToSchemaRecord, itemToSchemaVersion } from './dynamo-schemas-tx.mjs'
 import { SessionStoreError } from './errors.mjs'
 import type { GetSchemaResult, ListSchemaVersionsResult, ListSchemasResult } from './store.mjs'
 
 const SNAPSHOT_RETRIES = 10
-
-function itemToSchemaRecord(item: Record<string, unknown>): SchemaRecord {
-  return {
-    id: item.id as string,
-    latestVersion: item.latestVersion as number,
-    deprecatedAt: (item.deprecatedAt as string | null) ?? null,
-    deprecatedBy: (item.deprecatedBy as string | null) ?? null,
-    createdAt: item.createdAt as string,
-    createdBy: item.createdBy as string,
-    updatedAt: item.updatedAt as string,
-    updatedBy: item.updatedBy as string,
-  }
-}
-
-function itemToSchemaVersion(item: Record<string, unknown>): SchemaVersionRecord {
-  const id = item.id as string
-  const version = item.version as number
-  return {
-    id,
-    version,
-    ref: formatSchemaRef(id, version),
-    schema: item.schema as Record<string, unknown>,
-    createdAt: item.createdAt as string,
-    createdBy: item.createdBy as string,
-  }
-}
 
 export async function dynamoGetSchemaRegistryRevision(
   doc: DynamoDBDocumentClient,
@@ -72,7 +47,7 @@ export async function dynamoGetSchemaHead(
   return result.Item ? itemToSchemaRecord(result.Item) : undefined
 }
 
-async function queryAllPartition(
+export async function queryAllPartition(
   doc: DynamoDBDocumentClient,
   tableName: string,
   pk: string,

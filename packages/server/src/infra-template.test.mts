@@ -36,7 +36,7 @@ describe('CloudFormation template', () => {
     const template = await readFile(new URL('../infra/template.yaml', import.meta.url), 'utf8')
     expect(template).toContain('  SchemaEnforcement:')
     expect(template).toContain('    Default: optional')
-    expect(template).toContain('    AllowedValues: [optional, required]')
+    expect(template).toContain('    AllowedValues: [optional, shadow, required]')
     expect(template).toContain(
       '          AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT: !Ref SchemaEnforcement',
     )

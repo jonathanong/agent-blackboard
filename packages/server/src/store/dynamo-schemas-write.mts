@@ -4,7 +4,12 @@ import type { SchemaRecord, SchemaVersionRecord } from '../core/types.mjs'
 import { formatSchemaRef } from '../schemas/id.mjs'
 import { SCHEMAS_PK, schemaSk } from './dynamo-keys.mjs'
 import { dynamoGetSchemaHead, dynamoGetSchemaRegistryRevision } from './dynamo-schemas-read.mjs'
-import { registryMetaTxItem, schemaHeadTxItem, schemaVersionTxItem } from './dynamo-schemas-tx.mjs'
+import {
+  isRetryableTransactionCanceled,
+  registryMetaTxItem,
+  schemaHeadTxItem,
+  schemaVersionTxItem,
+} from './dynamo-schemas-tx.mjs'
 import { SessionStoreError } from './errors.mjs'
 import type {
   DeprecateSchemaResult,
@@ -13,17 +18,6 @@ import type {
 } from './store.mjs'
 
 const REVISION_RETRIES = 20
-
-function isRetryableTransactionCanceled(error: unknown): boolean {
-  if (!(error instanceof Error) || error.name !== 'TransactionCanceledException') return false
-  const reasons = (error as { CancellationReasons?: Array<{ Code?: string }> }).CancellationReasons
-  if (!reasons || reasons.length === 0) return true
-  const codes = reasons.map((r) => r.Code).filter((c) => c !== undefined && c !== 'None')
-  return (
-    codes.length > 0 &&
-    codes.every((c) => c === 'ConditionalCheckFailed' || c === 'TransactionConflict')
-  )
-}
 
 export async function dynamoPutSchemaVersion(
   doc: DynamoDBDocumentClient,
@@ -75,8 +69,11 @@ export async function dynamoPutSchemaVersion(
       version: nextVersion,
       ref: formatSchemaRef(input.id, nextVersion),
       schema: structuredClone(input.schema),
+      mode: input.mode ?? 'enforced',
       createdAt: timestamp,
       createdBy: input.actor,
+      promotedAt: null,
+      promotedBy: null,
     }
 
     try {

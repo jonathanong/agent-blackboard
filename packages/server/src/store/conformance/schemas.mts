@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { SessionStoreError } from '../errors.mjs'
 import type { BlackboardStore } from '../store.mjs'
+import { registerShadowSchemaConformanceTests } from './schemas-shadow.mjs'
 
 export function runSchemasConformance(makeStore: () => BlackboardStore): void {
   describe('BlackboardStore conformance: schemas', () => {
@@ -133,5 +134,7 @@ export function runSchemasConformance(makeStore: () => BlackboardStore): void {
       expect(fetched?.summary.deprecatedAt).toBe(dep1.summary.deprecatedAt)
       expect(fetched?.versionRecord.version).toBe(1)
     })
+
+    registerShadowSchemaConformanceTests(makeStore)
   })
 }

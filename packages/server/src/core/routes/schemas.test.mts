@@ -447,4 +447,243 @@ describe('/schemas routes', () => {
     expect(etagMatches('"rev-0"', '"rev-1"')).toBe(false)
     expect(etagMatches('"old,*,tag"', '"rev-1"')).toBe(false)
   })
+
+  it('supports shadow put, admin-only shadow reports, and admin-only version promotion', async () => {
+    const { store, deps, adminAuth, clientAuth } = await setup()
+
+    // Non-boolean shadow flag rejected
+    expect(
+      (
+        await handleRequest(
+          makeReq({
+            method: 'PUT',
+            path: '/schemas/finding',
+            headers: adminAuth,
+            body: { schema: { type: 'object' }, shadow: 'yes' },
+          }),
+          deps,
+        )
+      ).status,
+    ).toBe(400)
+
+    // Register v1 in shadow mode
+    const put = await handleRequest(
+      makeReq({
+        method: 'PUT',
+        path: '/schemas/finding',
+        headers: adminAuth,
+        body: {
+          schema: {
+            type: 'object',
+            properties: { title: { type: 'string' } },
+            required: ['title'],
+          },
+          shadow: true,
+        },
+      }),
+      deps,
+    )
+    expect(put.status).toBe(201)
+    expect(await readJson(put)).toMatchObject({ ref: 'finding@1', mode: 'shadow' })
+
+    // Report and promote are admin-only
+    expect(
+      (
+        await handleRequest(
+          makeReq({ method: 'GET', path: '/schemas/finding/report', headers: clientAuth }),
+          deps,
+        )
+      ).status,
+    ).toBe(401)
+    expect(
+      (
+        await handleRequest(
+          makeReq({
+            method: 'POST',
+            path: '/schemas/finding/versions/1/promote',
+            headers: clientAuth,
+          }),
+          deps,
+        )
+      ).status,
+    ).toBe(401)
+
+    // Unsupported methods on promote/report -> 404
+    expect(
+      (
+        await handleRequest(
+          makeReq({
+            method: 'GET',
+            path: '/schemas/finding/versions/1/promote',
+            headers: adminAuth,
+          }),
+          deps,
+        )
+      ).status,
+    ).toBe(404)
+    expect(
+      (
+        await handleRequest(
+          makeReq({
+            method: 'DELETE',
+            path: '/schemas/finding/versions/1/promote',
+            headers: adminAuth,
+          }),
+          deps,
+        )
+      ).status,
+    ).toBe(404)
+    expect(
+      (
+        await handleRequest(
+          makeReq({ method: 'PUT', path: '/schemas/finding/report', headers: adminAuth }),
+          deps,
+        )
+      ).status,
+    ).toBe(404)
+
+    // Report validation errors & 404s
+    expect(
+      (
+        await handleRequest(
+          makeReq({ method: 'GET', path: '/schemas/missing/report', headers: adminAuth }),
+          deps,
+        )
+      ).status,
+    ).toBe(404)
+    expect(
+      (
+        await handleRequest(
+          makeReq({
+            method: 'GET',
+            path: '/schemas/finding/versions/bad/report',
+            headers: adminAuth,
+          }),
+          deps,
+        )
+      ).status,
+    ).toBe(400)
+    expect(
+      (
+        await handleRequest(
+          makeReq({
+            method: 'GET',
+            path: '/schemas/finding/report',
+            query: { limit: '0' },
+            headers: adminAuth,
+          }),
+          deps,
+        )
+      ).status,
+    ).toBe(400)
+    expect(
+      (
+        await handleRequest(
+          makeReq({
+            method: 'GET',
+            path: '/schemas/finding/report',
+            query: { limit: '101' },
+            headers: adminAuth,
+          }),
+          deps,
+        )
+      ).status,
+    ).toBe(400)
+
+    // Record failure and inspect both schema-wide and version-scoped reports
+    await store.recordSchemaShadowFailure({
+      schemaId: 'finding',
+      schemaVersion: 1,
+      sessionId: 's1',
+      code: 'schema_validation_failed',
+      message: 'missing title',
+      details: [],
+    })
+    const reportAll = await handleRequest(
+      makeReq({
+        method: 'GET',
+        path: '/schemas/finding/report',
+        query: { limit: '5' },
+        headers: adminAuth,
+      }),
+      deps,
+    )
+    expect(reportAll.status).toBe(200)
+    expect(await readJson(reportAll)).toMatchObject({ id: 'finding', totalFailures: 1 })
+
+    const reportV1 = await handleRequest(
+      makeReq({
+        method: 'GET',
+        path: '/schemas/finding/versions/1/report',
+        headers: adminAuth,
+      }),
+      deps,
+    )
+    expect(reportV1.status).toBe(200)
+    expect(await readJson(reportV1)).toMatchObject({ id: 'finding', version: 1, totalFailures: 1 })
+
+    // Promote validation errors, 404, success, idempotency, and unexpected error propagation
+    expect(
+      (
+        await handleRequest(
+          makeReq({
+            method: 'POST',
+            path: '/schemas/finding/versions/bad/promote',
+            headers: adminAuth,
+          }),
+          deps,
+        )
+      ).status,
+    ).toBe(400)
+    expect(
+      (
+        await handleRequest(
+          makeReq({
+            method: 'POST',
+            path: '/schemas/finding/versions/9/promote',
+            headers: adminAuth,
+          }),
+          deps,
+        )
+      ).status,
+    ).toBe(404)
+
+    const promoted = await handleRequest(
+      makeReq({
+        method: 'POST',
+        path: '/schemas/finding/versions/1/promote',
+        headers: adminAuth,
+      }),
+      deps,
+    )
+    expect(promoted.status).toBe(200)
+    expect(await readJson(promoted)).toMatchObject({
+      ref: 'finding@1',
+      mode: 'enforced',
+      alreadyEnforced: false,
+    })
+
+    const promotedAgain = await handleRequest(
+      makeReq({
+        method: 'POST',
+        path: '/schemas/finding/versions/1/promote',
+        headers: adminAuth,
+      }),
+      deps,
+    )
+    expect(promotedAgain.status).toBe(200)
+    expect(await readJson(promotedAgain)).toMatchObject({ alreadyEnforced: true })
+
+    vi.spyOn(store, 'promoteSchemaVersion').mockRejectedValueOnce(new Error('unexpected-promote'))
+    await expect(
+      handleRequest(
+        makeReq({
+          method: 'POST',
+          path: '/schemas/finding/versions/1/promote',
+          headers: adminAuth,
+        }),
+        deps,
+      ),
+    ).rejects.toThrow('unexpected-promote')
+  })
 })
