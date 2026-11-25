@@ -16,6 +16,9 @@ describe('schema id and ref helpers', () => {
     expect(isValidSchemaId('http:foo')).toBe(false)
     expect(isValidSchemaId('foo@1')).toBe(false)
     expect(isValidSchemaId('foo#bar')).toBe(false)
+    expect(isValidSchemaId('constructor')).toBe(false)
+    expect(isValidSchemaId('toString')).toBe(false)
+    expect(isValidSchemaId('__proto__')).toBe(false)
     expect(isValidSchemaId(123)).toBe(false)
   })
 

@@ -166,7 +166,107 @@ describe('checkBackwardCompatibility', () => {
     expect(result.breakingChanges.length).toBeGreaterThanOrEqual(14)
   })
 
-  it('handles non-object jsonEqual edge cases cleanly', () => {
+  it('handles local $ref targets, composition keywords, boolean subschemas, new property constraints, and prototype keys', () => {
+    expect(
+      checkBackwardCompatibility(
+        {
+          type: 'object',
+          $defs: { val: { type: 'string' } },
+          properties: { v: { $ref: '#/$defs/val' } },
+        },
+        {
+          type: 'object',
+          $defs: { val: { type: 'number' } },
+          properties: { v: { $ref: '#/$defs/val' } },
+        },
+      ).compatible,
+    ).toBe(false)
+
+    expect(
+      checkBackwardCompatibility(
+        {
+          type: 'object',
+          $defs: {
+            node: { type: 'object', properties: { child: { $ref: '#/$defs/node' } } },
+          },
+          properties: {
+            root: { $ref: '#/$defs/node' },
+            self: { $ref: '#' },
+            bad: { $ref: '#/$defs/missing' },
+          },
+        },
+        {
+          type: 'object',
+          $defs: {
+            node: { type: 'object', properties: { child: { $ref: '#/$defs/node' } } },
+          },
+          properties: {
+            root: { $ref: '#/$defs/node' },
+            self: { $ref: '#' },
+            bad: { $ref: '#/$defs/missing' },
+          },
+        },
+      ).compatible,
+    ).toBe(true)
+
+    expect(
+      checkBackwardCompatibility(
+        { properties: { a: { $ref: '#anchor' } } },
+        { properties: { a: { $ref: '#anchor' } } },
+      ).compatible,
+    ).toBe(true)
+
+    expect(
+      checkBackwardCompatibility({ allOf: [{ type: 'string' }] }, { allOf: [{ type: 'number' }] })
+        .compatible,
+    ).toBe(false)
+    expect(
+      checkBackwardCompatibility({ allOf: [{ type: 'string' }] }, { allOf: [{ type: 'string' }] })
+        .compatible,
+    ).toBe(true)
+
+    expect(
+      checkBackwardCompatibility(
+        { properties: { x: { type: 'string' } } },
+        { properties: { x: false } },
+      ).compatible,
+    ).toBe(false)
+    expect(checkBackwardCompatibility({ items: true }, { items: false }).compatible).toBe(false)
+    expect(
+      checkBackwardCompatibility(
+        { additionalProperties: false },
+        { additionalProperties: { type: 'string' } },
+      ).compatible,
+    ).toBe(true)
+
+    expect(
+      checkBackwardCompatibility(
+        { type: 'object', additionalProperties: { type: 'string' } },
+        {
+          type: 'object',
+          additionalProperties: { type: 'string' },
+          properties: { code: { type: 'integer' } },
+        },
+      ).compatible,
+    ).toBe(false)
+    expect(
+      checkBackwardCompatibility(
+        { type: 'object', patternProperties: { '^x-': { type: 'string' } } },
+        {
+          type: 'object',
+          patternProperties: { '^x-': { type: 'string' } },
+          properties: { 'x-id': { type: 'integer' } },
+        },
+      ).compatible,
+    ).toBe(false)
+
+    expect(
+      checkBackwardCompatibility(
+        { properties: { constructor: { type: 'string' } } },
+        { properties: {} },
+      ).compatible,
+    ).toBe(false)
+
     expect(
       checkBackwardCompatibility(
         { enum: [null, [1], { a: 1 }] },

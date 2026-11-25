@@ -91,13 +91,14 @@ export function compileRegisteredSchema(
     strictRequired: false,
     allErrors: true,
   })
+  ajv.addKeyword('$anchor')
   registerFormats(ajv)
-  for (const [key, depSchema] of resolved) {
-    ajv.addSchema(depSchema, key)
-  }
 
   try {
-    const validate = ajv.compile(target.schema)
+    for (const [key, depSchema] of resolved) {
+      ajv.addSchema(structuredClone(depSchema), key)
+    }
+    const validate = ajv.compile(structuredClone(target.schema))
     return { ok: true, validate }
   } catch (error) {
     return { ok: false, error: `schema failed to compile: ${(error as Error).message}` }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { MemoryBlackboardStore } from '../store/memory.mjs'
 import { handleRequest } from './handle-request.mjs'
 import type { HandleRequestDeps } from './handle-request.mjs'
@@ -96,5 +96,17 @@ describe('handleRequest', () => {
     expect((await handleRequest(request({ path: '/schemas/a/versions/%' }), deps())).status).toBe(
       404,
     )
+  })
+
+  it('preserves a committed response even if the revision header lookup fails', async () => {
+    const store = new MemoryBlackboardStore()
+    const { token } = await store.createCredential('test')
+    vi.spyOn(store, 'getSchemaRegistryRevision').mockRejectedValueOnce(new Error('ddb blip'))
+    const response = await handleRequest(
+      request({ path: '/sessions', headers: { authorization: `Bearer ${token}` } }),
+      deps({ store }),
+    )
+    expect(response.status).toBe(200)
+    expect(response.headers['x-schema-registry-revision']).toBeUndefined()
   })
 })

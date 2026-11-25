@@ -389,10 +389,12 @@ describe('/schemas routes', () => {
       ).status,
     ).toBe(400)
 
-    // Store conflict mapped to 409; unexpected error rethrown
-    vi.spyOn(store, 'putSchemaVersion').mockRejectedValueOnce(
-      new SessionStoreError('schema_conflict', 'conflict'),
-    )
+    // Store conflict retries cleanly up to MAX_PUT_ATTEMPTS, then maps to 409
+    const putSpy = vi
+      .spyOn(store, 'putSchemaVersion')
+      .mockRejectedValueOnce(new SessionStoreError('schema_conflict', 'conflict-1'))
+      .mockRejectedValueOnce(new SessionStoreError('schema_conflict', 'conflict-2'))
+      .mockRejectedValueOnce(new SessionStoreError('schema_conflict', 'conflict-3'))
     expect(
       (
         await handleRequest(
@@ -406,6 +408,18 @@ describe('/schemas routes', () => {
         )
       ).status,
     ).toBe(409)
+    expect(putSpy).toHaveBeenCalledTimes(3)
+
+    // Direct expectedRevision mismatch in MemoryBlackboardStore throws schema_conflict
+    await expect(
+      store.putSchemaVersion({
+        id: 'rev-check',
+        schema: { type: 'object' },
+        actor: 'ops',
+        expectedVersion: 0,
+        expectedRevision: 999,
+      }),
+    ).rejects.toMatchObject({ code: 'schema_conflict' })
 
     vi.spyOn(store, 'putSchemaVersion').mockRejectedValueOnce(new Error('unexpected-put'))
     await expect(
@@ -426,10 +440,11 @@ describe('/schemas routes', () => {
     ).rejects.toThrow('unexpected-del')
   })
 
-  it('matches ETags with wildcard, lists, and weak tags', () => {
+  it('matches ETags with wildcard, lists, weak tags, and commas inside quoted tags', () => {
     expect(etagMatches(undefined, '"rev-1"')).toBe(false)
     expect(etagMatches('*', '"rev-1"')).toBe(true)
     expect(etagMatches('"rev-0", W/"rev-1"', '"rev-1"')).toBe(true)
     expect(etagMatches('"rev-0"', '"rev-1"')).toBe(false)
+    expect(etagMatches('"old,*,tag"', '"rev-1"')).toBe(false)
   })
 })

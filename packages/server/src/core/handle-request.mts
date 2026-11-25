@@ -51,29 +51,23 @@ async function routeMatched(
   const sessionMatch = /^\/sessions\/([^/]+)$/.exec(path)
   if (sessionMatch) {
     const sessionId = decodeSegment(sessionMatch[1]!)
-    return sessionId === null
-      ? notFoundResponse()
-      : handleSessionsRoute(request, deps.store, sessionId)
+    return sessionId === null ? undefined : handleSessionsRoute(request, deps.store, sessionId)
   }
   const entriesMatch = /^\/sessions\/([^/]+)\/entries$/.exec(path)
   if (entriesMatch) {
     const sessionId = decodeSegment(entriesMatch[1]!)
-    return sessionId === null
-      ? notFoundResponse()
-      : handleEntriesRoute(request, deps.store, sessionId)
+    return sessionId === null ? undefined : handleEntriesRoute(request, deps.store, sessionId)
   }
   const schemaMatch = /^\/schemas\/([^/]+)$/.exec(path)
   if (schemaMatch) {
     const id = decodeSegment(schemaMatch[1]!)
-    return id === null
-      ? notFoundResponse()
-      : handleSchemasRoute(request, deps.store, deps.env, { id })
+    return id === null ? undefined : handleSchemasRoute(request, deps.store, deps.env, { id })
   }
   const schemaVersionsMatch = /^\/schemas\/([^/]+)\/versions$/.exec(path)
   if (schemaVersionsMatch) {
     const id = decodeSegment(schemaVersionsMatch[1]!)
     return id === null
-      ? notFoundResponse()
+      ? undefined
       : handleSchemasRoute(request, deps.store, deps.env, { id, versionsList: true })
   }
   const schemaVersionMatch = /^\/schemas\/([^/]+)\/versions\/([^/]+)$/.exec(path)
@@ -81,7 +75,7 @@ async function routeMatched(
     const id = decodeSegment(schemaVersionMatch[1]!)
     const versionRaw = decodeSegment(schemaVersionMatch[2]!)
     return id === null || versionRaw === null
-      ? notFoundResponse()
+      ? undefined
       : handleSchemasRoute(request, deps.store, deps.env, { id, versionRaw })
   }
   return undefined
@@ -95,10 +89,14 @@ export async function handleRequest(
   const response = await routeMatched(path, request, deps)
   if (!response) return notFoundResponse()
   if (response.status !== 401 && response.headers[SCHEMA_REVISION_HEADER] === undefined) {
-    const revision = await deps.store.getSchemaRegistryRevision()
-    return {
-      ...response,
-      headers: { ...response.headers, [SCHEMA_REVISION_HEADER]: String(revision) },
+    try {
+      const revision = await deps.store.getSchemaRegistryRevision()
+      return {
+        ...response,
+        headers: { ...response.headers, [SCHEMA_REVISION_HEADER]: String(revision) },
+      }
+    } catch {
+      return response
     }
   }
   return response

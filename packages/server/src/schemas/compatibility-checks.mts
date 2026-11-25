@@ -13,11 +13,31 @@ export interface BreakingChange {
   message: string
 }
 
+export const COMPOSITION_KEYWORDS = [
+  'allOf',
+  'anyOf',
+  'oneOf',
+  'not',
+  'if',
+  'then',
+  'else',
+  'dependentRequired',
+  'dependentSchemas',
+  'prefixItems',
+  'patternProperties',
+  'propertyNames',
+  'contains',
+  'minContains',
+  'maxContains',
+  'unevaluatedProperties',
+  'unevaluatedItems',
+] as const
+
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-function jsonEqual(a: unknown, b: unknown): boolean {
+export function jsonEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true
   if (typeof a !== typeof b || a === null || b === null) return false
   if (Array.isArray(a) && Array.isArray(b)) {
@@ -27,7 +47,8 @@ function jsonEqual(a: unknown, b: unknown): boolean {
     const aKeys = Object.keys(a)
     const bKeys = Object.keys(b)
     return (
-      aKeys.length === bKeys.length && aKeys.every((key) => key in b && jsonEqual(a[key], b[key]))
+      aKeys.length === bKeys.length &&
+      aKeys.every((key) => Object.hasOwn(b, key) && jsonEqual(a[key], b[key]))
     )
   }
   return false
@@ -36,6 +57,18 @@ function jsonEqual(a: unknown, b: unknown): boolean {
 export function joinPath(base: string, segment: string): string {
   const escaped = segment.replaceAll('~', '~0').replaceAll('/', '~1')
   return base === '/' ? `/${escaped}` : `${base}/${escaped}`
+}
+
+export function resolveLocalPointer(root: Record<string, unknown>, ref: string): unknown {
+  if (ref === '#') return root
+  if (!ref.startsWith('#/')) return undefined
+  let current: unknown = root
+  for (const rawSegment of ref.slice(2).split('/')) {
+    const segment = rawSegment.replaceAll('~1', '/').replaceAll('~0', '~')
+    if (!isPlainObject(current) || !Object.hasOwn(current, segment)) return undefined
+    current = current[segment]
+  }
+  return current
 }
 
 function normalizeTypes(value: unknown): Set<string> | undefined {
@@ -123,7 +156,10 @@ export function checkTypeAndEnum(
       }
     }
   }
-  if ('const' in next && (!('const' in prev) || !jsonEqual(prev.const, next.const))) {
+  if (
+    Object.hasOwn(next, 'const') &&
+    (!Object.hasOwn(prev, 'const') || !jsonEqual(prev.const, next.const))
+  ) {
     changes.push({
       path,
       kind: 'narrowed_const',

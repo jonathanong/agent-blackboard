@@ -42,7 +42,10 @@ describe('compileRegisteredSchema', () => {
             version: 1,
             schema: {
               type: 'object',
-              $defs: { stamp: { type: 'string', format: 'date-time' } },
+              $defs: {
+                stamp: { type: 'string', format: 'date-time' },
+                anchored: { $anchor: 'val', type: 'string' },
+              },
               properties: { ts: { $ref: '#/$defs/stamp' } },
             },
           },
@@ -72,7 +75,12 @@ describe('compileRegisteredSchema', () => {
         version: 1,
         schema: {
           type: 'object',
-          properties: { wrapped: { $ref: 'wrapper' }, stamp: { $ref: 'base@1#/$defs/stamp' } },
+          properties: {
+            wrapped: { $ref: 'wrapper' },
+            unpinned: { $ref: 'base' },
+            anchored: { $ref: 'base@1#val' },
+            stamp: { $ref: 'base@1#/$defs/stamp' },
+          },
           required: ['wrapped'],
         },
       },

@@ -11,13 +11,14 @@ describe('validateSchemaDocument', () => {
         tag: { $ref: '#/$defs/tag' },
         author: { $ref: 'common@1#/$defs/author' },
         meta: { $ref: 'metadata' },
+        default: { $ref: 'default-prop@1' },
       },
       allOf: [{ type: 'object' }],
       default: { $ref: 'https://ignored-literal-default.example.com' },
     })
     expect(result).toEqual({
       ok: true,
-      refs: [{ id: 'common', version: 1 }, { id: 'metadata' }],
+      refs: [{ id: 'common', version: 1 }, { id: 'metadata' }, { id: 'default-prop', version: 1 }],
     })
   })
 
@@ -59,6 +60,21 @@ describe('validateSchemaDocument', () => {
     })
     expect(
       validateSchemaDocument({ $id: 'https://example.com/finding.json', type: 'object' }),
+    ).toMatchObject({ ok: false })
+    expect(
+      validateSchemaDocument({
+        type: 'object',
+        properties: { default: { $ref: 'https://evil.example/bypass.json' } },
+      }),
+    ).toMatchObject({ ok: false })
+    expect(
+      validateSchemaDocument({ type: 'object', properties: { x: { $ref: 123 } } }),
+    ).toMatchObject({ ok: false })
+    expect(
+      validateSchemaDocument({
+        type: 'object',
+        properties: { x: { $schema: 'http://json-schema.org/draft-07/schema#' } },
+      }),
     ).toMatchObject({ ok: false })
   })
 })

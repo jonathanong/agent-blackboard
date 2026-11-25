@@ -127,9 +127,9 @@ export async function handleSchemasRoute(
     if (target.versionsList) return listVersions(store, target.id)
     return getOneSchema(store, target.id, target.versionRaw)
   }
+  const adminName = resolveAdminCredential(request.headers.authorization, env)
+  if (!adminName) return unauthorizedResponse()
   if (target.id !== undefined && !target.versionsList && target.versionRaw === undefined) {
-    const adminName = resolveAdminCredential(request.headers.authorization, env)
-    if (!adminName) return unauthorizedResponse()
     if (request.method === 'PUT') return putSchemaRoute(request, store, adminName, target.id)
     if (request.method === 'DELETE') return deprecateSchema(store, adminName, target.id)
   }

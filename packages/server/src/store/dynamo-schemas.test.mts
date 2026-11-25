@@ -96,6 +96,34 @@ describe('DynamoDB schemas read helpers', () => {
     expect(bundle.schemas.find((s) => s.id === 'b')?.versions).toEqual([])
   })
 
+  it('retries inconsistent snapshots and throws schema_conflict when revision keeps moving', async () => {
+    let revCalls = 0
+    const retryDoc = mockDoc((command) => {
+      if (command.constructor.name === 'GetCommand') {
+        expect(command.input.ConsistentRead).toBe(true)
+        revCalls += 1
+        // 1st read returns rev 1, 2nd returns rev 2 (retry!), 3rd & 4th both return rev 2
+        return { Item: { revision: revCalls === 1 ? 1 : 2 } }
+      }
+      expect(command.input.ConsistentRead).toBe(true)
+      return { Items: [HEAD_A] }
+    })
+    const list = await dynamoListSchemas(retryDoc, 'T')
+    expect(list.revision).toBe(2)
+
+    let moving = 0
+    const movingDoc = mockDoc((command) => {
+      if (command.constructor.name === 'GetCommand') {
+        moving += 1
+        return { Item: { revision: moving } }
+      }
+      return { Items: [] }
+    })
+    await expect(dynamoListSchemas(movingDoc, 'T')).rejects.toMatchObject({
+      code: 'schema_conflict',
+    })
+  })
+
   it('handles empty query pages with undefined Items', async () => {
     const doc = mockDoc(() => ({}))
     expect((await dynamoListSchemas(doc, 'T')).schemas).toEqual([])
@@ -128,6 +156,66 @@ describe('DynamoDB schemas write helpers', () => {
     })
     expect(v1.revision).toBe(2)
     expect(v1.versionRecord.version).toBe(1)
+
+    // Successful v2 update asserts transaction items check head v1 and advance revision + version
+    let v2Tx: Record<string, unknown> | undefined
+    const v2Doc = mockDoc((command) => {
+      if (command.constructor.name === 'GetCommand') {
+        const key = command.input.Key as { PK: string }
+        return key.PK === 'SCHEMA_REGISTRY' ? { Item: { revision: 2 } } : { Item: HEAD_A }
+      }
+      v2Tx = command.input
+      return {}
+    })
+    const v2 = await dynamoPutSchemaVersion(v2Doc, 'T', NOW, {
+      id: 'a',
+      schema: { type: 'object', properties: { x: { type: 'string' } } },
+      actor: 'bob',
+      expectedVersion: 1,
+      expectedRevision: 2,
+    })
+    expect(v2.revision).toBe(3)
+    expect(v2.versionRecord.version).toBe(2)
+    const txItems = v2Tx!.TransactItems as Array<Record<string, unknown>>
+    expect(txItems).toHaveLength(3)
+    expect(txItems[1]).toMatchObject({
+      Update: {
+        ConditionExpression: 'latestVersion = :expectedVersion AND deprecatedAt = :null',
+        ExpressionAttributeValues: expect.objectContaining({
+          ':expectedVersion': 1,
+          ':nextVersion': 2,
+        }),
+      },
+    })
+
+    // Pre-tx expectedRevision mismatch rejects immediately
+    await expect(
+      dynamoPutSchemaVersion(v2Doc, 'T', NOW, {
+        id: 'a',
+        schema: { type: 'object' },
+        actor: 'bob',
+        expectedVersion: 1,
+        expectedRevision: 1,
+      }),
+    ).rejects.toMatchObject({ code: 'schema_conflict' })
+
+    // Post-tx cancel with expectedRevision bound rejects immediately without retrying
+    const boundCancelDoc = mockDoc((command) => {
+      if (command.constructor.name === 'GetCommand') {
+        const key = command.input.Key as { PK: string }
+        return key.PK === 'SCHEMA_REGISTRY' ? { Item: { revision: 2 } } : {}
+      }
+      throw canceledError()
+    })
+    await expect(
+      dynamoPutSchemaVersion(boundCancelDoc, 'T', NOW, {
+        id: 'a',
+        schema: { type: 'object' },
+        actor: 'bob',
+        expectedVersion: 0,
+        expectedRevision: 2,
+      }),
+    ).rejects.toMatchObject({ code: 'schema_conflict' })
 
     // Pre-tx deprecated & version mismatch checks
     const deprecatedDoc = mockDoc((command) => {

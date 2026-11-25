@@ -72,6 +72,8 @@ export interface PutSchemaVersionInput {
   actor: string
   /** Expected current `latestVersion` (0 when creating a new schema). */
   expectedVersion: number
+  /** When provided, binds publication to the exact registry revision used for validation/compilation. */
+  expectedRevision?: number
 }
 
 export interface PutSchemaVersionResult {

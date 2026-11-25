@@ -25,7 +25,8 @@ export async function dynamoPutSchemaVersion(
   input: PutSchemaVersionInput,
 ): Promise<PutSchemaVersionResult> {
   const nextVersion = input.expectedVersion + 1
-  for (let attempt = 0; attempt < REVISION_RETRIES; attempt++) {
+  const maxAttempts = input.expectedRevision === undefined ? REVISION_RETRIES : 1
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const [currentRevision, existing] = await Promise.all([
       dynamoGetSchemaRegistryRevision(doc, tableName),
       input.expectedVersion > 0
@@ -39,6 +40,12 @@ export async function dynamoPutSchemaVersion(
       throw new SessionStoreError(
         'schema_conflict',
         `schema ${input.id} was modified concurrently (expected version ${input.expectedVersion})`,
+      )
+    }
+    if (input.expectedRevision !== undefined && currentRevision !== input.expectedRevision) {
+      throw new SessionStoreError(
+        'schema_conflict',
+        `schema registry changed concurrently (expected revision ${input.expectedRevision}, found ${currentRevision})`,
       )
     }
 
@@ -82,7 +89,10 @@ export async function dynamoPutSchemaVersion(
       if (head !== undefined && head.deprecatedAt !== null) {
         throw new SessionStoreError('schema_deprecated', `schema is deprecated: ${input.id}`)
       }
-      if ((head?.latestVersion ?? 0) !== input.expectedVersion) {
+      if (
+        input.expectedRevision !== undefined ||
+        (head?.latestVersion ?? 0) !== input.expectedVersion
+      ) {
         throw new SessionStoreError(
           'schema_conflict',
           `schema ${input.id} was modified concurrently (expected version ${input.expectedVersion})`,

@@ -37,6 +37,12 @@ export class MemorySchemaStore {
         `schema ${input.id} was modified concurrently (expected version ${input.expectedVersion}, found ${currentVersion})`,
       )
     }
+    if (input.expectedRevision !== undefined && this.#revision !== input.expectedRevision) {
+      throw new SessionStoreError(
+        'schema_conflict',
+        `schema registry changed concurrently (expected revision ${input.expectedRevision}, found ${this.#revision})`,
+      )
+    }
     const timestamp = this.#now().toISOString()
     const nextVersion = currentVersion + 1
     this.#revision += 1

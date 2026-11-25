@@ -9,15 +9,31 @@ function stripWeakPrefix(tag: string): string {
   return tag.startsWith('W/') ? tag.slice(2) : tag
 }
 
+/** Splits an HTTP entity-tag list on commas outside quoted entity-tags per RFC 9110. */
+function splitEntityTags(header: string): string[] {
+  const tags: string[] = []
+  let start = 0
+  let inQuotes = false
+  for (let i = 0; i < header.length; i++) {
+    const ch = header[i]
+    if (ch === '"') inQuotes = !inQuotes
+    else if (ch === ',' && !inQuotes) {
+      tags.push(header.slice(start, i).trim())
+      start = i + 1
+    }
+  }
+  tags.push(header.slice(start).trim())
+  return tags
+}
+
 /**
  * Evaluates an HTTP `If-None-Match` header against the current registry ETag,
- * supporting `*`, comma-separated lists, and weak `W/` tags per RFC 9110.
+ * supporting `*`, comma-separated lists (respecting quoted commas), and weak `W/` tags.
  */
 export function etagMatches(ifNoneMatch: string | undefined, currentEtag: string): boolean {
   if (!ifNoneMatch) return false
-  for (const part of ifNoneMatch.split(',')) {
-    const trimmed = part.trim()
-    if (trimmed === '*' || stripWeakPrefix(trimmed) === currentEtag) return true
+  for (const tag of splitEntityTags(ifNoneMatch)) {
+    if (tag === '*' || stripWeakPrefix(tag) === currentEtag) return true
   }
   return false
 }
