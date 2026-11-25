@@ -3,6 +3,8 @@ export interface ClientConfig {
   token: string
   /** Opt in to bounded retries for safe GET requests. */
   readRetry?: ReadRetryOptions
+  /** Optional observer invoked whenever a response carries `x-schema-registry-revision`. */
+  onSchemaRevision?: (revision: number) => void
 }
 
 /** Bounded retry settings for GET requests that fail before a response or transiently. */

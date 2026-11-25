@@ -4,6 +4,7 @@ import { parseArgs } from './args.mjs'
 import type { CliContext } from './context.mjs'
 import { clientConfigFromEnv } from './env.mjs'
 import { CliError } from './errors.mjs'
+import { createRevisionNotifier } from './revision-notice.mjs'
 import { cliSessionId, SESSION_BOOLEAN_FLAGS } from './session-resolution.mjs'
 
 const VALID_FORMATS: readonly EntryWireFormat[] = ['json', 'jsonl', 'markdown']
@@ -19,7 +20,7 @@ function parseFormat(value: string | boolean | undefined): EntryWireFormat {
 export async function runGet(argv: string[], ctx: CliContext): Promise<void> {
   const { flags } = parseArgs(argv, SESSION_BOOLEAN_FLAGS)
   const sessionId = cliSessionId('get', flags, ctx)
-  const response = await getEntriesRaw(clientConfigFromEnv(ctx.env), {
+  const response = await getEntriesRaw(clientConfigFromEnv(ctx.env, createRevisionNotifier(ctx)), {
     sessionId,
     format: parseFormat(flags.format),
   })

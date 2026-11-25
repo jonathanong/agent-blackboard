@@ -10,6 +10,7 @@ import { CliError } from './errors.mjs'
 import { clientConfigFromEnv } from './env.mjs'
 import { runGet } from './get.mjs'
 import { writeLine } from './output.mjs'
+import { runSchemas } from './schemas.mjs'
 import { runSessions } from './sessions.mjs'
 import { runSnapshot } from './snapshot.mjs'
 import { USAGE } from './usage.mjs'
@@ -59,6 +60,9 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
       case 'snapshot':
         await runSnapshot(rest, ctx)
         break
+      case 'schemas':
+        await runSchemas(rest, ctx)
+        break
       case 'mcp':
         await (options.startMcpServer ?? startMcpServer)(clientConfigFromEnv(ctx.env), {
           env: ctx.env,
@@ -67,7 +71,7 @@ export async function runCli(argv: string[], options: RunCliOptions = {}): Promi
         break
       default:
         throw new CliError(
-          `Unknown command: ${command}. Expected one of: sessions, append, get, snapshot, credentials, mcp.`,
+          `Unknown command: ${command}. Expected one of: sessions, append, get, snapshot, schemas, credentials, mcp.`,
         )
     }
     return 0

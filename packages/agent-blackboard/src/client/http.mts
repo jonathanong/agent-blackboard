@@ -101,15 +101,19 @@ async function discard(response: Response): Promise<void> {
   await response.body?.cancel().catch(() => undefined)
 }
 
-/**
- * Issues an authenticated HTTP request and returns the raw `Response`,
- * throwing `AgentBlackboardError` on any non-2xx status. Callers that need the
- * body streamed (not buffered) should read `response.body` directly.
- */
-export async function rawRequest(
+const SCHEMA_REVISION_HEADER = 'x-schema-registry-revision'
+
+function notifySchemaRevision(config: ClientConfig, response: Response): void {
+  const raw = response.headers.get(SCHEMA_REVISION_HEADER)
+  if (raw === null || !/^[0-9]{1,15}$/.test(raw)) return
+  config.onSchemaRevision?.(Number.parseInt(raw, 10))
+}
+
+async function fetchWithRetry(
   config: ClientConfig,
   path: string,
   options: RequestOptions,
+  allowNotModified: boolean,
 ): Promise<Response> {
   const url = buildUrl(config.baseUrl, path, options.query ?? {})
   assertSecureUrl(url)
@@ -127,12 +131,35 @@ export async function rawRequest(
       await delay(retryDelay(retry, attempt))
       continue
     }
-    if (response.ok) return response
+    notifySchemaRevision(config, response)
+    if (response.ok || (allowNotModified && response.status === 304)) return response
     if (!retry || attempt === retry.maxRetries || !RETRYABLE_READ_STATUSES.has(response.status))
       return errorFor(response, options.method, path)
     await discard(response)
     await delay(retryDelay(retry, attempt))
   }
+}
+
+/**
+ * Issues an authenticated HTTP request and returns the raw `Response`,
+ * throwing `AgentBlackboardError` on any non-2xx status. Callers that need the
+ * body streamed (not buffered) should read `response.body` directly.
+ */
+export async function rawRequest(
+  config: ClientConfig,
+  path: string,
+  options: RequestOptions,
+): Promise<Response> {
+  return fetchWithRetry(config, path, options, false)
+}
+
+/** Issues an authenticated GET that treats HTTP 304 Not Modified as a valid response. */
+export async function rawConditionalGet(
+  config: ClientConfig,
+  path: string,
+  options: Omit<RequestOptions, 'method'>,
+): Promise<Response> {
+  return fetchWithRetry(config, path, { ...options, method: 'GET' }, true)
 }
 
 /** Issues an authenticated HTTP request and parses the response body as JSON. */
