@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { sendJson, startHttpFixture } from '../__tests__/http-fixture.mjs'
 import { Schemas } from './schemas.mjs'
 
@@ -134,7 +134,12 @@ describe('Schemas client', () => {
         schemaCount: 0,
         versionCount: 0,
       })
-      expect(() => schemas.validateLocal('finding', {})).toThrow(/schemas pull/)
+      const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(dir)
+      try {
+        expect(() => schemas.validateLocal('finding', {})).toThrow(/schemas pull/)
+      } finally {
+        cwdSpy.mockRestore()
+      }
     } finally {
       await fixture.close()
     }
