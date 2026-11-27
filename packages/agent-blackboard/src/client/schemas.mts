@@ -56,17 +56,23 @@ export class Schemas {
     const dir = resolveSchemasDir(options.cwd ?? process.cwd(), options.env ?? {}, options.dir)
     const source = normalizeRegistrySource(this.#config.baseUrl)
     const local = readLocalBundle(dir, source)
-    const fetched = await fetchSchemaBundleRequest(this.#config, local?.revision)
+    let fetched = await fetchSchemaBundleRequest(this.#config, local?.revision)
     if (fetched.notModified) {
-      const versionCount = local
-        ? local.schemas.reduce((sum, item) => sum + item.versions.length, 0)
-        : 0
-      return {
-        upToDate: true,
-        revision: fetched.revision,
-        schemaCount: local?.schemas.length ?? 0,
-        versionCount,
-        dir,
+      const current = readLocalBundle(dir, source)
+      if (current) {
+        return {
+          upToDate: true,
+          revision: current.revision,
+          schemaCount: current.schemas.length,
+          versionCount: current.schemas.reduce((sum, item) => sum + item.versions.length, 0),
+          dir,
+        }
+      }
+      if (local) {
+        fetched = await fetchSchemaBundleRequest(this.#config)
+      }
+      if (fetched.notModified) {
+        return { upToDate: true, revision: fetched.revision, schemaCount: 0, versionCount: 0, dir }
       }
     }
     const current = readLocalBundle(dir, source)

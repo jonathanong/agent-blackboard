@@ -114,14 +114,26 @@ describe('Schemas client', () => {
 
       // A delayed older-revision pull from the same source never downgrades a newer installed cache
       let delayedResolve: (() => void) | undefined
+      let markFirstReceived: (() => void) | undefined
+      const firstReceived = new Promise<void>((resolve) => {
+        markFirstReceived = resolve
+      })
       let pullCalls = 0
-      const raceFixture = await startHttpFixture(async (_req, res) => {
+      const raceFixture = await startHttpFixture(async (req, res) => {
         pullCalls += 1
         if (pullCalls === 1) {
+          markFirstReceived!()
           await new Promise<void>((resolve) => {
             delayedResolve = resolve
           })
           return sendJson(res, 200, { revision: 1, schemas: [] })
+        }
+        if (pullCalls === 3 && req.headers['if-none-match'] === '"rev-3"') {
+          // Simulate local cache being wiped mid-flight before a 304 arrives
+          rmSync(join(raceDir, 'manifest.json'), { force: true })
+          res.writeHead(304, { 'x-schema-registry-revision': '3' })
+          res.end()
+          return
         }
         sendJson(res, 200, {
           revision: 3,
@@ -149,10 +161,11 @@ describe('Schemas client', () => {
           ],
         })
       })
+      const raceDir = makeTempDir()
       try {
-        const raceDir = makeTempDir()
         const raceSchemas = new Schemas({ baseUrl: raceFixture.baseUrl, token: 't' })
         const slowOlder = raceSchemas.pull({ dir: raceDir })
+        await firstReceived
         const fastNewer = await raceSchemas.pull({ dir: raceDir })
         expect(fastNewer).toEqual({
           upToDate: false,
@@ -164,6 +177,14 @@ describe('Schemas client', () => {
         delayedResolve!()
         expect(await slowOlder).toEqual({
           upToDate: true,
+          revision: 3,
+          schemaCount: 1,
+          versionCount: 1,
+          dir: raceDir,
+        })
+        // If cache disappears mid-flight before a 304, pull repairs with an unconditional refetch
+        expect(await raceSchemas.pull({ dir: raceDir })).toEqual({
+          upToDate: false,
           revision: 3,
           schemaCount: 1,
           versionCount: 1,
