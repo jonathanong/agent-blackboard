@@ -209,7 +209,7 @@ the service. `lastEntryAt` is `null` until the first append and advances monoton
 
 Create one instance with `new Entries(config: ClientConfig)`.
 
-### `append(input): Promise<SessionEntry>`
+### `append(input): Promise<AppendEntryResult>`
 
 ```ts
 interface AppendEntryInput {
@@ -458,13 +458,14 @@ The package root exports:
 
 - configuration: `ClientConfig`, `ReadRetryOptions`, `AuthOptions`;
 - sessions: `Session`, `CreateSessionInput`, `PatchSessionInput`, `ListSessionsQuery`;
-- entries: `SessionEntry`, `AppendEntryInput`, `GetEntriesQuery`, `GetRawEntriesQuery`,
-  `EntryWireFormat`, `StructuredEntryFormat`;
+- entries: `SessionEntry`, `AppendEntryInput`, `AppendEntryResult`, `GetEntriesQuery`,
+  `GetRawEntriesQuery`, `EntryWireFormat`, `StructuredEntryFormat`;
 - credentials: `CredentialCreated`, `CredentialSummary`;
 - schemas: `Schemas`, `LocalSchemaOptions`, `resolveSchemasDir`, `validateAgainstBundle`,
-  `validateAgainstLocalSchemas`, `SchemaSummary`, `SchemaVersionRecord`, `SchemaWithVersions`,
-  `SchemaBundle`, `SchemaVersionDetail`, `ListSchemasResult`, `ListSchemaVersionsResult`,
-  `PullSchemasResult`, `SchemaValidationIssue`, `SchemaValidationResult`;
+  `validateAgainstLocalSchemas`, `SchemaSummary`, `SchemaVersionMode`, `SchemaVersionRecord`,
+  `SchemaWithVersions`, `SchemaBundle`, `SchemaVersionDetail`, `ListSchemasResult`,
+  `ListSchemaVersionsResult`, `PullSchemasResult`, `SchemaValidationIssue`,
+  `SchemaValidationResult`, `SchemaShadowWarning`;
 - snapshots: `Snapshots`, `partitionSnapshot`, `cleanupSnapshotPartitions`, `SnapshotSelection`,
   `SnapshotManifest`, `SnapshotCounts`, `SnapshotChecksum`, `SnapshotVerification`,
   `SnapshotExportOptions`, `SnapshotExportResult`, `SnapshotPartitionOptions`,

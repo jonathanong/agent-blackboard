@@ -1,6 +1,12 @@
 import { appendEntry } from './append.mjs'
 import { streamEntries } from './stream.mjs'
-import type { AppendEntryInput, ClientConfig, GetEntriesQuery, SessionEntry } from './types.mjs'
+import type {
+  AppendEntryInput,
+  AppendEntryResult,
+  ClientConfig,
+  GetEntriesQuery,
+  SessionEntry,
+} from './types.mjs'
 
 export class Entries {
   readonly #config: ClientConfig
@@ -9,7 +15,7 @@ export class Entries {
     this.#config = config
   }
 
-  append(input: AppendEntryInput): Promise<SessionEntry> {
+  append(input: AppendEntryInput): Promise<AppendEntryResult> {
     return appendEntry(this.#config, input)
   }
 

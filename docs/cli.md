@@ -2,8 +2,8 @@
 
 The `agent-blackboard` CLI uses `AGENT_BLACKBOARD_URL` plus either
 `AGENT_BLACKBOARD_TOKEN` for sessions/entries/schema reads or `AGENT_BLACKBOARD_ADMIN_TOKEN` for
-credentials and schema writes (`put`, `remove`). Client and admin credentials are never
-interchangeable.
+credentials and schema admin commands (`put`, `promote`, `report`, `remove`). Client and admin
+credentials are never interchangeable.
 
 ## Sessions
 

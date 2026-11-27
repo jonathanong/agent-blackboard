@@ -134,10 +134,13 @@ Entry writes naming `schemaId` are validated against the registered JSON Schema 
 `AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT` controls the server-wide policy: `optional` (default — allows
 entries without `schemaId`, enforces named schemas unless that version is in `shadow` mode),
 `shadow` (validates every entry naming a schema but rejects nothing), or `required` (also rejects
-entries missing `schemaId`). When a validation fails in per-version or global shadow mode, the
-server accepts the entry (`201`), attaches a `warning` object (`code`, `message`, and diagnostic
-`details`) to the write response, and records metadata plus diagnostics server-side without the
-entry payload.
+entries missing `schemaId`). When a newer version is registered in `shadow` mode on top of an
+already-enforced version, unpinned writes continue enforcing the latest prior enforced version and
+also shadow-validate against the newer shadow version. When a validation fails in per-version or
+global shadow mode, the server accepts the entry (`201`), attaches a `warning` object (`code`,
+`message`, and diagnostic `details`) to the write response, omits `schemaId`/`schemaVersion` unless
+the entry satisfied an enforced baseline version, and records metadata plus diagnostics server-side
+without the entry payload.
 
 ## Authentication
 

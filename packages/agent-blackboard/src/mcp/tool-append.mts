@@ -1,13 +1,13 @@
 import { appendEntry } from '../client/append.mjs'
 import { toolSessionId, type SessionResolutionContext } from './session-resolution.mjs'
 import { expectObject, optionalPositiveInt, requiredString } from './validate.mjs'
-import type { ClientConfig, SessionEntry } from '../client/types.mjs'
+import type { AppendEntryResult, ClientConfig } from '../client/types.mjs'
 
 export function handleEntryAppend(
   args: Record<string, unknown>,
   config: ClientConfig,
   resolution?: SessionResolutionContext,
-): Promise<SessionEntry> {
+): Promise<AppendEntryResult> {
   const schemaId =
     args.schemaId === undefined ? undefined : requiredString(args.schemaId, 'schemaId')
   const schemaVersion = optionalPositiveInt(args.schemaVersion, 'schemaVersion')
