@@ -7,8 +7,8 @@
     "email": "jonathanrichardong@gmail.com",
     "url": "https://github.com/jonathanong"
   },
-  "homepage": "https://github.com/jonathanong/agent-blackboard",
-  "repository": "https://github.com/jonathanong/agent-blackboard",
+  "homepage": "https://github.com/jongleberry/agent-blackboard",
+  "repository": "https://github.com/jongleberry/agent-blackboard",
   "license": "MIT",
   "keywords": ["entries", "agent", "mcp", "retrospective", "codex"],
   "skills": "./skills/",
@@ -20,9 +20,9 @@
     "developerName": "Jonathan Ong",
     "category": "Coding",
     "capabilities": ["Interactive", "Write"],
-    "websiteURL": "https://github.com/jonathanong/agent-blackboard",
-    "privacyPolicyURL": "https://github.com/jonathanong/agent-blackboard",
-    "termsOfServiceURL": "https://github.com/jonathanong/agent-blackboard",
+    "websiteURL": "https://github.com/jongleberry/agent-blackboard",
+    "privacyPolicyURL": "https://github.com/jongleberry/agent-blackboard",
+    "termsOfServiceURL": "https://github.com/jongleberry/agent-blackboard",
     "defaultPrompt": [
       "Record a note about what I just did",
       "Get my entries for this session",

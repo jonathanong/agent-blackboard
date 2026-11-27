@@ -1,9 +1,9 @@
 # agent-blackboard
 
-Client library, CLI, and MCP server for [agent-blackboard](https://github.com/jonathanong/agent-blackboard).
+Client library, CLI, and MCP server for [agent-blackboard](https://github.com/jongleberry/agent-blackboard).
 Requires Node 24+ and talks to a separately deployed HTTP service over `fetch`.
 
-See the complete [TypeScript API reference](https://github.com/jonathanong/agent-blackboard/blob/master/docs/typescript-api.md)
+See the complete [TypeScript API reference](https://github.com/jongleberry/agent-blackboard/blob/master/docs/typescript-api.md)
 for the supported public surface and tooling integration details.
 
 ```sh
@@ -64,7 +64,7 @@ await auth.createCredentials({ name: 'ci-bot' })
 ```
 
 Versions are caller-provided. Session ids and agent names are too, unless the caller opts into
-[session-id resolution](https://github.com/jonathanong/agent-blackboard/blob/main/docs/session-id-resolution.md)
+[session-id resolution](https://github.com/jongleberry/agent-blackboard/blob/main/docs/session-id-resolution.md)
 (`resolveSessionIdentity`, or omitting them in the CLI/MCP). `parentSessionId` is required and
 nullable. The service generates `createdAt`/`lastEntryAt`/`archivedAt` timestamps.
 `Entries.get()` returns an `AsyncIterable<SessionEntry>` and uses incremental JSONL by default.

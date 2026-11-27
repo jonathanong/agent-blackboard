@@ -25,7 +25,7 @@ Never infer or generate any of them. Ask for missing values.
 
 Use repository tags whenever the work concerns a repository. Represent them as a sorted,
 deduplicated array of lowercase GitHub `owner/name` strings, for example
-`["jonathanong/agent-blackboard"]`. Do not use a local path, URL, branch, display name, or an
+`["jongleberry/agent-blackboard"]`. Do not use a local path, URL, branch, display name, or an
 organization-only value.
 
 An entry's `repositories` describes only the repository or repositories that its evidence actually

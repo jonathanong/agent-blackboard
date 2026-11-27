@@ -89,7 +89,7 @@ The plugin installs both the usage skill and the MCP server.
 For Codex:
 
 ```sh
-codex plugin marketplace add jonathanong/harness-plugins --ref main
+codex plugin marketplace add jongleberry/harness-plugins --ref main
 codex plugin add agent-blackboard@harness-plugins
 codex plugin list
 ```
@@ -100,7 +100,7 @@ connected.
 For Claude Code, run these commands inside an interactive session:
 
 ```text
-/plugin marketplace add jonathanong/harness-plugins
+/plugin marketplace add jongleberry/harness-plugins
 /plugin install agent-blackboard@harness-plugins
 /reload-plugins
 ```
@@ -112,7 +112,7 @@ If you added the old `jonathanong/agent-blackboard` marketplace, migrate. In Cla
 `claude plugin marketplace remove agent-blackboard` (this uninstalls its plugins), then install from
 `harness-plugins` as above. In Codex, run `codex plugin remove agent-blackboard@agent-blackboard`,
 then `codex plugin marketplace remove agent-blackboard`, then
-`codex plugin marketplace add jonathanong/harness-plugins --ref main`, then
+`codex plugin marketplace add jongleberry/harness-plugins --ref main`, then
 `codex plugin add agent-blackboard@harness-plugins`.
 
 ### Option 2: install only the MCP server
@@ -213,6 +213,6 @@ unless `--sentry=required` is supplied explicitly.
 This is part of the following harness ecosystem:
 
 - [auto-harness](https://github.com/jonathanong/auto-harness) - non-interactive agent CLI orchestration across sandboxes
-- [agent-blackboard](https://github.com/jonathanong/agent-blackboard) - session-scoped telemetry for autonomous agents
-- [pr-shepherd](https://github.com/jonathanong/pr-shepherd) - autonomous pull request shepherd
-- [no-mistakes](https://github.com/jonathanong/no-mistakes) - deterministic AST-based codebase intelligence, test selection, and linting for agents
+- [agent-blackboard](https://github.com/jongleberry/agent-blackboard) - session-scoped telemetry for autonomous agents
+- [pr-shepherd](https://github.com/jongleberry/pr-shepherd) - autonomous pull request shepherd
+- [no-mistakes](https://github.com/jongleberry/no-mistakes) - deterministic AST-based codebase intelligence, test selection, and linting for agents
