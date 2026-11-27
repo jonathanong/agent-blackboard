@@ -1,4 +1,10 @@
-import type { SchemaRecord, SchemaVersionRecord } from '../core/types.mjs'
+import type {
+  SchemaRecord,
+  SchemaShadowFailureRecord,
+  SchemaValidationIssue,
+  SchemaVersionRecord,
+} from '../core/types.mjs'
+import { formatSchemaRef } from '../schemas/id.mjs'
 import {
   SCHEMA_REGISTRY_PK,
   SCHEMA_REGISTRY_SK,
@@ -7,6 +13,46 @@ import {
   schemaSk,
   schemaVersionSk,
 } from './dynamo-keys.mjs'
+
+export function itemToSchemaRecord(item: Record<string, unknown>): SchemaRecord {
+  return {
+    id: item.id as string,
+    latestVersion: item.latestVersion as number,
+    deprecatedAt: (item.deprecatedAt as string | null) ?? null,
+    deprecatedBy: (item.deprecatedBy as string | null) ?? null,
+    createdAt: item.createdAt as string,
+    createdBy: item.createdBy as string,
+    updatedAt: item.updatedAt as string,
+    updatedBy: item.updatedBy as string,
+  }
+}
+
+export function itemToSchemaVersion(item: Record<string, unknown>): SchemaVersionRecord {
+  const id = item.id as string
+  const version = item.version as number
+  return {
+    id,
+    version,
+    ref: formatSchemaRef(id, version),
+    schema: item.schema as Record<string, unknown>,
+    mode: item.mode === 'shadow' ? 'shadow' : 'enforced',
+    createdAt: item.createdAt as string,
+    createdBy: item.createdBy as string,
+    promotedAt: (item.promotedAt as string | null) ?? null,
+    promotedBy: (item.promotedBy as string | null) ?? null,
+  }
+}
+
+export function isRetryableTransactionCanceled(error: unknown): boolean {
+  if (!(error instanceof Error) || error.name !== 'TransactionCanceledException') return false
+  const reasons = (error as { CancellationReasons?: Array<{ Code?: string }> }).CancellationReasons
+  if (!reasons || reasons.length === 0) return true
+  const codes = reasons.map((r) => r.Code).filter((c) => c !== undefined && c !== 'None')
+  return (
+    codes.length > 0 &&
+    codes.every((c) => c === 'ConditionalCheckFailed' || c === 'TransactionConflict')
+  )
+}
 
 export function registryMetaTxItem(
   tableName: string,
@@ -90,5 +136,53 @@ export function schemaVersionTxItem(tableName: string, versionRecord: SchemaVers
       },
       ConditionExpression: 'attribute_not_exists(PK)',
     },
+  }
+}
+
+const MAX_SHADOW_DETAILS_BYTES = 32_768
+const MAX_SHADOW_FIELD_CHARS = 512
+
+function truncateShadowField(value: string): string {
+  return value.length <= MAX_SHADOW_FIELD_CHARS
+    ? value
+    : `${value.slice(0, MAX_SHADOW_FIELD_CHARS)}…`
+}
+
+/** Bounds stored shadow failure diagnostics well below DynamoDB's 400 KiB item limit. */
+export function boundShadowDetails(
+  details: readonly SchemaValidationIssue[],
+): SchemaValidationIssue[] {
+  const bounded: SchemaValidationIssue[] = []
+  let bytes = 2
+  for (const issue of details) {
+    const clean: SchemaValidationIssue = {
+      instancePath: truncateShadowField(issue.instancePath),
+      schemaPath: truncateShadowField(issue.schemaPath),
+      keyword: truncateShadowField(issue.keyword),
+      message: truncateShadowField(issue.message),
+    }
+    const size = Buffer.byteLength(JSON.stringify(clean), 'utf8') + (bounded.length > 0 ? 1 : 0)
+    if (bytes + size > MAX_SHADOW_DETAILS_BYTES) break
+    bounded.push(clean)
+    bytes += size
+  }
+  return bounded
+}
+
+export function maxIsoTimestamp(a: string | null, b: string | null): string | null {
+  if (a === null) return b
+  if (b === null) return a
+  return a >= b ? a : b
+}
+
+export function itemToShadowFailure(item: Record<string, unknown>): SchemaShadowFailureRecord {
+  return {
+    schemaId: item.schemaId as string,
+    schemaVersion: item.schemaVersion as number,
+    sessionId: item.sessionId as string,
+    occurredAt: item.occurredAt as string,
+    code: item.code as string,
+    message: item.message as string,
+    details: (item.details as SchemaValidationIssue[]) ?? [],
   }
 }

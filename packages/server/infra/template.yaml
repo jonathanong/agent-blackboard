@@ -55,6 +55,15 @@ Parameters:
     Default: ''
     Description: Exact 40-character Git commit deployed by the CLI.
 
+  SchemaEnforcement:
+    Type: String
+    Default: optional
+    AllowedValues: [optional, shadow, required]
+    Description: >-
+      Controls write-time schema enforcement: optional (validate entries that
+      name a schema), shadow (validate every entry naming a schema without
+      rejecting), or required (reject entries missing a schemaId).
+
 Resources:
   AgentBlackboardTable:
     Type: AWS::DynamoDB::Table
@@ -168,6 +177,7 @@ Resources:
           SENTRY_DSN: !Ref SentryDsn
           SENTRY_ENVIRONMENT: !Ref SentryEnvironment
           SENTRY_RELEASE: !Ref SentryRelease
+          AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT: !Ref SchemaEnforcement
 
   # AuthType: NONE makes the Function URL publicly reachable — the handler
   # itself is responsible for validating the bearer token on every request

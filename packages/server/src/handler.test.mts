@@ -242,21 +242,30 @@ describe('realStore', () => {
 
 describe('adminEnv', () => {
   const KEY = 'AGENT_BLACKBOARD_ADMIN_CREDENTIALS'
+  const ENFORCE_KEY = 'AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT'
   const original = process.env[KEY]
+  const originalEnforce = process.env[ENFORCE_KEY]
 
   afterEach(() => {
     if (original === undefined) delete process.env[KEY]
     else process.env[KEY] = original
+    if (originalEnforce === undefined) delete process.env[ENFORCE_KEY]
+    else process.env[ENFORCE_KEY] = originalEnforce
   })
 
-  it('returns {} when AGENT_BLACKBOARD_ADMIN_CREDENTIALS is unset', () => {
+  it('returns {} when server env vars are unset', () => {
     delete process.env[KEY]
+    delete process.env[ENFORCE_KEY]
     expect(adminEnv()).toEqual({})
   })
 
-  it('returns { AGENT_BLACKBOARD_ADMIN_CREDENTIALS } when set', () => {
+  it('returns configured admin credentials and schema enforcement mode when set', () => {
     process.env[KEY] = 'token123'
-    expect(adminEnv()).toEqual({ AGENT_BLACKBOARD_ADMIN_CREDENTIALS: 'token123' })
+    process.env[ENFORCE_KEY] = 'required'
+    expect(adminEnv()).toEqual({
+      AGENT_BLACKBOARD_ADMIN_CREDENTIALS: 'token123',
+      AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT: 'required',
+    })
   })
 })
 

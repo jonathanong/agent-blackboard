@@ -38,3 +38,19 @@ export function schemaVersionPrefix(id: string): string {
 export function schemaVersionSk(id: string, version: number): string {
   return `${schemaVersionPrefix(id)}${String(version).padStart(10, '0')}`
 }
+
+export function schemaShadowCountsPk(id: string): string {
+  return `SCHEMA_SHADOW_COUNTS#${id}`
+}
+
+export function schemaShadowCountSk(version: number): string {
+  return `V#${String(version).padStart(10, '0')}`
+}
+
+export function schemaShadowFailuresPk(id: string, version: number): string {
+  return `SCHEMA_SHADOW_FAILURES#${id}#V#${String(version).padStart(10, '0')}`
+}
+
+export function schemaShadowFailureSk(occurredAt: string, uniqueId: string): string {
+  return `${occurredAt}#${uniqueId}`
+}

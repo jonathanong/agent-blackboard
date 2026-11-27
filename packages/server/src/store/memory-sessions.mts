@@ -122,6 +122,8 @@ export class MemorySessionStore {
       sessionId: input.sessionId,
       createdAt: new Date(timestamp).toISOString(),
       data: input.data,
+      ...(input.schemaId !== undefined ? { schemaId: input.schemaId } : {}),
+      ...(input.schemaVersion !== undefined ? { schemaVersion: input.schemaVersion } : {}),
     }
     this.#entries.set(this.#entryKey(input.credId, input.sessionId, timestamp), entry)
     this.#sessions.set(sessionKey, { ...session, lastEntryAt: entry.createdAt })

@@ -6,6 +6,7 @@ import type {
   GetSchemaResult,
   ListSchemasResult,
   ListSchemaVersionsResult,
+  PromoteSchemaVersionResult,
   PutSchemaVersionInput,
   PutSchemaVersionResult,
 } from './store.mjs'
@@ -69,8 +70,11 @@ export class MemorySchemaStore {
       version: nextVersion,
       ref: formatSchemaRef(input.id, nextVersion),
       schema: structuredClone(input.schema),
+      mode: input.mode ?? 'enforced',
       createdAt: timestamp,
       createdBy: input.actor,
+      promotedAt: null,
+      promotedBy: null,
     }
     this.#summaries.set(input.id, summary)
     const list = this.#versions.get(input.id) ?? []
@@ -80,6 +84,44 @@ export class MemorySchemaStore {
       revision: this.#revision,
       summary: { ...summary },
       versionRecord: { ...versionRecord, schema: structuredClone(versionRecord.schema) },
+    }
+  }
+
+  promoteSchemaVersion(id: string, version: number, actor: string): PromoteSchemaVersionResult {
+    const summary = this.#summaries.get(id)
+    const versions = this.#versions.get(id)
+    const index = versions?.findIndex((v) => v.version === version) ?? -1
+    if (!summary || !versions || index < 0) {
+      throw new SessionStoreError('schema_not_found', `schema version not found: ${id}@${version}`)
+    }
+    if (summary.deprecatedAt !== null) {
+      throw new SessionStoreError('schema_deprecated', `schema is deprecated: ${id}`)
+    }
+    const existing = versions[index]!
+    if (existing.mode === 'enforced') {
+      return {
+        revision: this.#revision,
+        summary: { ...summary },
+        versionRecord: { ...existing, schema: structuredClone(existing.schema) },
+        alreadyEnforced: true,
+      }
+    }
+    const timestamp = this.#now().toISOString()
+    this.#revision += 1
+    const updatedSummary: SchemaRecord = { ...summary, updatedAt: timestamp, updatedBy: actor }
+    const updatedVersion: SchemaVersionRecord = {
+      ...existing,
+      mode: 'enforced',
+      promotedAt: timestamp,
+      promotedBy: actor,
+    }
+    this.#summaries.set(id, updatedSummary)
+    versions[index] = updatedVersion
+    return {
+      revision: this.#revision,
+      summary: { ...updatedSummary },
+      versionRecord: { ...updatedVersion, schema: structuredClone(updatedVersion.schema) },
+      alreadyEnforced: false,
     }
   }
 

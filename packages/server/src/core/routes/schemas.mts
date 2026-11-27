@@ -13,12 +13,15 @@ import {
 import type { HandlerRequest, HandlerResponse } from '../types.mjs'
 import { etagMatches, revisionHeaders, schemaRegistryEtag } from './schemas-etag.mjs'
 import { putSchemaRoute } from './schemas-put.mjs'
+import { getSchemaShadowReportRoute, promoteSchemaRoute } from './schemas-shadow.mjs'
 import { storeErrorResponse } from './store-error.mjs'
 
 export interface SchemaRouteTarget {
   id?: string
   versionsList?: boolean
   versionRaw?: string
+  promote?: boolean
+  report?: boolean
 }
 
 async function authorizeRead(
@@ -72,8 +75,11 @@ async function getOneSchema(
       version: found.versionRecord.version,
       ref: found.versionRecord.ref,
       schema: found.versionRecord.schema,
+      mode: found.versionRecord.mode,
       versionCreatedAt: found.versionRecord.createdAt,
       versionCreatedBy: found.versionRecord.createdBy,
+      promotedAt: found.versionRecord.promotedAt,
+      promotedBy: found.versionRecord.promotedBy,
       revision: found.revision,
     },
     revisionHeaders(found.revision),
@@ -122,14 +128,30 @@ export async function handleSchemasRoute(
   target: SchemaRouteTarget = {},
 ): Promise<HandlerResponse> {
   if (request.method === 'GET') {
+    if (target.report && target.id !== undefined) {
+      if (!resolveAdminCredential(request.headers.authorization, env)) return unauthorizedResponse()
+      return getSchemaShadowReportRoute(request, store, target.id, target.versionRaw)
+    }
     if (!(await authorizeRead(request, store, env))) return unauthorizedResponse()
     if (target.id === undefined) return listOrBundleSchemas(request, store)
     if (target.versionsList) return listVersions(store, target.id)
+    if (target.promote) return notFoundResponse()
     return getOneSchema(store, target.id, target.versionRaw)
   }
   const adminName = resolveAdminCredential(request.headers.authorization, env)
   if (!adminName) return unauthorizedResponse()
-  if (target.id !== undefined && !target.versionsList && target.versionRaw === undefined) {
+  if (target.promote && target.id !== undefined && target.versionRaw !== undefined) {
+    if (request.method === 'POST') {
+      return promoteSchemaRoute(store, adminName, target.id, target.versionRaw)
+    }
+    return notFoundResponse()
+  }
+  if (
+    target.id !== undefined &&
+    !target.versionsList &&
+    target.versionRaw === undefined &&
+    !target.report
+  ) {
     if (request.method === 'PUT') return putSchemaRoute(request, store, adminName, target.id)
     if (request.method === 'DELETE') return deprecateSchema(store, adminName, target.id)
   }

@@ -35,9 +35,12 @@ export async function putSchemaRoute(
       : errorResponse(400, 'body must be a JSON object')
   }
   if (!isPlainObject(parsed.value)) return errorResponse(400, 'body must be a JSON object')
-  const { schema, breaking } = parsed.value
+  const { schema, breaking, shadow } = parsed.value
   if (breaking !== undefined && typeof breaking !== 'boolean') {
     return errorResponse(400, 'breaking must be a boolean')
+  }
+  if (shadow !== undefined && typeof shadow !== 'boolean') {
+    return errorResponse(400, 'shadow must be a boolean')
   }
   const docCheck = validateSchemaDocument(schema)
   if (!docCheck.ok) return errorResponse(400, docCheck.error)
@@ -77,6 +80,7 @@ export async function putSchemaRoute(
         actor: adminName,
         expectedVersion,
         expectedRevision: bundle.revision,
+        ...(shadow ? { mode: 'shadow' } : {}),
       })
       return jsonResponse(
         201,

@@ -7,8 +7,8 @@ Usage:
   agent-blackboard sessions get <id>
   agent-blackboard sessions patch <id> --data <json>
   agent-blackboard sessions archive <id>
-  agent-blackboard append [--session-id <id>] <json>
-  agent-blackboard append [--session-id <id>] --file <json|markdown|text>
+  agent-blackboard append [--session-id <id>] [--schema <id>[@<version>]] <json>
+  agent-blackboard append [--session-id <id>] [--schema <id>[@<version>]] --file <json|markdown|text>
   agent-blackboard get [--session-id <id>] [--format json|jsonl|markdown]
   agent-blackboard snapshot export [--path <absolute-path>] [--agent <name>] [--version <version>]
     [--parent-session-id <id>|--root-only] [--data <json>] [--inactive-for-hours <hours>]
@@ -16,7 +16,9 @@ Usage:
     [--max-bytes <bytes>] [--checksum <sha256>] [--sessions <count> --entries <count> --records <count> --bytes <count>]
   agent-blackboard snapshot cleanup [--path <generated-snapshot>] [--directory <generated-partition-directory>] --cleanup-token <token>
   agent-blackboard schemas pull [--dir <path>]
-  agent-blackboard schemas put <id> <file> [--breaking]
+  agent-blackboard schemas put <id> <file> [--breaking] [--shadow]
+  agent-blackboard schemas promote <id>@<version>
+  agent-blackboard schemas report <id>[@<version>] [--limit <n>]
   agent-blackboard schemas remove <id>
   agent-blackboard schemas list
   agent-blackboard schemas get <id>[@<version>]

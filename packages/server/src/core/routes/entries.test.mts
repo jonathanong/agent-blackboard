@@ -106,4 +106,115 @@ describe('entries route', () => {
     )
     expect(response.status).toBe(503)
   })
+
+  it('enforces registered schemas on entry writes while keeping historical entries readable', async () => {
+    await store.putSchemaVersion({
+      id: 'finding',
+      schema: {
+        type: 'object',
+        properties: { title: { type: 'string' } },
+        required: ['title'],
+      },
+      actor: 'ops',
+      expectedVersion: 0,
+    })
+
+    const created = await handleEntriesRoute(
+      request({ method: 'POST', body: { data: { title: 'flaky retry' }, schemaId: 'finding' } }),
+      store,
+      's',
+      { AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT: 'required' },
+    )
+    expect(created.status).toBe(201)
+    expect(await json(created)).toMatchObject({
+      schemaId: 'finding',
+      schemaVersion: 1,
+      data: { title: 'flaky retry' },
+    })
+
+    const missingSchema = await handleEntriesRoute(
+      request({ method: 'POST', body: { data: { title: 'no schema' } } }),
+      store,
+      's',
+      { AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT: 'required' },
+    )
+    expect(missingSchema.status).toBe(400)
+    expect(await json(missingSchema)).toMatchObject({ code: 'schema_required' })
+
+    const invalidPayload = await handleEntriesRoute(
+      request({ method: 'POST', body: { data: { title: 123 }, schemaId: 'finding' } }),
+      store,
+      's',
+    )
+    expect(invalidPayload.status).toBe(400)
+    expect(await json(invalidPayload)).toMatchObject({ code: 'schema_validation_failed' })
+
+    // Deprecating rejects new writes, but prior entries remain readable
+    await store.deprecateSchema('finding', 'ops')
+    const afterDep = await handleEntriesRoute(
+      request({ method: 'POST', body: { data: { title: 'late' }, schemaId: 'finding' } }),
+      store,
+      's',
+    )
+    expect(afterDep.status).toBe(400)
+    expect(await json(afterDep)).toMatchObject({ code: 'schema_deprecated' })
+
+    const readBack = await handleEntriesRoute(request({ query: { format: 'json' } }), store, 's')
+    expect(readBack.status).toBe(200)
+    expect(await json(readBack)).toHaveLength(1)
+  })
+
+  it('accepts shadow validation failures with a warning, records metadata without payload, and isolates recording errors', async () => {
+    await store.putSchemaVersion({
+      id: 'finding',
+      schema: {
+        type: 'object',
+        properties: { title: { type: 'string' } },
+        required: ['title'],
+      },
+      actor: 'ops',
+      expectedVersion: 0,
+      mode: 'shadow',
+    })
+
+    const res = await handleEntriesRoute(
+      request({
+        method: 'POST',
+        body: { data: { sensitiveNote: 'secret-value-123' }, schemaId: 'finding' },
+      }),
+      store,
+      's',
+    )
+    expect(res.status).toBe(201)
+    expect(await json(res)).toMatchObject({
+      sessionId: 's',
+      schemaId: 'finding',
+      schemaVersion: 1,
+      warning: {
+        code: 'schema_validation_failed',
+        schema: 'finding@1',
+        details: [expect.objectContaining({ keyword: 'required' })],
+      },
+    })
+
+    const report = await store.getSchemaShadowReport('finding', { version: 1 })
+    expect(report?.totalFailures).toBe(1)
+    expect(report?.recentFailures[0]).toMatchObject({
+      schemaId: 'finding',
+      schemaVersion: 1,
+      sessionId: 's',
+      code: 'schema_validation_failed',
+    })
+    expect(JSON.stringify(report)).not.toContain('secret-value-123')
+
+    // Recording errors never fail the accepted entry write
+    vi.spyOn(store, 'recordSchemaShadowFailure').mockRejectedValueOnce(new Error('telemetry down'))
+    const isolated = await handleEntriesRoute(
+      request({ method: 'POST', body: { data: { bad: true }, schemaId: 'finding' } }),
+      store,
+      's',
+    )
+    expect(isolated.status).toBe(201)
+    expect(await json(isolated)).toMatchObject({ warning: { code: 'schema_validation_failed' } })
+  })
 })

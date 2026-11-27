@@ -64,5 +64,21 @@ export function runEntriesConformance(makeStore: () => BlackboardStore): void {
       expect(await collect(store.getEntries(credA, SESSION_ID))).toEqual([entryA])
       expect(await collect(store.getEntries(credB, SESSION_ID))).toEqual([entryB])
     })
+
+    it('round-trips optional schemaId and schemaVersion on entries', async () => {
+      const store = makeStore()
+      const credId = randomUUID()
+      await createTestSession(store, credId, SESSION_ID, null)
+      const entry = await store.appendEntry({
+        credId,
+        sessionId: SESSION_ID,
+        data: { title: 'bug' },
+        schemaId: 'finding',
+        schemaVersion: 2,
+      })
+      expect(entry.schemaId).toBe('finding')
+      expect(entry.schemaVersion).toBe(2)
+      expect(await collect(store.getEntries(credId, SESSION_ID))).toEqual([entry])
+    })
   })
 }

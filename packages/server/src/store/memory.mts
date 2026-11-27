@@ -1,5 +1,12 @@
-import type { CredentialRecord, SchemaBundle, Session, SessionEntry } from '../core/types.mjs'
+import type {
+  CredentialRecord,
+  SchemaBundle,
+  SchemaShadowReport,
+  Session,
+  SessionEntry,
+} from '../core/types.mjs'
 import { MemoryCredentialStore } from './memory-credentials.mjs'
+import { MemorySchemaShadowStore } from './memory-schemas-shadow.mjs'
 import { MemorySchemaStore } from './memory-schemas.mjs'
 import { MemorySessionStore } from './memory-sessions.mjs'
 import type {
@@ -8,14 +15,17 @@ import type {
   DeprecateSchemaResult,
   GetEntriesOptions,
   GetSchemaResult,
+  GetSchemaShadowReportOptions,
   ListSchemaVersionsResult,
   ListSchemasResult,
   ListSessionsQuery,
   ListSessionsResult,
   NewSession,
   NewSessionEntry,
+  PromoteSchemaVersionResult,
   PutSchemaVersionInput,
   PutSchemaVersionResult,
+  RecordSchemaShadowFailureInput,
   SessionPatch,
 } from './store.mjs'
 
@@ -25,12 +35,15 @@ export interface MemoryStoreOptions {
 
 /** In-memory `BlackboardStore` for unit tests and local dev. */
 export class MemoryBlackboardStore implements BlackboardStore {
+  readonly #now: () => Date
   readonly #sessions: MemorySessionStore
   readonly #credentials: MemoryCredentialStore
   readonly #schemas: MemorySchemaStore
+  readonly #shadow = new MemorySchemaShadowStore()
 
   constructor(options: MemoryStoreOptions = {}) {
     const now = options.now ?? ((): Date => new Date())
+    this.#now = now
     this.#sessions = new MemorySessionStore(now)
     this.#credentials = new MemoryCredentialStore(now)
     this.#schemas = new MemorySchemaStore(now)
@@ -92,6 +105,14 @@ export class MemoryBlackboardStore implements BlackboardStore {
     return this.#schemas.putSchemaVersion(input)
   }
 
+  async promoteSchemaVersion(
+    id: string,
+    version: number,
+    actor: string,
+  ): Promise<PromoteSchemaVersionResult> {
+    return this.#schemas.promoteSchemaVersion(id, version, actor)
+  }
+
   async deprecateSchema(id: string, actor: string): Promise<DeprecateSchemaResult> {
     return this.#schemas.deprecateSchema(id, actor)
   }
@@ -110,5 +131,23 @@ export class MemoryBlackboardStore implements BlackboardStore {
 
   async getSchemaBundle(): Promise<SchemaBundle> {
     return this.#schemas.getSchemaBundle()
+  }
+
+  async recordSchemaShadowFailure(input: RecordSchemaShadowFailureInput): Promise<void> {
+    this.#shadow.record(input, this.#now().toISOString())
+  }
+
+  async getSchemaShadowReport(
+    id: string,
+    options: GetSchemaShadowReportOptions = {},
+  ): Promise<SchemaShadowReport | undefined> {
+    const listed = this.#schemas.listSchemaVersions(id)
+    if (!listed) return undefined
+    const selected =
+      options.version === undefined
+        ? listed.versions
+        : listed.versions.filter((v) => v.version === options.version)
+    if (options.version !== undefined && selected.length === 0) return undefined
+    return this.#shadow.buildReport(id, listed.revision, selected, options.version, options.limit)
   }
 }

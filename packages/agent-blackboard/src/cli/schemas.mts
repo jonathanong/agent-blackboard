@@ -21,8 +21,9 @@ import { adminConfigFromEnv, clientConfigFromEnv } from './env.mjs'
 import { CliError } from './errors.mjs'
 import { writeLine } from './output.mjs'
 import { createRevisionNotifier } from './revision-notice.mjs'
+import { runPromote, runReport } from './schemas-shadow.mjs'
 
-const PUT_BOOLEAN_FLAGS = new Set(['breaking'])
+const PUT_BOOLEAN_FLAGS = new Set(['breaking', 'shadow'])
 
 function optionalDirFlag(flags: ParsedArgs['flags'], subcommand: string): string | undefined {
   const dir = stringFlag(flags, 'dir')
@@ -32,11 +33,11 @@ function optionalDirFlag(flags: ParsedArgs['flags'], subcommand: string): string
   return dir
 }
 
-function parseBreakingFlag(flags: ParsedArgs['flags']): boolean {
-  const raw = flags.breaking
+function parseBooleanFlag(flags: ParsedArgs['flags'], name: string): boolean {
+  const raw = flags[name]
   if (raw === undefined || raw === false || raw === 'false') return false
   if (raw === true || raw === 'true') return true
-  throw new CliError('schemas put --breaking must be a boolean flag.')
+  throw new CliError(`schemas put --${name} must be a boolean flag.`)
 }
 
 async function readJsonObjectFile(
@@ -99,12 +100,14 @@ async function runPut(args: string[], ctx: CliContext): Promise<void> {
   const [id, filePath] = positional
   if (!id || !filePath) throw new CliError('schemas put requires <id> <file>.')
   if (!isValidSchemaId(id)) throw new CliError(`Invalid schema id: ${id}`)
-  const breaking = parseBreakingFlag(flags)
+  const breaking = parseBooleanFlag(flags, 'breaking')
+  const shadow = parseBooleanFlag(flags, 'shadow')
   const schema = await readJsonObjectFile(filePath, 'schema file')
   const config = adminConfigFromEnv(ctx.env, createRevisionNotifier(ctx))
   const result = await putSchemaRequest(config, id, {
     schema,
     ...(breaking ? { breaking: true } : {}),
+    ...(shadow ? { shadow: true } : {}),
   })
   writeLine(ctx.stdout, JSON.stringify(result))
 }
@@ -170,9 +173,15 @@ export async function runSchemas(argv: string[], ctx: CliContext): Promise<void>
     case 'validate':
       await runValidate(rest, ctx)
       return
+    case 'promote':
+      await runPromote(rest, ctx)
+      return
+    case 'report':
+      await runReport(rest, ctx)
+      return
     default:
       throw new CliError(
-        `Unknown schemas subcommand: ${sub ?? '(none)'}. Expected one of: pull, put, remove, list, get, validate.`,
+        `Unknown schemas subcommand: ${sub ?? '(none)'}. Expected one of: pull, put, promote, report, remove, list, get, validate.`,
       )
   }
 }

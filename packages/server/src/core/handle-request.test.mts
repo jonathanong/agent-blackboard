@@ -96,6 +96,19 @@ describe('handleRequest', () => {
     expect((await handleRequest(request({ path: '/schemas/a/versions/%' }), deps())).status).toBe(
       404,
     )
+    expect((await handleRequest(request({ path: '/schemas/%/report' }), deps())).status).toBe(404)
+    expect(
+      (await handleRequest(request({ path: '/schemas/%/versions/1/promote' }), deps())).status,
+    ).toBe(404)
+    expect(
+      (await handleRequest(request({ path: '/schemas/a/versions/%/promote' }), deps())).status,
+    ).toBe(404)
+    expect(
+      (await handleRequest(request({ path: '/schemas/%/versions/1/report' }), deps())).status,
+    ).toBe(404)
+    expect(
+      (await handleRequest(request({ path: '/schemas/a/versions/%/report' }), deps())).status,
+    ).toBe(404)
   })
 
   it('preserves a committed response even if the revision header lookup fails', async () => {

@@ -101,11 +101,14 @@ describe('createDynamoStore wiring', () => {
         const key = command.input.Key as { PK: string }
         if (key.PK === 'SCHEMA_REGISTRY') return { Item: { revision: 1 } }
         if (key.PK === 'SCHEMAS') return { Item: schemaHead }
-        return { Item: schemaVer }
+        if (key.PK === 'SCHEMA_SHADOW_COUNTS#finding') return {}
+        return { Item: { ...schemaVer, mode: 'shadow' } }
       }
       if (command.constructor.name === 'QueryCommand') {
         const values = command.input.ExpressionAttributeValues as Record<string, string>
-        return values[':pk'] === 'SCHEMAS' ? { Items: [schemaHead] } : { Items: [schemaVer] }
+        if (values[':pk'] === 'SCHEMAS') return { Items: [schemaHead] }
+        if (values[':pk'] === 'SCHEMA_VERSIONS') return { Items: [schemaVer] }
+        return { Items: [] }
       }
       throw new Error(`unexpected ${command.constructor.name}`)
     })
@@ -125,6 +128,18 @@ describe('createDynamoStore wiring', () => {
     expect((await store.getSchema('finding'))?.versionRecord.version).toBe(1)
     expect((await store.listSchemaVersions('finding'))?.versions.length).toBe(1)
     expect((await store.getSchemaBundle()).schemas.length).toBe(1)
+    expect((await store.promoteSchemaVersion('finding', 1, 'ops')).versionRecord.mode).toBe(
+      'enforced',
+    )
+    await store.recordSchemaShadowFailure({
+      schemaId: 'finding',
+      schemaVersion: 1,
+      sessionId: 's1',
+      code: 'schema_validation_failed',
+      message: 'bad',
+      details: [],
+    })
+    expect((await store.getSchemaShadowReport('finding'))?.totalFailures).toBe(0)
     expect((await store.deprecateSchema('finding', 'ops')).summary.deprecatedBy).toBe('ops')
   })
 })
