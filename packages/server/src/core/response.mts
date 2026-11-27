@@ -32,6 +32,14 @@ export function payloadTooLargeResponse(): HandlerResponse {
   return errorResponse(413, 'request body too large')
 }
 
+async function* emptyBody(): AsyncGenerator<string> {
+  // No body chunks for 304 Not Modified responses.
+}
+
+export function notModifiedResponse(headers: Record<string, string> = {}): HandlerResponse {
+  return { status: 304, headers, body: emptyBody() }
+}
+
 export function streamResponse(
   status: number,
   contentType: string,

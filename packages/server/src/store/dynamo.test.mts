@@ -76,6 +76,57 @@ describe('createDynamoStore wiring', () => {
     await expect(collect(store.getEntries('c', 's'))).resolves.toEqual([entry])
     expect(getCount).toBeGreaterThan(0)
   })
+
+  it('delegates every schema operation', async () => {
+    const schemaHead = {
+      id: 'finding',
+      latestVersion: 1,
+      deprecatedAt: null,
+      deprecatedBy: null,
+      createdAt: NOW.toISOString(),
+      createdBy: 'ops',
+      updatedAt: NOW.toISOString(),
+      updatedBy: 'ops',
+    }
+    const schemaVer = {
+      id: 'finding',
+      version: 1,
+      schema: { type: 'object' },
+      createdAt: NOW.toISOString(),
+      createdBy: 'ops',
+    }
+    const doc = client((command) => {
+      if (command.constructor.name === 'TransactWriteCommand') return {}
+      if (command.constructor.name === 'GetCommand') {
+        const key = command.input.Key as { PK: string }
+        if (key.PK === 'SCHEMA_REGISTRY') return { Item: { revision: 1 } }
+        if (key.PK === 'SCHEMAS') return { Item: schemaHead }
+        return { Item: schemaVer }
+      }
+      if (command.constructor.name === 'QueryCommand') {
+        const values = command.input.ExpressionAttributeValues as Record<string, string>
+        return values[':pk'] === 'SCHEMAS' ? { Items: [schemaHead] } : { Items: [schemaVer] }
+      }
+      throw new Error(`unexpected ${command.constructor.name}`)
+    })
+    const store = createDynamoStore({ client: doc, tableName: 'T', now: () => NOW })
+    expect(await store.getSchemaRegistryRevision()).toBe(1)
+    expect(
+      (
+        await store.putSchemaVersion({
+          id: 'finding',
+          schema: { type: 'object' },
+          actor: 'ops',
+          expectedVersion: 0,
+        })
+      ).versionRecord.version,
+    ).toBe(1)
+    expect((await store.listSchemas()).schemas.length).toBe(1)
+    expect((await store.getSchema('finding'))?.versionRecord.version).toBe(1)
+    expect((await store.listSchemaVersions('finding'))?.versions.length).toBe(1)
+    expect((await store.getSchemaBundle()).schemas.length).toBe(1)
+    expect((await store.deprecateSchema('finding', 'ops')).summary.deprecatedBy).toBe('ops')
+  })
 })
 
 describe('DynamoDB credentials', () => {

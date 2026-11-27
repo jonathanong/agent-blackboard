@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { MemoryBlackboardStore } from '../store/memory.mjs'
 import { handleRequest } from './handle-request.mjs'
 import type { HandleRequestDeps } from './handle-request.mjs'
@@ -83,10 +83,30 @@ describe('handleRequest', () => {
     expect(entriesResponse.status).toBe(200)
   })
 
-  it('404s a session id with a malformed percent-escape instead of throwing', async () => {
+  it('404s a session or schema segment with a malformed percent-escape instead of throwing', async () => {
     // decodeURIComponent('%') throws URIError; a route no store lookup could
     // ever match anyway should 404 like any other unmatched id, not 500.
     expect((await handleRequest(request({ path: '/sessions/%' }), deps())).status).toBe(404)
     expect((await handleRequest(request({ path: '/sessions/%/entries' }), deps())).status).toBe(404)
+    expect((await handleRequest(request({ path: '/schemas/%' }), deps())).status).toBe(404)
+    expect((await handleRequest(request({ path: '/schemas/%/versions' }), deps())).status).toBe(404)
+    expect((await handleRequest(request({ path: '/schemas/%/versions/1' }), deps())).status).toBe(
+      404,
+    )
+    expect((await handleRequest(request({ path: '/schemas/a/versions/%' }), deps())).status).toBe(
+      404,
+    )
+  })
+
+  it('preserves a committed response even if the revision header lookup fails', async () => {
+    const store = new MemoryBlackboardStore()
+    const { token } = await store.createCredential('test')
+    vi.spyOn(store, 'getSchemaRegistryRevision').mockRejectedValueOnce(new Error('ddb blip'))
+    const response = await handleRequest(
+      request({ path: '/sessions', headers: { authorization: `Bearer ${token}` } }),
+      deps({ store }),
+    )
+    expect(response.status).toBe(200)
+    expect(response.headers['x-schema-registry-revision']).toBeUndefined()
   })
 })
