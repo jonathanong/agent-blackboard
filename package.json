@@ -31,16 +31,16 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
-    "@vitest/coverage-v8": "^5.1.0",
+    "@vitest/coverage-v8": "^5.1.1",
     "agent-blackboard": "workspace:*",
-    "dependency-cruiser": "^18.7.2",
+    "dependency-cruiser": "^18.8.0",
     "github-actionlint": "^1.7.12",
-    "knip": "^6.44.2",
-    "oxfmt": "^0.77.0",
-    "oxlint": "^1.92.0",
-    "oxlint-tsgolint": "^7.0.2006",
+    "knip": "^6.46.1",
+    "oxfmt": "^0.79.0",
+    "oxlint": "^1.94.0",
+    "oxlint-tsgolint": "^7.0.2007",
     "typescript": "^7.0.2",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.1"
   },
   "engines": {
     "node": ">=24.0.0"
