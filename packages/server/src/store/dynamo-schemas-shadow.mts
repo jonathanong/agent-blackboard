@@ -5,7 +5,6 @@ import type {
   SchemaShadowFailureRecord,
   SchemaShadowReport,
   SchemaShadowVersionCount,
-  SchemaValidationIssue,
 } from '../core/types.mjs'
 import {
   schemaShadowCountSk,
@@ -19,24 +18,19 @@ import {
   queryAllPartition,
 } from './dynamo-schemas-read.mjs'
 import {
+  boundShadowDetails,
+  isRetryableTransactionCanceled,
+  itemToShadowFailure,
+  maxIsoTimestamp,
+} from './dynamo-schemas-tx.mjs'
+import {
   DEFAULT_SHADOW_REPORT_LIMIT,
   type GetSchemaShadowReportOptions,
   type RecordSchemaShadowFailureInput,
 } from './store.mjs'
 
 const SECONDS_PER_DAY = 86_400
-
-function itemToShadowFailure(item: Record<string, unknown>): SchemaShadowFailureRecord {
-  return {
-    schemaId: item.schemaId as string,
-    schemaVersion: item.schemaVersion as number,
-    sessionId: item.sessionId as string,
-    occurredAt: item.occurredAt as string,
-    code: item.code as string,
-    message: item.message as string,
-    details: (item.details as SchemaValidationIssue[]) ?? [],
-  }
-}
+const SHADOW_FAILURE_RETRIES = 5
 
 async function queryRecentFailures(
   doc: DynamoDBDocumentClient,
@@ -45,17 +39,25 @@ async function queryRecentFailures(
   version: number,
   limit: number,
 ): Promise<SchemaShadowFailureRecord[]> {
-  const result = await doc.send(
-    new QueryCommand({
-      TableName: tableName,
-      KeyConditionExpression: 'PK = :pk',
-      ExpressionAttributeValues: { ':pk': schemaShadowFailuresPk(id, version) },
-      ScanIndexForward: false,
-      Limit: limit,
-      ConsistentRead: true,
-    }),
-  )
-  return (result.Items ?? []).map(itemToShadowFailure)
+  const items: SchemaShadowFailureRecord[] = []
+  let exclusiveStartKey: Record<string, unknown> | undefined
+  while (items.length < limit) {
+    const page = await doc.send(
+      new QueryCommand({
+        TableName: tableName,
+        KeyConditionExpression: 'PK = :pk',
+        ExpressionAttributeValues: { ':pk': schemaShadowFailuresPk(id, version) },
+        ScanIndexForward: false,
+        Limit: limit - items.length,
+        ExclusiveStartKey: exclusiveStartKey,
+        ConsistentRead: true,
+      }),
+    )
+    for (const item of page.Items ?? []) items.push(itemToShadowFailure(item))
+    exclusiveStartKey = page.LastEvaluatedKey
+    if (!exclusiveStartKey) break
+  }
+  return items
 }
 
 export async function dynamoRecordSchemaShadowFailure(
@@ -68,48 +70,56 @@ export async function dynamoRecordSchemaShadowFailure(
   const nowDate = now()
   const occurredAt = nowDate.toISOString()
   const ttl = Math.floor(nowDate.getTime() / 1000) + ttlDays * SECONDS_PER_DAY
-  await doc.send(
-    new TransactWriteCommand({
-      TransactItems: [
-        {
-          Update: {
-            TableName: tableName,
-            Key: {
-              PK: schemaShadowCountsPk(input.schemaId),
-              SK: schemaShadowCountSk(input.schemaVersion),
-            },
-            UpdateExpression:
-              'ADD failureCount :one SET entityType = :type, schemaId = :id, schemaVersion = :version, lastFailureAt = :now',
-            ExpressionAttributeValues: {
-              ':one': 1,
-              ':type': 'schema_shadow_count',
-              ':id': input.schemaId,
-              ':version': input.schemaVersion,
-              ':now': occurredAt,
-            },
+  const command = new TransactWriteCommand({
+    TransactItems: [
+      {
+        Update: {
+          TableName: tableName,
+          Key: {
+            PK: schemaShadowCountsPk(input.schemaId),
+            SK: schemaShadowCountSk(input.schemaVersion),
+          },
+          UpdateExpression:
+            'ADD failureCount :one SET entityType = :type, schemaId = :id, schemaVersion = :version, lastFailureAt = :now',
+          ExpressionAttributeValues: {
+            ':one': 1,
+            ':type': 'schema_shadow_count',
+            ':id': input.schemaId,
+            ':version': input.schemaVersion,
+            ':now': occurredAt,
           },
         },
-        {
-          Put: {
-            TableName: tableName,
-            Item: {
-              PK: schemaShadowFailuresPk(input.schemaId, input.schemaVersion),
-              SK: schemaShadowFailureSk(occurredAt, randomUUID()),
-              entityType: 'schema_shadow_failure',
-              schemaId: input.schemaId,
-              schemaVersion: input.schemaVersion,
-              sessionId: input.sessionId,
-              occurredAt,
-              code: input.code,
-              message: input.message,
-              details: structuredClone(input.details),
-              ttl,
-            },
+      },
+      {
+        Put: {
+          TableName: tableName,
+          Item: {
+            PK: schemaShadowFailuresPk(input.schemaId, input.schemaVersion),
+            SK: schemaShadowFailureSk(occurredAt, randomUUID()),
+            entityType: 'schema_shadow_failure',
+            schemaId: input.schemaId,
+            schemaVersion: input.schemaVersion,
+            sessionId: input.sessionId,
+            occurredAt,
+            code: input.code,
+            message: input.message,
+            details: boundShadowDetails(input.details),
+            ttl,
           },
         },
-      ],
-    }),
-  )
+      },
+    ],
+  })
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await doc.send(command)
+      return
+    } catch (error) {
+      if (!isRetryableTransactionCanceled(error) || attempt + 1 >= SHADOW_FAILURE_RETRIES) {
+        throw error
+      }
+    }
+  }
 }
 
 export async function dynamoGetSchemaShadowReport(
@@ -133,20 +143,16 @@ export async function dynamoGetSchemaShadowReport(
       queryRecentFailures(doc, tableName, id, options.version, limit),
     ])
     const failureCount = (countRes.Item?.failureCount as number | undefined) ?? 0
-    const lastFailureAt = (countRes.Item?.lastFailureAt as string | undefined) ?? null
+    const lastFailureAt = maxIsoTimestamp(
+      (countRes.Item?.lastFailureAt as string | undefined) ?? null,
+      recentFailures[0]?.occurredAt ?? null,
+    )
+    const { version, ref, mode } = found.versionRecord
     return {
       id,
       version: options.version,
       totalFailures: failureCount,
-      versions: [
-        {
-          version: found.versionRecord.version,
-          ref: found.versionRecord.ref,
-          mode: found.versionRecord.mode,
-          failureCount,
-          lastFailureAt,
-        },
-      ],
+      versions: [{ version, ref, mode, failureCount, lastFailureAt }],
       recentFailures,
       revision: found.revision,
     }
@@ -154,40 +160,33 @@ export async function dynamoGetSchemaShadowReport(
   const found = await dynamoListSchemaVersions(doc, tableName, id)
   if (!found) return undefined
   const countItems = await queryAllPartition(doc, tableName, schemaShadowCountsPk(id))
-  const countsByVersion = new Map<number, { failureCount: number; lastFailureAt: string | null }>()
-  for (const item of countItems) {
-    countsByVersion.set(item.schemaVersion as number, {
-      failureCount: item.failureCount as number,
-      lastFailureAt: item.lastFailureAt as string,
-    })
-  }
+  const counts = new Map<number, { failureCount: number; lastFailureAt: string | null }>(
+    countItems.map((item) => [
+      item.schemaVersion as number,
+      { failureCount: item.failureCount as number, lastFailureAt: item.lastFailureAt as string },
+    ]),
+  )
+  const failing = found.versions.filter((v) => (counts.get(v.version)?.failureCount ?? 0) > 0)
+  const lists = await Promise.all(
+    failing.map((v) => queryRecentFailures(doc, tableName, id, v.version, limit)),
+  )
+  const newest = new Map<number, string | null>(
+    failing.map((v, i) => [v.version, lists[i]![0]?.occurredAt ?? null]),
+  )
   let totalFailures = 0
   const versions: SchemaShadowVersionCount[] = found.versions.map((v) => {
-    const entry = countsByVersion.get(v.version)
+    const entry = counts.get(v.version)
     const failureCount = entry?.failureCount ?? 0
     totalFailures += failureCount
-    return {
-      version: v.version,
-      ref: v.ref,
-      mode: v.mode,
-      failureCount,
-      lastFailureAt: entry?.lastFailureAt ?? null,
-    }
+    const lastFailureAt = maxIsoTimestamp(
+      entry?.lastFailureAt ?? null,
+      newest.get(v.version) ?? null,
+    )
+    return { version: v.version, ref: v.ref, mode: v.mode, failureCount, lastFailureAt }
   })
-  const failingVersions = versions.filter((v) => v.failureCount > 0)
-  const lists = await Promise.all(
-    failingVersions.map((v) => queryRecentFailures(doc, tableName, id, v.version, limit)),
-  )
   const recentFailures = lists
     .flat()
     .sort((a, b) => b.occurredAt.localeCompare(a.occurredAt) || b.schemaVersion - a.schemaVersion)
     .slice(0, limit)
-  return {
-    id,
-    version: null,
-    totalFailures,
-    versions,
-    recentFailures,
-    revision: found.revision,
-  }
+  return { id, version: null, totalFailures, versions, recentFailures, revision: found.revision }
 }

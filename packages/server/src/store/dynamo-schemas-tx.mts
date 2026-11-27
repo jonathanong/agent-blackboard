@@ -1,4 +1,9 @@
-import type { SchemaRecord, SchemaVersionRecord } from '../core/types.mjs'
+import type {
+  SchemaRecord,
+  SchemaShadowFailureRecord,
+  SchemaValidationIssue,
+  SchemaVersionRecord,
+} from '../core/types.mjs'
 import { formatSchemaRef } from '../schemas/id.mjs'
 import {
   SCHEMA_REGISTRY_PK,
@@ -131,5 +136,53 @@ export function schemaVersionTxItem(tableName: string, versionRecord: SchemaVers
       },
       ConditionExpression: 'attribute_not_exists(PK)',
     },
+  }
+}
+
+const MAX_SHADOW_DETAILS_BYTES = 32_768
+const MAX_SHADOW_FIELD_CHARS = 512
+
+function truncateShadowField(value: string): string {
+  return value.length <= MAX_SHADOW_FIELD_CHARS
+    ? value
+    : `${value.slice(0, MAX_SHADOW_FIELD_CHARS)}…`
+}
+
+/** Bounds stored shadow failure diagnostics well below DynamoDB's 400 KiB item limit. */
+export function boundShadowDetails(
+  details: readonly SchemaValidationIssue[],
+): SchemaValidationIssue[] {
+  const bounded: SchemaValidationIssue[] = []
+  let bytes = 2
+  for (const issue of details) {
+    const clean: SchemaValidationIssue = {
+      instancePath: truncateShadowField(issue.instancePath),
+      schemaPath: truncateShadowField(issue.schemaPath),
+      keyword: truncateShadowField(issue.keyword),
+      message: truncateShadowField(issue.message),
+    }
+    const size = Buffer.byteLength(JSON.stringify(clean), 'utf8') + (bounded.length > 0 ? 1 : 0)
+    if (bytes + size > MAX_SHADOW_DETAILS_BYTES) break
+    bounded.push(clean)
+    bytes += size
+  }
+  return bounded
+}
+
+export function maxIsoTimestamp(a: string | null, b: string | null): string | null {
+  if (a === null) return b
+  if (b === null) return a
+  return a >= b ? a : b
+}
+
+export function itemToShadowFailure(item: Record<string, unknown>): SchemaShadowFailureRecord {
+  return {
+    schemaId: item.schemaId as string,
+    schemaVersion: item.schemaVersion as number,
+    sessionId: item.sessionId as string,
+    occurredAt: item.occurredAt as string,
+    code: item.code as string,
+    message: item.message as string,
+    details: (item.details as SchemaValidationIssue[]) ?? [],
   }
 }

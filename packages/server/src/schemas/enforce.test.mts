@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { MemoryBlackboardStore } from '../store/memory.mjs'
+import { getSnapshotCache } from './enforce-cache.mjs'
 import { validateEntryWrite } from './enforce.mjs'
 
 describe('validateEntryWrite', () => {
@@ -56,7 +57,7 @@ describe('validateEntryWrite', () => {
       expectedVersion: 0,
     })
 
-    // Missing schema and missing version (also cached per revision — only one bundle fetch)
+    // Missing schema and missing version reuse the cached revision bundle without growing lookup cache
     const bundleSpy = vi.spyOn(store, 'getSchemaBundle')
     expect(await validateEntryWrite(store, { schemaId: 'missing' }, {}, {})).toMatchObject({
       ok: false,
@@ -69,6 +70,7 @@ describe('validateEntryWrite', () => {
     expect(
       await validateEntryWrite(store, { schemaId: 'finding', schemaVersion: 9 }, {}, {}),
     ).toMatchObject({ ok: false, body: { code: 'schema_not_found' } })
+    expect((await getSnapshotCache(store, 1)).lookups.size).toBe(0)
 
     // Valid latest write + cache hit on second call
     expect(

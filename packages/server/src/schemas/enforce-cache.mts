@@ -78,6 +78,9 @@ export function resolveCachedLookup(
         : { ok: false, code: 'schema_invalid', error: compiled.error }
     }
   }
-  cache.lookups.set(cacheKey, outcome)
+  // Do not cache missing-schema lookups so arbitrary nonexistent IDs/versions cannot grow the map unboundedly.
+  if (outcome.ok || outcome.code !== 'schema_not_found') {
+    cache.lookups.set(cacheKey, outcome)
+  }
   return outcome
 }
