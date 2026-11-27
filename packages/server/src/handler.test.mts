@@ -266,6 +266,8 @@ describe('adminEnv', () => {
       AGENT_BLACKBOARD_ADMIN_CREDENTIALS: 'token123',
       AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT: 'required',
     })
+    process.env[ENFORCE_KEY] = 'bogus'
+    expect(() => adminEnv()).toThrow(/Invalid AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT/)
   })
 })
 

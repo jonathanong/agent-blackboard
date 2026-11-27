@@ -1,11 +1,21 @@
 import type { ValidateFunction } from 'ajv/dist/2020.js'
-import type { SchemaBundle, SchemaVersionMode } from '../core/types.mjs'
+import type { SchemaBundle, SchemaVersionMode, SchemaVersionRecord } from '../core/types.mjs'
 import type { BlackboardStore } from '../store/store.mjs'
 import { compileRegisteredSchema } from './compile.mjs'
 import { formatSchemaRef } from './id.mjs'
 
+interface CompiledSchemaVersion {
+  version: number
+  mode: SchemaVersionMode
+  validate: ValidateFunction
+}
+
 export type CachedLookup =
-  | { ok: true; version: number; mode: SchemaVersionMode; validate: ValidateFunction }
+  | (CompiledSchemaVersion & {
+      ok: true
+      /** When an unpinned write resolves to a shadow version, the latest prior enforced version that still gates writes. */
+      enforcedBaseline?: CompiledSchemaVersion
+    })
   | { ok: false; code: string; error: string; deprecatedVersion?: number }
 
 export interface StoreValidatorCache {
@@ -29,6 +39,32 @@ export async function getSnapshotCache(
   const fresh: StoreValidatorCache = { revision: bundle.revision, bundle, lookups: new Map() }
   validatorCaches.set(store, fresh)
   return fresh
+}
+
+function compileVersionRecord(
+  schemaId: string,
+  record: SchemaVersionRecord,
+  bundle: SchemaBundle,
+): ({ ok: true } & CompiledSchemaVersion) | { ok: false; code: string; error: string } {
+  const compiled = compileRegisteredSchema(
+    { id: schemaId, version: record.version, schema: record.schema },
+    bundle,
+    { rejectDeprecatedRefs: false },
+  )
+  if (!compiled.ok) return { ok: false, code: 'schema_invalid', error: compiled.error }
+  return { ok: true, version: record.version, mode: record.mode, validate: compiled.validate }
+}
+
+function findLatestEnforcedVersion(
+  versions: SchemaVersionRecord[],
+): SchemaVersionRecord | undefined {
+  let latest: SchemaVersionRecord | undefined
+  for (const record of versions) {
+    if (record.mode === 'enforced' && (!latest || record.version > latest.version)) {
+      latest = record
+    }
+  }
+  return latest
 }
 
 export function resolveCachedLookup(
@@ -66,19 +102,24 @@ export function resolveCachedLookup(
       error: `schema version not found: ${formatSchemaRef(schemaId, targetVersion)}`,
     }
   }
-  const compiled = compileRegisteredSchema(
-    { id: schemaId, version: targetVersion, schema: versionRecord.schema },
-    cache.bundle,
-    { rejectDeprecatedRefs: false },
-  )
-  const outcome: CachedLookup = compiled.ok
-    ? {
-        ok: true,
-        version: targetVersion,
-        mode: versionRecord.mode,
-        validate: compiled.validate,
-      }
-    : { ok: false, code: 'schema_invalid', error: compiled.error }
+  const compiledTarget = compileVersionRecord(schemaId, versionRecord, cache.bundle)
+  let outcome: CachedLookup = compiledTarget
+  if (compiledTarget.ok && schemaVersion === undefined && versionRecord.mode === 'shadow') {
+    const baselineRecord = findLatestEnforcedVersion(entry.versions)
+    if (baselineRecord) {
+      const compiledBaseline = compileVersionRecord(schemaId, baselineRecord, cache.bundle)
+      outcome = compiledBaseline.ok
+        ? {
+            ...compiledTarget,
+            enforcedBaseline: {
+              version: compiledBaseline.version,
+              mode: compiledBaseline.mode,
+              validate: compiledBaseline.validate,
+            },
+          }
+        : compiledBaseline
+    }
+  }
   cache.lookups.set(cacheKey, outcome)
   return outcome
 }

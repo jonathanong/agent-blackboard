@@ -1,5 +1,6 @@
+import type { ValidateFunction } from 'ajv/dist/2020.js'
 import type { SchemaShadowWarning, SchemaValidationIssue } from '../core/types.mjs'
-import type { BlackboardStore } from '../store/store.mjs'
+import type { BlackboardStore, RecordSchemaShadowFailureInput } from '../store/store.mjs'
 import { getSnapshotCache, resolveCachedLookup } from './enforce-cache.mjs'
 import { formatSchemaRef, isValidSchemaId } from './id.mjs'
 
@@ -7,20 +8,12 @@ export interface SchemaEnforcementEnv {
   AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT?: string
 }
 
-type SchemaEnforcementMode = 'optional' | 'shadow' | 'required'
+export type SchemaEnforcementMode = 'optional' | 'shadow' | 'required'
 
 interface EntrySchemaValidationFailure {
   ok: false
   status: number
   body: Record<string, unknown>
-}
-
-interface PendingShadowFailure {
-  schemaId: string
-  schemaVersion: number
-  code: string
-  message: string
-  details: SchemaValidationIssue[]
 }
 
 interface EntrySchemaValidationSuccess {
@@ -29,7 +22,7 @@ interface EntrySchemaValidationSuccess {
   schemaVersion?: number
   revision?: number
   warning?: SchemaShadowWarning
-  shadowFailure?: PendingShadowFailure
+  shadowFailure?: Omit<RecordSchemaShadowFailureInput, 'sessionId'>
 }
 
 export type EntrySchemaValidationResult =
@@ -44,7 +37,8 @@ function fail(
   return { ok: false, status: 400, body: { error, code, ...extra } }
 }
 
-function resolveEnforcementMode(env: SchemaEnforcementEnv): SchemaEnforcementMode {
+/** Validates and resolves `AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT`, throwing loudly on unknown values. */
+export function resolveEnforcementMode(env: SchemaEnforcementEnv): SchemaEnforcementMode {
   const mode = env.AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT
   if (mode === undefined || mode === 'optional') return 'optional'
   if (mode === 'shadow' || mode === 'required') return mode
@@ -58,15 +52,56 @@ function rejectOrWarn(
   code: string,
   message: string,
 ): EntrySchemaValidationResult {
-  if (mode === 'shadow') return { ok: true, warning: { code, message } }
-  return fail(code, message)
+  return mode === 'shadow' ? { ok: true, warning: { code, message } } : fail(code, message)
+}
+
+function validationDetails(validate: ValidateFunction): SchemaValidationIssue[] {
+  return validate.errors!.map(({ instancePath, schemaPath, keyword, message }) => ({
+    instancePath,
+    schemaPath,
+    keyword,
+    message: String(message),
+  }))
+}
+
+function shadowOutcome(
+  schemaId: string,
+  failedVersion: number,
+  validate: ValidateFunction,
+  revision: number,
+  validatedVersion?: number,
+): EntrySchemaValidationSuccess {
+  const ref = formatSchemaRef(schemaId, failedVersion)
+  const message = `entry data failed schema validation (${ref})`
+  const details = validationDetails(validate)
+  const code = 'schema_validation_failed'
+  return {
+    ok: true,
+    ...(validatedVersion !== undefined ? { schemaId, schemaVersion: validatedVersion } : {}),
+    revision,
+    warning: { code, message, schema: ref, details },
+    shadowFailure: { schemaId, schemaVersion: failedVersion, code, message, details },
+  }
+}
+
+function rejectOrShadow(
+  warnOnly: boolean,
+  schemaId: string,
+  version: number,
+  validate: ValidateFunction,
+  revision: number,
+): EntrySchemaValidationResult {
+  if (warnOnly) return shadowOutcome(schemaId, version, validate, revision)
+  const ref = formatSchemaRef(schemaId, version)
+  return fail('schema_validation_failed', `entry data failed schema validation (${ref})`, {
+    schema: ref,
+    details: validationDetails(validate),
+  })
 }
 
 /**
- * Enforces write-time JSON Schema validation for `POST /sessions/:id/entries`.
- * Modes: `optional` (default — validate when `schemaId` is given), `required` (`schemaId`
- * mandatory), and `shadow` (validate every entry naming a schema, never reject). Per-version
- * shadow mode (`mode: 'shadow'`) also accepts validation failures with a warning and shadow log.
+ * Enforces write-time JSON Schema validation for `POST /sessions/:id/entries` across `optional`,
+ * `shadow`, and `required` modes while preserving prior enforced baselines on shadow upgrades.
  */
 export async function validateEntryWrite(
   store: BlackboardStore,
@@ -118,32 +153,37 @@ export async function validateEntryWrite(
     }
   }
 
-  if (!lookup.validate(data)) {
-    const ref = formatSchemaRef(schemaId, lookup.version)
-    const message = `entry data failed schema validation (${ref})`
-    const details: SchemaValidationIssue[] = lookup.validate.errors!.map((err) => ({
-      instancePath: err.instancePath,
-      schemaPath: err.schemaPath,
-      keyword: err.keyword,
-      message: String(err.message),
-    }))
-    if (mode === 'shadow' || lookup.mode === 'shadow') {
-      return {
-        ok: true,
+  if (lookup.enforcedBaseline) {
+    const baseline = lookup.enforcedBaseline
+    if (!baseline.validate(data)) {
+      return rejectOrShadow(
+        mode === 'shadow',
         schemaId,
-        schemaVersion: lookup.version,
-        revision: cache.revision,
-        warning: { code: 'schema_validation_failed', message, schema: ref, details },
-        shadowFailure: {
-          schemaId,
-          schemaVersion: lookup.version,
-          code: 'schema_validation_failed',
-          message,
-          details,
-        },
-      }
+        baseline.version,
+        baseline.validate,
+        cache.revision,
+      )
     }
-    return fail('schema_validation_failed', message, { schema: ref, details })
+    if (!lookup.validate(data)) {
+      return shadowOutcome(
+        schemaId,
+        lookup.version,
+        lookup.validate,
+        cache.revision,
+        baseline.version,
+      )
+    }
+    return { ok: true, schemaId, schemaVersion: lookup.version, revision: cache.revision }
+  }
+
+  if (!lookup.validate(data)) {
+    return rejectOrShadow(
+      mode === 'shadow' || lookup.mode === 'shadow',
+      schemaId,
+      lookup.version,
+      lookup.validate,
+      cache.revision,
+    )
   }
 
   return { ok: true, schemaId, schemaVersion: lookup.version, revision: cache.revision }

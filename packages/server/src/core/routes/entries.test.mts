@@ -186,16 +186,17 @@ describe('entries route', () => {
       's',
     )
     expect(res.status).toBe(201)
-    expect(await json(res)).toMatchObject({
+    const createdShadow = (await json(res)) as Record<string, unknown>
+    expect(createdShadow).toMatchObject({
       sessionId: 's',
-      schemaId: 'finding',
-      schemaVersion: 1,
       warning: {
         code: 'schema_validation_failed',
         schema: 'finding@1',
         details: [expect.objectContaining({ keyword: 'required' })],
       },
     })
+    expect(createdShadow.schemaId).toBeUndefined()
+    expect(createdShadow.schemaVersion).toBeUndefined()
 
     const report = await store.getSchemaShadowReport('finding', { version: 1 })
     expect(report?.totalFailures).toBe(1)

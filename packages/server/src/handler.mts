@@ -8,6 +8,7 @@
 import { handleRequest } from './core/handle-request.mjs'
 import type { HandleRequestDeps, ServerEnv } from './core/handle-request.mjs'
 import type { HandlerRequest, HandlerResponse } from './core/types.mjs'
+import { resolveEnforcementMode } from './schemas/enforce.mjs'
 import { createDynamoStore } from './store/dynamo.mjs'
 import { errorMessage, nodeStreamSink, streamResponseBody } from './handler-stream.mjs'
 import type { ResponseStreamSink } from './handler-stream.mjs'
@@ -141,7 +142,7 @@ export function realStore(): ReturnType<typeof createDynamoStore> {
 }
 
 export function adminEnv(): ServerEnv {
-  return {
+  const env: ServerEnv = {
     ...(process.env.AGENT_BLACKBOARD_ADMIN_CREDENTIALS
       ? { AGENT_BLACKBOARD_ADMIN_CREDENTIALS: process.env.AGENT_BLACKBOARD_ADMIN_CREDENTIALS }
       : {}),
@@ -149,6 +150,8 @@ export function adminEnv(): ServerEnv {
       ? { AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT: process.env.AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT }
       : {}),
   }
+  resolveEnforcementMode(env)
+  return env
 }
 
 export function currentTime(): Date {
