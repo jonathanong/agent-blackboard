@@ -203,14 +203,14 @@ unless `--sentry=required` is supplied explicitly.
 
 ## Configuration
 
-| Variable                              | Used by        | Meaning                                                      |
-| ------------------------------------- | -------------- | ------------------------------------------------------------ |
-| `AGENT_BLACKBOARD_TABLE`              | server         | DynamoDB table name                                          |
-| `AGENT_BLACKBOARD_TTL_DAYS`           | server         | Entry retention; default 90 days                             |
-| `AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT` | server         | `optional` (default) or `required` for unschematized entries |
-| `AGENT_BLACKBOARD_ADMIN_CREDENTIALS`  | server         | Base64 JSON admin credential list                            |
-| `AGENT_BLACKBOARD_URL`                | client/CLI/MCP | Server base URL                                              |
-| `AGENT_BLACKBOARD_TOKEN`              | client/CLI/MCP | Client credential                                            |
-| `AGENT_BLACKBOARD_ADMIN_TOKEN`        | CLI            | Admin credential                                             |
-| `AGENT_BLACKBOARD_SCHEMAS_DIR`        | client/CLI/MCP | Optional local schema cache directory override               |
-| `AGENT_BLACKBOARD_SENTRY_DSN`         | deploy CLI     | Optional public Lambda Sentry DSN                            |
+| Variable                              | Used by        | Meaning                                                         |
+| ------------------------------------- | -------------- | --------------------------------------------------------------- |
+| `AGENT_BLACKBOARD_TABLE`              | server         | DynamoDB table name                                             |
+| `AGENT_BLACKBOARD_TTL_DAYS`           | server         | Entry retention; default 90 days                                |
+| `AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT` | server         | `optional` (default), `shadow`, or `required` write-time policy |
+| `AGENT_BLACKBOARD_ADMIN_CREDENTIALS`  | server         | Base64 JSON admin credential list                               |
+| `AGENT_BLACKBOARD_URL`                | client/CLI/MCP | Server base URL                                                 |
+| `AGENT_BLACKBOARD_TOKEN`              | client/CLI/MCP | Client credential                                               |
+| `AGENT_BLACKBOARD_ADMIN_TOKEN`        | CLI            | Admin credential                                                |
+| `AGENT_BLACKBOARD_SCHEMAS_DIR`        | client/CLI/MCP | Optional local schema cache directory override                  |
+| `AGENT_BLACKBOARD_SENTRY_DSN`         | deploy CLI     | Optional public Lambda Sentry DSN                               |

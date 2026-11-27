@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -234,6 +234,7 @@ describe('Schemas client', () => {
         schemaCount: 0,
         versionCount: 0,
       })
+      mkdirSync(join(dir, '.git'))
       const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(dir)
       try {
         expect(() => schemas.validateLocal('finding', {})).toThrow(/schemas pull/)

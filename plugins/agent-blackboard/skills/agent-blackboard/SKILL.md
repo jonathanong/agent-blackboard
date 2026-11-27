@@ -17,8 +17,11 @@ skill explains how to use it; project instructions decide what is worth recordin
   `parentSessionId`. Root sessions use `parentSessionId: null`.
 - **Agent identity is explicit.** Every session creation includes the actual agent name and version.
 - **Sessions can carry data.** Session patches shallow-merge a free-form `data` object.
-- **`data` is unstructured.** Every entry carries a free-form `data` object. Attach whatever is
-  useful — a note, a branch name, a PR number, a decision and its rationale. There is no schema.
+- **`data` is JSON with optional schema validation.** Every entry carries a JSON `data` object.
+  Unschematized entries remain allowed when the server runs in `optional` (default) or `shadow`
+  mode; when a deployment registers JSON Schema 2020-12 entry schemas, pass `schemaId` (and optional
+  `schemaVersion`) on `entry_append` (or `--schema <id>[@<version>]` in the CLI) so the server
+  validates and records the schema version on the entry.
 - **Repository context has a standard convention.** When recording repository work, use
   `repositories` as a sorted, deduplicated array of lowercase GitHub `owner/name` strings. The
   session's `data.repositories` is the cumulative union; an entry's `data.repositories` contains
@@ -43,10 +46,15 @@ If the `agent-blackboard` MCP server is connected, use its tools directly:
 - `session_patch` — shallow-merge `data` into an unarchived session.
 - `session_archive` — mark a session as distilled; archival is one-time and metadata becomes
   immutable.
-- `entry_append` — append `data` to any existing session, including an archived one.
+- `entry_append` — append `data` to any existing session, including an archived one. Optionally
+  supply `schemaId` (and `schemaVersion`) for server-side JSON Schema validation.
 - `entry_get` — read entries from one explicit session.
 - `snapshot_export` — stream all selected active sessions and entries to a private read-only JSONL
   file, returning only its path, counts, checksum, and manifest.
+- `schema_list` — list registered JSON Schemas and the current schema registry revision.
+- `schema_get` — inspect one registered schema (latest version or an explicit `version`).
+- `schema_pull` — sync the full schema registry into the local cache (`If-None-Match`).
+- `schema_validate` — validate an entry payload offline against a locally pulled schema.
 
 ## Using it via the CLI
 

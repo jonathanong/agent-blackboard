@@ -13,11 +13,12 @@ pnpm add agent-blackboard
 ## Library
 
 ```ts
-import { Auth, Entries, Sessions, Snapshots } from 'agent-blackboard'
+import { Auth, Entries, Schemas, Sessions, Snapshots } from 'agent-blackboard'
 
 const config = { baseUrl, token }
 const sessions = new Sessions(config)
 const entries = new Entries(config)
+const schemas = new Schemas(config)
 const snapshots = new Snapshots(config)
 
 await sessions.create({
@@ -36,8 +37,12 @@ await sessions.patch({ sessionId: 'worker-456', data: { branch: 'fix/retry' } })
 
 await entries.append({
   sessionId: 'worker-456',
+  schemaId: 'finding',
   data: { note: 'found a flaky retry' },
 })
+
+const pull = await schemas.pull()
+schemas.validateLocal('finding', { note: 'found a flaky retry' }, { dir: pull.dir })
 
 for await (const current of entries.get({ sessionId: 'worker-456' })) {
   console.log(current)
@@ -84,9 +89,18 @@ agent-blackboard sessions list
 agent-blackboard sessions list --inactive-for-hours 8
 agent-blackboard sessions get worker-456
 agent-blackboard append --session-id worker-456 '{"note":"investigating"}'
+agent-blackboard append --session-id worker-456 --schema finding '{"title":"flaky retry"}'
 agent-blackboard append --session-id worker-456 --file findings.md
 agent-blackboard get --session-id worker-456 --format jsonl
 agent-blackboard sessions archive worker-456
+agent-blackboard schemas pull
+agent-blackboard schemas list
+agent-blackboard schemas get finding
+agent-blackboard schemas validate finding entry.json
+agent-blackboard schemas put finding finding.schema.json --shadow
+agent-blackboard schemas report finding@1
+agent-blackboard schemas promote finding@1
+agent-blackboard schemas remove finding
 agent-blackboard snapshot export --root-only --inactive-for-hours 8
 agent-blackboard snapshot partition --path /tmp/agent-blackboard-snapshot-<uuid>.jsonl \
   --cleanup-token <cleanup-token>
@@ -115,18 +129,21 @@ skill copy can drift.
 ## MCP
 
 The stdio MCP server exposes `session_create`, `session_ensure`, `session_search`, `session_patch`,
-`session_archive`, `entry_append`, `entry_get`, and `snapshot_export`. `snapshot_export` writes a
-private, read-only JSONL file and returns only its path, counts, checksum, and terminal manifest;
-it never puts snapshot records on the MCP connection. Every session and entry operation requires
-explicit session ids where applicable. Credential management remains CLI/admin-only.
+`session_archive`, `entry_append` (with optional `schemaId`/`schemaVersion`), `entry_get`,
+`snapshot_export`, `schema_list`, `schema_get`, `schema_pull`, and offline `schema_validate`.
+`snapshot_export` writes a private, read-only JSONL file and returns only its path, counts,
+checksum, and terminal manifest; it never puts snapshot records on the MCP connection. Every session
+and entry operation requires explicit session ids where applicable. Credential management and schema
+admin operations (`put`, `promote`, `report`, `remove`) remain CLI/admin-only.
 
 ## Configuration
 
-| Variable                       | Used by         | Meaning                            |
-| ------------------------------ | --------------- | ---------------------------------- |
-| `AGENT_BLACKBOARD_URL`         | CLI/MCP         | Service base URL                   |
-| `AGENT_BLACKBOARD_TOKEN`       | CLI/MCP         | Client credential (`abb_sk_...`)   |
-| `AGENT_BLACKBOARD_ADMIN_TOKEN` | CLI credentials | Admin credential (`abb_admin_...`) |
+| Variable                       | Used by            | Meaning                                        |
+| ------------------------------ | ------------------ | ---------------------------------------------- |
+| `AGENT_BLACKBOARD_URL`         | CLI/MCP            | Service base URL                               |
+| `AGENT_BLACKBOARD_TOKEN`       | CLI/MCP            | Client credential (`abb_sk_...`)               |
+| `AGENT_BLACKBOARD_ADMIN_TOKEN` | CLI admin commands | Admin credential (`abb_admin_...`)             |
+| `AGENT_BLACKBOARD_SCHEMAS_DIR` | client/CLI/MCP     | Optional local schema cache directory override |
 
 Client and admin tokens are never interchangeable.
 
