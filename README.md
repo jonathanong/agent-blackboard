@@ -210,9 +210,4 @@ unless `--sentry=required` is supplied explicitly.
 
 ## Harness Ecosystem
 
-This is part of the following harness ecosystem:
-
-- [auto-harness](https://github.com/jonathanong/auto-harness) - non-interactive agent CLI orchestration across sandboxes
-- [agent-blackboard](https://github.com/jongleberry/agent-blackboard) - session-scoped telemetry for autonomous agents
-- [pr-shepherd](https://github.com/jongleberry/pr-shepherd) - autonomous pull request shepherd
-- [no-mistakes](https://github.com/jongleberry/no-mistakes) - deterministic AST-based codebase intelligence, test selection, and linting for agents
+agent-blackboard is part of [ratchet-stack](https://github.com/jongleberry/ratchet-stack), a set of plugins and tools for autonomous coding agents.
