@@ -152,6 +152,8 @@ describe('adminEnvFromProcess / storeFromProcess', () => {
       AGENT_BLACKBOARD_ADMIN_CREDENTIALS: 'abc',
       AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT: 'required',
     })
+    process.env.AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT = 'bogus'
+    expect(() => adminEnvFromProcess()).toThrow(/Invalid AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT/)
   })
 
   it('storeFromProcess picks the in-memory store only when AGENT_BLACKBOARD_STORE=memory', () => {

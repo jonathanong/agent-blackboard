@@ -13,6 +13,7 @@ import { realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { handleRequest, type ServerEnv } from './core/handle-request.mjs'
 import type { BodyChunk, HandlerRequest, HandlerResponse } from './core/types.mjs'
+import { resolveEnforcementMode } from './schemas/enforce.mjs'
 import { createDynamoStore } from './store/dynamo.mjs'
 import { MemoryBlackboardStore } from './store/memory.mjs'
 import type { BlackboardStore } from './store/store.mjs'
@@ -118,7 +119,7 @@ export function createServer(deps: ServerDeps): Server {
 // ---- Script entrypoint: `node local-server.mts` / `pnpm run dev` ----
 
 export function adminEnvFromProcess(): ServerEnv {
-  return {
+  const env: ServerEnv = {
     ...(process.env.AGENT_BLACKBOARD_ADMIN_CREDENTIALS
       ? { AGENT_BLACKBOARD_ADMIN_CREDENTIALS: process.env.AGENT_BLACKBOARD_ADMIN_CREDENTIALS }
       : {}),
@@ -126,6 +127,8 @@ export function adminEnvFromProcess(): ServerEnv {
       ? { AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT: process.env.AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT }
       : {}),
   }
+  resolveEnforcementMode(env)
+  return env
 }
 
 export function storeFromProcess(): BlackboardStore {
