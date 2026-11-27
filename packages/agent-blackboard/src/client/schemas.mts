@@ -1,4 +1,9 @@
-import { readLocalBundle, resolveSchemasDir, writeLocalBundle } from '../schemas/local-store.mjs'
+import {
+  normalizeRegistrySource,
+  readLocalBundle,
+  resolveSchemasDir,
+  writeLocalBundle,
+} from '../schemas/local-store.mjs'
 import { validateAgainstLocalSchemas } from '../schemas/validate.mjs'
 import type {
   ListSchemasResult,
@@ -49,7 +54,8 @@ export class Schemas {
 
   async pull(options: LocalSchemaOptions = {}): Promise<PullSchemasResult> {
     const dir = resolveSchemasDir(options.cwd ?? process.cwd(), options.env ?? {}, options.dir)
-    const local = readLocalBundle(dir)
+    const source = normalizeRegistrySource(this.#config.baseUrl)
+    const local = readLocalBundle(dir, source)
     const fetched = await fetchSchemaBundleRequest(this.#config, local?.revision)
     if (fetched.notModified) {
       const versionCount = local
@@ -63,7 +69,7 @@ export class Schemas {
         dir,
       }
     }
-    const counts = writeLocalBundle(dir, fetched.bundle)
+    const counts = writeLocalBundle(dir, fetched.bundle, undefined, source)
     return {
       upToDate: false,
       revision: fetched.bundle.revision,

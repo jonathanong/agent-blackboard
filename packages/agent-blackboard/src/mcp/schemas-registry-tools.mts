@@ -1,5 +1,5 @@
 import type { Tool } from '@modelcontextprotocol/sdk/types.js'
-import { IDEMPOTENT_ADDITIVE, READ_ONLY } from './schema-fields.mjs'
+import { MUTATING, READ_ONLY } from './schema-fields.mjs'
 
 export const SCHEMA_REGISTRY_TOOLS: Tool[] = [
   {
@@ -39,7 +39,7 @@ export const SCHEMA_REGISTRY_TOOLS: Tool[] = [
         },
       },
     },
-    annotations: IDEMPOTENT_ADDITIVE,
+    annotations: MUTATING,
   },
   {
     name: 'schema_validate',

@@ -112,6 +112,24 @@ describe('Schemas client', () => {
         dir,
       })
 
+      // Pulling from a different server origin into the same dir ignores the previous ETag
+      const otherFixture = await startHttpFixture((req, res) => {
+        expect(req.headers['if-none-match']).toBeUndefined()
+        sendJson(res, 200, { revision: 2, schemas: [] })
+      })
+      try {
+        const otherSchemas = new Schemas({ baseUrl: otherFixture.baseUrl, token: 't' })
+        expect(await otherSchemas.pull({ dir })).toEqual({
+          upToDate: false,
+          revision: 2,
+          schemaCount: 0,
+          versionCount: 0,
+          dir,
+        })
+      } finally {
+        await otherFixture.close()
+      }
+
       await expect(schemas.listVersions('')).rejects.toThrow(TypeError)
     } finally {
       await fixture.close()

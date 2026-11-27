@@ -125,7 +125,7 @@ it('lists twelve tools and returns JSON text or MCP errors', async () => {
       },
       schema_pull: {
         readOnlyHint: false,
-        destructiveHint: false,
+        destructiveHint: true,
         idempotentHint: true,
         openWorldHint: false,
       },
