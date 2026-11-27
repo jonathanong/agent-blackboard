@@ -6,8 +6,8 @@
     "name": "Jonathan Ong",
     "email": "jonathanrichardong@gmail.com"
   },
-  "homepage": "https://github.com/jonathanong/agent-blackboard",
-  "repository": "https://github.com/jonathanong/agent-blackboard",
+  "homepage": "https://github.com/jongleberry/agent-blackboard",
+  "repository": "https://github.com/jongleberry/agent-blackboard",
   "license": "MIT",
   "keywords": ["entries", "agent", "mcp", "retrospective", "self-improvement"],
   "skills": "./plugins/agent-blackboard/skills/",

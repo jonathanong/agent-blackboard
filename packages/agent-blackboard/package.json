@@ -2,14 +2,14 @@
   "name": "agent-blackboard",
   "version": "0.7.0",
   "description": "Client library, CLI, and MCP server for Agent Blackboard session entries.",
-  "homepage": "https://github.com/jonathanong/agent-blackboard#readme",
+  "homepage": "https://github.com/jongleberry/agent-blackboard#readme",
   "bugs": {
-    "url": "https://github.com/jonathanong/agent-blackboard/issues"
+    "url": "https://github.com/jongleberry/agent-blackboard/issues"
   },
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jonathanong/agent-blackboard.git",
+    "url": "git+https://github.com/jongleberry/agent-blackboard.git",
     "directory": "packages/agent-blackboard"
   },
   "bin": {

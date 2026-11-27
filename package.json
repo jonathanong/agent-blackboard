@@ -3,15 +3,15 @@
   "version": "0.0.0",
   "private": true,
   "description": "Agent Blackboard: session-scoped entries for autonomous agents.",
-  "homepage": "https://github.com/jonathanong/agent-blackboard#readme",
+  "homepage": "https://github.com/jongleberry/agent-blackboard#readme",
   "bugs": {
-    "url": "https://github.com/jonathanong/agent-blackboard/issues"
+    "url": "https://github.com/jongleberry/agent-blackboard/issues"
   },
   "license": "MIT",
   "author": "",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jonathanong/agent-blackboard.git"
+    "url": "git+https://github.com/jongleberry/agent-blackboard.git"
   },
   "type": "module",
   "scripts": {
