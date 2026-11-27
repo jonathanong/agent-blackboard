@@ -112,6 +112,67 @@ describe('Schemas client', () => {
         dir,
       })
 
+      // A delayed older-revision pull from the same source never downgrades a newer installed cache
+      let delayedResolve: (() => void) | undefined
+      let pullCalls = 0
+      const raceFixture = await startHttpFixture(async (_req, res) => {
+        pullCalls += 1
+        if (pullCalls === 1) {
+          await new Promise<void>((resolve) => {
+            delayedResolve = resolve
+          })
+          return sendJson(res, 200, { revision: 1, schemas: [] })
+        }
+        sendJson(res, 200, {
+          revision: 3,
+          schemas: [
+            {
+              id: 'finding',
+              latestVersion: 1,
+              deprecatedAt: null,
+              deprecatedBy: null,
+              createdAt: '2026-01-01T00:00:00.000Z',
+              createdBy: 'ops',
+              updatedAt: '2026-01-01T00:00:00.000Z',
+              updatedBy: 'ops',
+              versions: [
+                {
+                  id: 'finding',
+                  version: 1,
+                  ref: 'finding@1',
+                  schema: { type: 'object' },
+                  createdAt: '2026-01-01T00:00:00.000Z',
+                  createdBy: 'ops',
+                },
+              ],
+            },
+          ],
+        })
+      })
+      try {
+        const raceDir = makeTempDir()
+        const raceSchemas = new Schemas({ baseUrl: raceFixture.baseUrl, token: 't' })
+        const slowOlder = raceSchemas.pull({ dir: raceDir })
+        const fastNewer = await raceSchemas.pull({ dir: raceDir })
+        expect(fastNewer).toEqual({
+          upToDate: false,
+          revision: 3,
+          schemaCount: 1,
+          versionCount: 1,
+          dir: raceDir,
+        })
+        delayedResolve!()
+        expect(await slowOlder).toEqual({
+          upToDate: true,
+          revision: 3,
+          schemaCount: 1,
+          versionCount: 1,
+          dir: raceDir,
+        })
+      } finally {
+        await raceFixture.close()
+      }
+
       // Pulling from a different server origin into the same dir ignores the previous ETag
       const otherFixture = await startHttpFixture((req, res) => {
         expect(req.headers['if-none-match']).toBeUndefined()

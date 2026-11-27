@@ -69,6 +69,16 @@ export class Schemas {
         dir,
       }
     }
+    const current = readLocalBundle(dir, source)
+    if (current && current.revision > fetched.bundle.revision) {
+      return {
+        upToDate: true,
+        revision: current.revision,
+        schemaCount: current.schemas.length,
+        versionCount: current.schemas.reduce((sum, item) => sum + item.versions.length, 0),
+        dir,
+      }
+    }
     const counts = writeLocalBundle(dir, fetched.bundle, undefined, source)
     return {
       upToDate: false,
