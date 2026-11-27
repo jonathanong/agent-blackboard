@@ -257,5 +257,6 @@ describe('validateEntryWrite', () => {
     )
     expect(depUnknownVer).toMatchObject({ ok: true, warning: { code: 'schema_deprecated' } })
     if (depUnknownVer.ok) expect(depUnknownVer.shadowFailure).toBeUndefined()
+    expect((await getSnapshotCache(store, 4)).lookups.has('strict@99')).toBe(false)
   })
 })

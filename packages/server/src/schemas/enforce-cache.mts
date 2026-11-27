@@ -41,46 +41,44 @@ export function resolveCachedLookup(
   if (hit) return hit
 
   const entry = cache.bundle.schemas.find((item) => item.id === schemaId)
-  let outcome: CachedLookup
   if (!entry) {
-    outcome = { ok: false, code: 'schema_not_found', error: `schema not found: ${schemaId}` }
-  } else if (entry.deprecatedAt !== null) {
+    return { ok: false, code: 'schema_not_found', error: `schema not found: ${schemaId}` }
+  }
+  if (entry.deprecatedAt !== null) {
     const targetVersion = schemaVersion ?? entry.latestVersion
     const hasVersion = entry.versions.some((v) => v.version === targetVersion)
-    outcome = {
+    const outcome: CachedLookup = {
       ok: false,
       code: 'schema_deprecated',
       error: `schema is deprecated: ${schemaId}`,
       ...(hasVersion ? { deprecatedVersion: targetVersion } : {}),
     }
-  } else {
-    const targetVersion = schemaVersion ?? entry.latestVersion
-    const versionRecord = entry.versions.find((v) => v.version === targetVersion)
-    if (!versionRecord) {
-      outcome = {
-        ok: false,
-        code: 'schema_not_found',
-        error: `schema version not found: ${formatSchemaRef(schemaId, targetVersion)}`,
-      }
-    } else {
-      const compiled = compileRegisteredSchema(
-        { id: schemaId, version: targetVersion, schema: versionRecord.schema },
-        cache.bundle,
-        { rejectDeprecatedRefs: false },
-      )
-      outcome = compiled.ok
-        ? {
-            ok: true,
-            version: targetVersion,
-            mode: versionRecord.mode,
-            validate: compiled.validate,
-          }
-        : { ok: false, code: 'schema_invalid', error: compiled.error }
+    // Cache only registered versions so arbitrary unknown versions on a deprecated schema cannot grow the map.
+    if (hasVersion) cache.lookups.set(cacheKey, outcome)
+    return outcome
+  }
+  const targetVersion = schemaVersion ?? entry.latestVersion
+  const versionRecord = entry.versions.find((v) => v.version === targetVersion)
+  if (!versionRecord) {
+    return {
+      ok: false,
+      code: 'schema_not_found',
+      error: `schema version not found: ${formatSchemaRef(schemaId, targetVersion)}`,
     }
   }
-  // Do not cache missing-schema lookups so arbitrary nonexistent IDs/versions cannot grow the map unboundedly.
-  if (outcome.ok || outcome.code !== 'schema_not_found') {
-    cache.lookups.set(cacheKey, outcome)
-  }
+  const compiled = compileRegisteredSchema(
+    { id: schemaId, version: targetVersion, schema: versionRecord.schema },
+    cache.bundle,
+    { rejectDeprecatedRefs: false },
+  )
+  const outcome: CachedLookup = compiled.ok
+    ? {
+        ok: true,
+        version: targetVersion,
+        mode: versionRecord.mode,
+        validate: compiled.validate,
+      }
+    : { ok: false, code: 'schema_invalid', error: compiled.error }
+  cache.lookups.set(cacheKey, outcome)
   return outcome
 }
