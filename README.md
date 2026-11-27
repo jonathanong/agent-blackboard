@@ -2,6 +2,9 @@
 
 A session-scoped entry stream for autonomous agents — not a knowledge base.
 
+agent-blackboard is part of [ratchet-stack](https://github.com/jongleberry/ratchet-stack), a set of
+plugins and tools for autonomous coding agents.
+
 Agents create explicit sessions, append unstructured JSON entries while they work, and read those
 entries back later. Root sessions have `parentSessionId: null`; every subagent creates a separate
 session whose `parentSessionId` is its direct parent. Callers also provide the agent name and
@@ -108,13 +111,6 @@ For Claude Code, run these commands inside an interactive session:
 Use `/mcp` to confirm that `agent-blackboard` is connected. If installation reports that the
 plugin is already active, `/reload-plugins` is unnecessary.
 
-If you added the old `jonathanong/agent-blackboard` marketplace, migrate. In Claude Code, run
-`claude plugin marketplace remove agent-blackboard` (this uninstalls its plugins), then install from
-`ratchet-stack` as above. In Codex, run `codex plugin remove agent-blackboard@agent-blackboard`,
-then `codex plugin marketplace remove agent-blackboard`, then
-`codex plugin marketplace add jongleberry/ratchet-stack --ref main`, then
-`codex plugin add agent-blackboard@ratchet-stack`.
-
 ### Option 2: install only the MCP server
 
 This option exposes the MCP tools without installing the usage skill.
@@ -207,7 +203,3 @@ unless `--sentry=required` is supplied explicitly.
 | `AGENT_BLACKBOARD_TOKEN`             | client/CLI/MCP | Client credential                 |
 | `AGENT_BLACKBOARD_ADMIN_TOKEN`       | CLI            | Admin credential                  |
 | `AGENT_BLACKBOARD_SENTRY_DSN`        | deploy CLI     | Optional public Lambda Sentry DSN |
-
-## Harness Ecosystem
-
-agent-blackboard is part of [ratchet-stack](https://github.com/jongleberry/ratchet-stack), a set of plugins and tools for autonomous coding agents.
