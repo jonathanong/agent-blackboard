@@ -17,7 +17,12 @@ const REVISION_RETRIES = 20
 function isRetryableTransactionCanceled(error: unknown): boolean {
   if (!(error instanceof Error) || error.name !== 'TransactionCanceledException') return false
   const reasons = (error as { CancellationReasons?: Array<{ Code?: string }> }).CancellationReasons
-  return !(reasons?.some((reason) => reason.Code === 'ValidationError') ?? false)
+  if (!reasons || reasons.length === 0) return true
+  const codes = reasons.map((r) => r.Code).filter((c) => c !== undefined && c !== 'None')
+  return (
+    codes.length > 0 &&
+    codes.every((c) => c === 'ConditionalCheckFailed' || c === 'TransactionConflict')
+  )
 }
 
 export async function dynamoPutSchemaVersion(
@@ -122,7 +127,8 @@ export async function dynamoDeprecateSchema(
     ])
     if (!existing) throw new SessionStoreError('schema_not_found', `schema not found: ${id}`)
     if (existing.deprecatedAt !== null) {
-      return { revision: currentRevision, summary: existing, alreadyDeprecated: true }
+      const revision = await dynamoGetSchemaRegistryRevision(doc, tableName)
+      return { revision, summary: existing, alreadyDeprecated: true }
     }
 
     const timestamp = now().toISOString()

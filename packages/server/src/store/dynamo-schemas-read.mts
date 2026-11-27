@@ -1,7 +1,7 @@
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
 import { GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb'
 import type { SchemaBundle, SchemaRecord, SchemaVersionRecord } from '../core/types.mjs'
-import { formatSchemaRef } from '../schemas/id.mjs'
+import { formatSchemaRef, isValidSchemaId } from '../schemas/id.mjs'
 import {
   SCHEMA_REGISTRY_PK,
   SCHEMA_REGISTRY_SK,
@@ -61,6 +61,7 @@ export async function dynamoGetSchemaHead(
   tableName: string,
   id: string,
 ): Promise<SchemaRecord | undefined> {
+  if (!isValidSchemaId(id)) return undefined
   const result = await doc.send(
     new GetCommand({
       TableName: tableName,
@@ -95,11 +96,7 @@ async function queryAllPartition(
   return items
 }
 
-/**
- * Brackets a strongly consistent base-table read with revision reads before and
- * after, retrying if a registry mutation committed mid-read so the returned data
- * and revision (ETag) always describe one consistent snapshot.
- */
+/** Brackets a consistent base-table read with revision reads so data and ETag match one snapshot. */
 async function readConsistentSnapshot<T>(
   doc: DynamoDBDocumentClient,
   tableName: string,

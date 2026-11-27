@@ -277,5 +277,30 @@ describe('checkBackwardCompatibility', () => {
       checkBackwardCompatibility({ properties: { a: true } }, { properties: { a: true } })
         .compatible,
     ).toBe(true)
+
+    // Removing applicators when unevaluatedItems/unevaluatedProperties is false is breaking
+    expect(
+      checkBackwardCompatibility(
+        { type: 'array', items: { type: 'string' }, unevaluatedItems: false },
+        { type: 'array', unevaluatedItems: false },
+      ).compatible,
+    ).toBe(false)
+    expect(
+      checkBackwardCompatibility(
+        { type: 'object', additionalProperties: { type: 'string' }, unevaluatedProperties: false },
+        { type: 'object', unevaluatedProperties: false },
+      ).compatible,
+    ).toBe(false)
+
+    // Diamond local-$ref DAG stays bounded in linear time
+    const defs: Record<string, unknown> = { d0: { type: 'string' } }
+    for (let i = 1; i <= 30; i++) {
+      defs[`d${i}`] = {
+        type: 'object',
+        properties: { a: { $ref: `#/$defs/d${i - 1}` }, b: { $ref: `#/$defs/d${i - 1}` } },
+      }
+    }
+    const dag = { type: 'object', $defs: defs, properties: { root: { $ref: '#/$defs/d30' } } }
+    expect(checkBackwardCompatibility(dag, dag).compatible).toBe(true)
   })
 })

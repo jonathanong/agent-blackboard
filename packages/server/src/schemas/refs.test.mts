@@ -14,6 +14,7 @@ describe('validateSchemaDocument', () => {
         default: { $ref: 'default-prop@1' },
       },
       allOf: [{ type: 'object' }],
+      dependentRequired: { $schema: ['tag'] },
       default: { $ref: 'https://ignored-literal-default.example.com' },
     })
     expect(result).toEqual({
@@ -58,6 +59,7 @@ describe('validateSchemaDocument', () => {
     expect(validateSchemaDocument({ type: 'object', $dynamicRef: '#meta' })).toMatchObject({
       ok: false,
     })
+    expect(validateSchemaDocument({ type: 'object', $async: true })).toMatchObject({ ok: false })
     expect(
       validateSchemaDocument({ $id: 'https://example.com/finding.json', type: 'object' }),
     ).toMatchObject({ ok: false })

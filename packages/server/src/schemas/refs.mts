@@ -4,7 +4,7 @@ export const JSON_SCHEMA_2020_12 = 'https://json-schema.org/draft/2020-12/schema
 const ACCEPTED_DRAFT_URIS = new Set([JSON_SCHEMA_2020_12, `${JSON_SCHEMA_2020_12}#`])
 
 /** Keywords at schema nodes whose values are literal JSON data rather than subschemas. */
-const DATA_KEYWORDS = new Set(['const', 'enum', 'default', 'examples'])
+const DATA_KEYWORDS = new Set(['const', 'enum', 'default', 'examples', 'dependentRequired'])
 
 /** Keywords whose values are maps from arbitrary property/def names to subschemas. */
 const SCHEMA_MAP_KEYWORDS = new Set([
@@ -51,6 +51,9 @@ function inspectSchemaNode(node: unknown, refs: ParsedSchemaRef[]): string | und
   }
   if (node.$dynamicRef !== undefined) {
     return '$dynamicRef is not allowed in registered schemas'
+  }
+  if (node.$async !== undefined) {
+    return '$async is not allowed in registered schemas'
   }
   if (node.$id !== undefined) {
     return '$id is not allowed in registered schemas; the registry assigns schema identity'

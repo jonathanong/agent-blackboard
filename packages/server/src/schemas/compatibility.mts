@@ -51,7 +51,6 @@ function compareLocalRef(
   if (prevTarget === undefined || nextTarget === undefined) return
   ctx.visitedRefs.add(visitKey)
   compareSubschema(prevTarget, nextTarget, path, ctx)
-  ctx.visitedRefs.delete(visitKey)
 }
 
 function compareProperties(
@@ -140,11 +139,23 @@ function compareNodes(
       joinPath(path, 'additionalProperties'),
       ctx,
     )
+  } else if (Object.hasOwn(prev, 'additionalProperties') && next.unevaluatedProperties === false) {
+    ctx.changes.push({
+      path: joinPath(path, 'additionalProperties'),
+      kind: 'narrowed_constraint',
+      message: 'removed additionalProperties while unevaluatedProperties is false',
+    })
   }
 
   if (Object.hasOwn(next, 'items')) {
     const prevItems = Object.hasOwn(prev, 'items') ? prev.items : true
     compareSubschema(prevItems, next.items, joinPath(path, 'items'), ctx)
+  } else if (Object.hasOwn(prev, 'items') && next.unevaluatedItems === false) {
+    ctx.changes.push({
+      path: joinPath(path, 'items'),
+      kind: 'narrowed_constraint',
+      message: 'removed items while unevaluatedItems is false',
+    })
   }
 }
 

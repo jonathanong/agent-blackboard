@@ -85,6 +85,7 @@ describe('DynamoDB schemas read helpers', () => {
     expect((await dynamoGetSchema(doc, 'T', 'a'))?.versionRecord.version).toBe(1)
     expect(await dynamoGetSchema(doc, 'T', 'a', 99)).toBeUndefined()
     expect(await dynamoGetSchema(doc, 'T', 'missing')).toBeUndefined()
+    expect(await dynamoGetSchema(doc, 'T', 'a'.repeat(1020))).toBeUndefined()
 
     const versions = await dynamoListSchemaVersions(doc, 'T', 'a')
     expect(versions?.versions.map((v) => v.version)).toEqual([1, 2])
@@ -309,22 +310,24 @@ describe('DynamoDB schemas write helpers', () => {
       }),
     ).rejects.toMatchObject({ code: 'schema_conflict' })
 
-    // ValidationError inside TransactionCanceledException (e.g. oversized item) is rethrown without retry
-    const validationErr = Object.assign(canceledError(), {
-      CancellationReasons: [{ Code: 'None' }, { Code: 'ValidationError' }],
-    })
-    const oversizedDoc = mockDoc((command) => {
-      if (command.constructor.name === 'GetCommand') return {}
-      throw validationErr
-    })
-    await expect(
-      dynamoPutSchemaVersion(oversizedDoc, 'T', NOW, {
-        id: 'a',
-        schema: { type: 'object' },
-        actor: 'alice',
-        expectedVersion: 0,
-      }),
-    ).rejects.toBe(validationErr)
+    // ValidationError or ThrottlingError inside TransactionCanceledException is rethrown without retry
+    for (const code of ['ValidationError', 'ThrottlingError']) {
+      const nonRetryableErr = Object.assign(canceledError(), {
+        CancellationReasons: [{ Code: 'None' }, { Code: code }],
+      })
+      const failDoc = mockDoc((command) => {
+        if (command.constructor.name === 'GetCommand') return {}
+        throw nonRetryableErr
+      })
+      await expect(
+        dynamoPutSchemaVersion(failDoc, 'T', NOW, {
+          id: 'a',
+          schema: { type: 'object' },
+          actor: 'alice',
+          expectedVersion: 0,
+        }),
+      ).rejects.toBe(nonRetryableErr)
+    }
 
     // Non-TransactionCanceledException bubbles
     const fatalDoc = mockDoc((command) => {
@@ -362,9 +365,13 @@ describe('DynamoDB schemas write helpers', () => {
       code: 'schema_not_found',
     })
 
+    let alreadyRevReads = 0
     const alreadyDoc = mockDoc((command) => {
       const key = command.input.Key as { PK: string }
-      if (key.PK === 'SCHEMA_REGISTRY') return { Item: { revision: 2 } }
+      if (key.PK === 'SCHEMA_REGISTRY') {
+        alreadyRevReads += 1
+        return { Item: { revision: alreadyRevReads === 1 ? 1 : 2 } }
+      }
       return {
         Item: { ...HEAD_A, deprecatedAt: '2026-01-01T00:00:00.000Z', deprecatedBy: 'alice' },
       }
