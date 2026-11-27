@@ -5,6 +5,7 @@ import type { CliContext } from './context.mjs'
 import { clientConfigFromEnv } from './env.mjs'
 import { CliError } from './errors.mjs'
 import { writeLine } from './output.mjs'
+import { createRevisionNotifier } from './revision-notice.mjs'
 import { cliSessionIdentity, SESSION_BOOLEAN_FLAGS } from './session-resolution.mjs'
 
 /**
@@ -38,7 +39,7 @@ function parseCreateSessionInput(
 export async function runSessions(argv: string[], ctx: CliContext): Promise<void> {
   const [subcommand, ...rest] = argv
   const { positional, flags } = parseArgs(rest, SESSION_BOOLEAN_FLAGS)
-  const sessions = new Sessions(clientConfigFromEnv(ctx.env))
+  const sessions = new Sessions(clientConfigFromEnv(ctx.env, createRevisionNotifier(ctx)))
   if (subcommand === 'create') {
     const input = parseCreateSessionInput('create', positional, flags, ctx)
     writeLine(ctx.stdout, JSON.stringify(await sessions.create(input)))

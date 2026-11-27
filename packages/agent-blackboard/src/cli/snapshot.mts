@@ -8,6 +8,7 @@ import { clientConfigFromEnv } from './env.mjs'
 import { CliError } from './errors.mjs'
 import { parseDataArrayContains } from './data-array-contains.mjs'
 import { writeLine } from './output.mjs'
+import { createRevisionNotifier } from './revision-notice.mjs'
 import { partitionCounts } from './snapshot-partition-options.mjs'
 
 const PARTITION_FLAGS = [
@@ -187,7 +188,9 @@ export async function runSnapshot(argv: string[], ctx: CliContext): Promise<void
   if (positional.length > 0) throw new CliError('snapshot export accepts flags only.')
   const path = optionalString(flags, 'path')
   const selection = selectionFrom(flags)
-  const result = await new Snapshots(clientConfigFromEnv(ctx.env)).export({
+  const result = await new Snapshots(
+    clientConfigFromEnv(ctx.env, createRevisionNotifier(ctx)),
+  ).export({
     ...(path === undefined ? {} : { path }),
     selection,
   })

@@ -15,6 +15,12 @@ Usage:
   agent-blackboard snapshot partition --path <generated-snapshot> --cleanup-token <token> [--max-sessions <count>]
     [--max-bytes <bytes>] [--checksum <sha256>] [--sessions <count> --entries <count> --records <count> --bytes <count>]
   agent-blackboard snapshot cleanup [--path <generated-snapshot>] [--directory <generated-partition-directory>] --cleanup-token <token>
+  agent-blackboard schemas pull [--dir <path>]
+  agent-blackboard schemas put <id> <file> [--breaking]
+  agent-blackboard schemas remove <id>
+  agent-blackboard schemas list
+  agent-blackboard schemas get <id>[@<version>]
+  agent-blackboard schemas validate <id>[@<version>] <file> [--dir <path>]
   agent-blackboard credentials <subcommand>
   agent-blackboard mcp
 
@@ -26,4 +32,5 @@ Env:
   AGENT_BLACKBOARD_URL            Server base URL
   AGENT_BLACKBOARD_TOKEN          Client credential
   AGENT_BLACKBOARD_ADMIN_TOKEN    Admin credential
+  AGENT_BLACKBOARD_SCHEMAS_DIR    Optional local schema cache directory
 `

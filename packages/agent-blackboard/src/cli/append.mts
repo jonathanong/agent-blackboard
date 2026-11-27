@@ -6,6 +6,7 @@ import type { CliContext } from './context.mjs'
 import { clientConfigFromEnv } from './env.mjs'
 import { CliError } from './errors.mjs'
 import { writeLine } from './output.mjs'
+import { createRevisionNotifier } from './revision-notice.mjs'
 import { cliSessionId, SESSION_BOOLEAN_FLAGS } from './session-resolution.mjs'
 
 async function readStdin(stdin: AsyncIterable<Buffer | string>): Promise<string> {
@@ -58,7 +59,7 @@ export async function runAppend(argv: string[], ctx: CliContext): Promise<void> 
   const data = file
     ? await readFileData(file)
     : parseJsonObject(positional[0] ?? (await readStdin(ctx.stdin)))
-  const entry = await appendEntry(clientConfigFromEnv(ctx.env), {
+  const entry = await appendEntry(clientConfigFromEnv(ctx.env, createRevisionNotifier(ctx)), {
     sessionId,
     data,
   })
