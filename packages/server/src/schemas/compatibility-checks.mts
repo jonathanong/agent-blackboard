@@ -59,16 +59,38 @@ export function joinPath(base: string, segment: string): string {
   return base === '/' ? `/${escaped}` : `${base}/${escaped}`
 }
 
+const ANCHOR_SKIP_KEYS = new Set(['const', 'enum', 'default', 'examples', 'dependentRequired'])
+
+function findLocalAnchor(node: unknown, anchor: string): Record<string, unknown> | undefined {
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const found = findLocalAnchor(item, anchor)
+      if (found) return found
+    }
+    return undefined
+  }
+  if (!isPlainObject(node)) return undefined
+  if (node.$anchor === anchor) return node
+  for (const [key, value] of Object.entries(node)) {
+    if (ANCHOR_SKIP_KEYS.has(key)) continue
+    const found = findLocalAnchor(value, anchor)
+    if (found) return found
+  }
+  return undefined
+}
+
 export function resolveLocalPointer(root: Record<string, unknown>, ref: string): unknown {
   if (ref === '#') return root
-  if (!ref.startsWith('#/')) return undefined
-  let current: unknown = root
-  for (const rawSegment of ref.slice(2).split('/')) {
-    const segment = rawSegment.replaceAll('~1', '/').replaceAll('~0', '~')
-    if (!isPlainObject(current) || !Object.hasOwn(current, segment)) return undefined
-    current = current[segment]
+  if (ref.startsWith('#/')) {
+    let current: unknown = root
+    for (const rawSegment of ref.slice(2).split('/')) {
+      const segment = rawSegment.replaceAll('~1', '/').replaceAll('~0', '~')
+      if (!isPlainObject(current) || !Object.hasOwn(current, segment)) return undefined
+      current = current[segment]
+    }
+    return current
   }
-  return current
+  return findLocalAnchor(root, ref.slice(1))
 }
 
 function normalizeTypes(value: unknown): Set<string> | undefined {

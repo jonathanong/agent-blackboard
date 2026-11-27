@@ -139,7 +139,11 @@ function compareNodes(
       joinPath(path, 'additionalProperties'),
       ctx,
     )
-  } else if (Object.hasOwn(prev, 'additionalProperties') && next.unevaluatedProperties === false) {
+  } else if (
+    Object.hasOwn(prev, 'additionalProperties') &&
+    prev.additionalProperties !== false &&
+    next.unevaluatedProperties === false
+  ) {
     ctx.changes.push({
       path: joinPath(path, 'additionalProperties'),
       kind: 'narrowed_constraint',
@@ -150,7 +154,11 @@ function compareNodes(
   if (Object.hasOwn(next, 'items')) {
     const prevItems = Object.hasOwn(prev, 'items') ? prev.items : true
     compareSubschema(prevItems, next.items, joinPath(path, 'items'), ctx)
-  } else if (Object.hasOwn(prev, 'items') && next.unevaluatedItems === false) {
+  } else if (
+    Object.hasOwn(prev, 'items') &&
+    prev.items !== false &&
+    next.unevaluatedItems === false
+  ) {
     ctx.changes.push({
       path: joinPath(path, 'items'),
       kind: 'narrowed_constraint',

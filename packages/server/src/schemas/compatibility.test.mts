@@ -211,8 +211,30 @@ describe('checkBackwardCompatibility', () => {
 
     expect(
       checkBackwardCompatibility(
-        { properties: { a: { $ref: '#anchor' } } },
-        { properties: { a: { $ref: '#anchor' } } },
+        {
+          $defs: { val: { $anchor: 'value', type: 'string' } },
+          properties: { a: { $ref: '#value' }, missing: { $ref: '#missingAnchor' } },
+          default: { $anchor: 'ignored' },
+          allOf: [{ $anchor: 'arrAnchor', type: 'object' }],
+        },
+        {
+          $defs: { val: { $anchor: 'value', type: 'number' } },
+          properties: { a: { $ref: '#value' }, missing: { $ref: '#missingAnchor' } },
+          default: { $anchor: 'ignored' },
+          allOf: [{ $anchor: 'arrAnchor', type: 'object' }],
+        },
+      ).compatible,
+    ).toBe(false)
+    expect(
+      checkBackwardCompatibility(
+        {
+          allOf: [{ $anchor: 'arrAnchor', type: 'string' }],
+          properties: { a: { $ref: '#arrAnchor' } },
+        },
+        {
+          allOf: [{ $anchor: 'arrAnchor', type: 'string' }],
+          properties: { a: { $ref: '#arrAnchor' } },
+        },
       ).compatible,
     ).toBe(true)
 
@@ -291,6 +313,19 @@ describe('checkBackwardCompatibility', () => {
         { type: 'object', unevaluatedProperties: false },
       ).compatible,
     ).toBe(false)
+
+    expect(
+      checkBackwardCompatibility(
+        { type: 'array', items: false, unevaluatedItems: false },
+        { type: 'array', unevaluatedItems: false },
+      ).compatible,
+    ).toBe(true)
+    expect(
+      checkBackwardCompatibility(
+        { type: 'object', additionalProperties: false, unevaluatedProperties: false },
+        { type: 'object', unevaluatedProperties: false },
+      ).compatible,
+    ).toBe(true)
 
     // Diamond local-$ref DAG stays bounded in linear time
     const defs: Record<string, unknown> = { d0: { type: 'string' } }
