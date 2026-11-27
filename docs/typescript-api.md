@@ -12,10 +12,12 @@ import {
   Auth,
   Entries,
   formatError,
+  Schemas,
   Sessions,
   Snapshots,
   type ClientConfig,
   type ReadRetryOptions,
+  type SchemaSummary,
   type Session,
   type SessionEntry,
 } from 'agent-blackboard'
@@ -42,6 +44,7 @@ interface ClientConfig {
   baseUrl: string
   token: string // abb_sk_<credentialId>_<secret>
   readRetry?: ReadRetryOptions
+  onSchemaRevision?: (revision: number) => void
 }
 
 interface ReadRetryOptions {
@@ -212,12 +215,16 @@ Create one instance with `new Entries(config: ClientConfig)`.
 interface AppendEntryInput {
   sessionId: string
   data: Record<string, unknown>
+  schemaId?: string
+  schemaVersion?: number
 }
 ```
 
-Appends one entry to any existing session, including an archived one. The service assigns
-`createdAt`, advances the session's `lastEntryAt`, and leaves `archivedAt` unchanged; the caller
-cannot supply or override timestamps.
+Appends one entry to any existing session, including an archived one. When `schemaId` (and optional
+`schemaVersion`) is supplied, the server validates `data` against that registered JSON Schema and
+stores the resolved `schemaId` and `schemaVersion` on the entry. The service assigns `createdAt`,
+advances the session's `lastEntryAt`, and leaves `archivedAt` unchanged; the caller cannot supply or
+override timestamps.
 
 ### `get(query): AsyncIterable<SessionEntry>`
 
@@ -313,11 +320,50 @@ interface SessionEntry {
   sessionId: string
   createdAt: string
   data: Record<string, unknown>
+  schemaId?: string
+  schemaVersion?: number
+}
+
+interface AppendEntryResult extends SessionEntry {
+  warning?: SchemaShadowWarning // present when accepted under per-version or global shadow mode
 }
 ```
 
-`data` is intentionally unstructured. Values must survive JSON serialization; avoid `undefined`,
+`data` is JSON-serializable object data; when validated against a registered schema, `schemaId` and
+`schemaVersion` record the exact immutable schema version used at write time. Avoid `undefined`,
 functions, symbols, `BigInt`, circular references, and other non-JSON values.
+
+## `Schemas`
+
+`Schemas` exposes read operations plus local pull and offline validation against the JSON Schema
+2020-12 registry. Admin operations (`put`, `promote`, `report`, `remove`) are CLI/admin-only and
+are not exported here.
+
+```ts
+interface LocalSchemaOptions {
+  dir?: string // explicit cache directory override
+  cwd?: string // base directory for worktree-root lookup; defaults to process.cwd()
+  env?: NodeJS.ProcessEnv // checked for AGENT_BLACKBOARD_SCHEMAS_DIR; defaults to {}
+}
+
+const schemas = new Schemas(config)
+
+const { revision, schemas: summaries } = await schemas.list()
+const latest = await schemas.get('finding')
+const pinned = await schemas.get('finding', 1)
+const history = await schemas.listVersions('finding')
+
+const pull = await schemas.pull({ dir: '/path/to/cache' })
+const result = schemas.validateLocal('finding', { title: 'flaky retry' }, { dir: pull.dir })
+```
+
+`LocalSchemaOptions.env` defaults to `{}` rather than reading `process.env` implicitly.
+`validateLocal` and `validateAgainstLocalSchemas` throw when no valid local pull exists, when the
+requested schema or version is missing, or when the schema is deprecated; schema validation
+failures return `{ valid: false, schema, revision, errors }` instead of throwing.
+
+Pure helpers `resolveSchemasDir`, `validateAgainstBundle`, and `validateAgainstLocalSchemas` are
+also exported from the package root for offline workflows.
 
 ## `Auth`
 
@@ -414,7 +460,11 @@ The package root exports:
 - sessions: `Session`, `CreateSessionInput`, `PatchSessionInput`, `ListSessionsQuery`;
 - entries: `SessionEntry`, `AppendEntryInput`, `GetEntriesQuery`, `GetRawEntriesQuery`,
   `EntryWireFormat`, `StructuredEntryFormat`;
-- credentials: `CredentialCreated`, `CredentialSummary`.
+- credentials: `CredentialCreated`, `CredentialSummary`;
+- schemas: `Schemas`, `LocalSchemaOptions`, `resolveSchemasDir`, `validateAgainstBundle`,
+  `validateAgainstLocalSchemas`, `SchemaSummary`, `SchemaVersionRecord`, `SchemaWithVersions`,
+  `SchemaBundle`, `SchemaVersionDetail`, `ListSchemasResult`, `ListSchemaVersionsResult`,
+  `PullSchemasResult`, `SchemaValidationIssue`, `SchemaValidationResult`;
 - snapshots: `Snapshots`, `partitionSnapshot`, `cleanupSnapshotPartitions`, `SnapshotSelection`,
   `SnapshotManifest`, `SnapshotCounts`, `SnapshotChecksum`, `SnapshotVerification`,
   `SnapshotExportOptions`, `SnapshotExportResult`, `SnapshotPartitionOptions`,

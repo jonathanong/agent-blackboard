@@ -19,7 +19,7 @@ function text(content: unknown): string {
   return (content as Array<{ text: string }>)[0]!.text
 }
 
-it('lists eight tools and returns JSON text or MCP errors', async () => {
+it('lists twelve tools and returns JSON text or MCP errors', async () => {
   const entry = { sessionId: 's', createdAt: 'now', data: {} }
   const fixture = await startHttpFixture((req, res) => {
     if (new URL(req.url, 'http://localhost').pathname !== '/snapshot') {
@@ -86,6 +86,10 @@ it('lists eight tools and returns JSON text or MCP errors', async () => {
     expect(tools.map((tool) => tool.name).sort()).toEqual([
       'entry_append',
       'entry_get',
+      'schema_get',
+      'schema_list',
+      'schema_pull',
+      'schema_validate',
       'session_archive',
       'session_create',
       'session_ensure',
@@ -102,6 +106,30 @@ it('lists eight tools and returns JSON text or MCP errors', async () => {
         openWorldHint: false,
       },
       entry_get: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      schema_get: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      schema_list: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      schema_pull: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      schema_validate: {
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,

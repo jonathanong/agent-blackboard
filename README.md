@@ -68,10 +68,19 @@ agent-blackboard append --session-id worker-456 '{"note":"found a flaky retry"}'
 agent-blackboard get --session-id worker-456 --format markdown
 ```
 
-Create client credentials with an admin token:
+Create client credentials and register entry schemas with an admin token
+(`AGENT_BLACKBOARD_ADMIN_TOKEN`), then pull and validate with a client token:
 
 ```sh
+export AGENT_BLACKBOARD_ADMIN_TOKEN=abb_admin_...
 agent-blackboard credentials create --name "my laptop"
+agent-blackboard schemas put finding finding.schema.json --shadow
+agent-blackboard schemas report finding@1
+agent-blackboard schemas promote finding@1
+
+agent-blackboard schemas pull
+agent-blackboard schemas validate finding entry.json
+agent-blackboard append --session-id worker-456 --schema finding '{"title":"flaky retry"}'
 ```
 
 ## Install in Codex, Claude Code, Cursor, OpenCode, or Grok
@@ -194,12 +203,14 @@ unless `--sentry=required` is supplied explicitly.
 
 ## Configuration
 
-| Variable                             | Used by        | Meaning                           |
-| ------------------------------------ | -------------- | --------------------------------- |
-| `AGENT_BLACKBOARD_TABLE`             | server         | DynamoDB table name               |
-| `AGENT_BLACKBOARD_TTL_DAYS`          | server         | Entry retention; default 90 days  |
-| `AGENT_BLACKBOARD_ADMIN_CREDENTIALS` | server         | Base64 JSON admin credential list |
-| `AGENT_BLACKBOARD_URL`               | client/CLI/MCP | Server base URL                   |
-| `AGENT_BLACKBOARD_TOKEN`             | client/CLI/MCP | Client credential                 |
-| `AGENT_BLACKBOARD_ADMIN_TOKEN`       | CLI            | Admin credential                  |
-| `AGENT_BLACKBOARD_SENTRY_DSN`        | deploy CLI     | Optional public Lambda Sentry DSN |
+| Variable                              | Used by        | Meaning                                                      |
+| ------------------------------------- | -------------- | ------------------------------------------------------------ |
+| `AGENT_BLACKBOARD_TABLE`              | server         | DynamoDB table name                                          |
+| `AGENT_BLACKBOARD_TTL_DAYS`           | server         | Entry retention; default 90 days                             |
+| `AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT` | server         | `optional` (default) or `required` for unschematized entries |
+| `AGENT_BLACKBOARD_ADMIN_CREDENTIALS`  | server         | Base64 JSON admin credential list                            |
+| `AGENT_BLACKBOARD_URL`                | client/CLI/MCP | Server base URL                                              |
+| `AGENT_BLACKBOARD_TOKEN`              | client/CLI/MCP | Client credential                                            |
+| `AGENT_BLACKBOARD_ADMIN_TOKEN`        | CLI            | Admin credential                                             |
+| `AGENT_BLACKBOARD_SCHEMAS_DIR`        | client/CLI/MCP | Optional local schema cache directory override               |
+| `AGENT_BLACKBOARD_SENTRY_DSN`         | deploy CLI     | Optional public Lambda Sentry DSN                            |

@@ -9,7 +9,7 @@ export interface SchemaSummary {
   updatedBy: string
 }
 
-type SchemaVersionMode = 'enforced' | 'shadow'
+export type SchemaVersionMode = 'enforced' | 'shadow'
 
 export interface SchemaVersionRecord {
   id: string
@@ -46,6 +46,11 @@ export interface SchemaVersionDetail extends SchemaSummary {
   versionCreatedBy: string
   promotedAt?: string | null
   promotedBy?: string | null
+  revision: number
+}
+
+export interface ListSchemaVersionsResult extends SchemaSummary {
+  versions: SchemaVersionRecord[]
   revision: number
 }
 

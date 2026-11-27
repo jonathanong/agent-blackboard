@@ -9,6 +9,8 @@ import {
   SESSION_ID,
 } from './schema-fields.mjs'
 
+import { SCHEMA_REGISTRY_TOOLS } from './schemas-registry-tools.mjs'
+
 export const ENTRY_TOOLS: Tool[] = [
   {
     name: 'snapshot_export',
@@ -148,12 +150,19 @@ export const ENTRY_TOOLS: Tool[] = [
   },
   {
     name: 'entry_append',
-    description: 'Appends unstructured data to an existing session, including an archived one.',
+    description:
+      'Appends an entry to an existing session, including an archived one. Optionally names a registered schemaId (and schemaVersion) for server-side validation.',
     inputSchema: {
       type: 'object',
       properties: {
         sessionId: RESOLVABLE_SESSION_ID,
-        data: { type: 'object', description: 'Unstructured JSON payload.' },
+        data: { type: 'object', description: 'Entry JSON payload.' },
+        schemaId: { type: 'string', description: 'Optional registered JSON Schema id.' },
+        schemaVersion: {
+          type: 'integer',
+          minimum: 1,
+          description: 'Optional pinned schema version number (requires schemaId).',
+        },
       },
       required: ['data'],
     },
@@ -171,4 +180,5 @@ export const ENTRY_TOOLS: Tool[] = [
     },
     annotations: READ_ONLY,
   },
+  ...SCHEMA_REGISTRY_TOOLS,
 ]

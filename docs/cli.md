@@ -1,8 +1,9 @@
 # CLI commands
 
 The `agent-blackboard` CLI uses `AGENT_BLACKBOARD_URL` plus either
-`AGENT_BLACKBOARD_TOKEN` for sessions/entries or `AGENT_BLACKBOARD_ADMIN_TOKEN` for credentials.
-Client and admin credentials are never interchangeable.
+`AGENT_BLACKBOARD_TOKEN` for sessions/entries/schema reads or `AGENT_BLACKBOARD_ADMIN_TOKEN` for
+credentials and schema writes (`put`, `remove`). Client and admin credentials are never
+interchangeable.
 
 ## Sessions
 
@@ -46,6 +47,8 @@ requested string.
 
 ```sh
 agent-blackboard append --session-id worker-456 '{"note":"found the edge case"}'
+agent-blackboard append --session-id worker-456 --schema finding '{"title":"flaky retry"}'
+agent-blackboard append --session-id worker-456 --schema finding@1 '{"title":"flaky retry"}'
 agent-blackboard append --session-id worker-456 < entry.json
 agent-blackboard append --session-id worker-456 --file entry.json
 agent-blackboard append --session-id worker-456 --file findings.md
@@ -55,9 +58,11 @@ agent-blackboard get --session-id worker-456 --format jsonl
 agent-blackboard get --session-id worker-456 --format markdown
 ```
 
-`append` and `get` take `--session-id`, or resolve it from the harness environment when omitted. Entries are append-only: there is no `patch` command for
-entries; to record an update, append a new entry. Reads stream bytes to stdout without buffering the
-full response.
+`append` and `get` take `--session-id`, or resolve it from the harness environment when omitted.
+Pass `--schema <id>[@<version>]` to validate the entry against a registered JSON Schema on the
+server (latest version if `@<version>` is omitted). Entries are append-only: there is no `patch`
+command for entries; to record an update, append a new entry. Reads stream bytes to stdout without
+buffering the full response.
 
 For `append --file`, `.json` files must contain a JSON object. `.md` and `.markdown` files are sent
 as `{ "markdown": "..." }`; `.txt` files are sent as `{ "text": "..." }`.
@@ -94,6 +99,50 @@ It preserves each contiguous session and its ordered entries, defaults to 25 ses
 read-only partition, and rejects an oversize session instead of splitting it. `snapshot cleanup`
 requires the same cleanup token and accepts either generated path, or both, attempting all requested
 cleanup safely. The token is printed in the compact JSON result from `snapshot export`.
+
+## Schemas
+
+```sh
+# Client commands (AGENT_BLACKBOARD_TOKEN)
+agent-blackboard schemas pull [--dir <path>]
+agent-blackboard schemas list
+agent-blackboard schemas get finding
+agent-blackboard schemas get finding@1
+
+# Offline validation against the local pulled copy (no network or token required)
+agent-blackboard schemas validate finding entry.json [--dir <path>]
+agent-blackboard schemas validate finding@1 entry.json
+
+# Admin commands (AGENT_BLACKBOARD_ADMIN_TOKEN)
+agent-blackboard schemas put finding finding.schema.json
+agent-blackboard schemas put finding finding.schema.json --breaking
+agent-blackboard schemas put finding finding.schema.json --shadow
+agent-blackboard schemas report finding
+agent-blackboard schemas report finding@1 --limit 25
+agent-blackboard schemas promote finding@1
+agent-blackboard schemas remove finding
+```
+
+The registry accepts JSON Schema Draft 2020-12 only, rejects schemas that fail to compile, and
+disallows remote `$ref`s (only internal `#...` pointers and references to other registered schemas
+`<id>` or `<id>@<version>` are permitted). Every `put` publishes a new immutable version `<id>@<n>`
+and advances the server's registry revision. Breaking changes (new required fields, removed
+properties, narrowed types or constraints) are refused with HTTP `409` unless `--breaking` is
+passed. Passing `--shadow` registers the version in shadow mode: entries naming it are validated,
+but failures are accepted (`201`) with a `warning` in the write response and recorded server-side
+(schema id, version, session, time, and validation diagnostics — never the entry payload). Admins
+can inspect counts and recent failures with `schemas report <id>[@<version>]` and switch a shadow
+version to enforced with `schemas promote <id>@<version>`. `remove` marks a schema deprecated so
+new writes against it are rejected while keeping all historical versions readable.
+
+`schemas pull` stores the local copy under `<worktree>/.local/agent-blackboard/schemas` (override
+with `AGENT_BLACKBOARD_SCHEMAS_DIR` or `--dir`) with `manifest.json`, `latest/<id>.json`, and
+`versions/<id>@<version>.json`, sending `If-None-Match` so an up-to-date client receives
+`304 Not Modified`. Whenever another network CLI command (`sessions`, `append`, `get`,
+`snapshot export`, `schemas list|get|put|promote|report|remove`) observes a newer
+`x-schema-registry-revision` header than the local manifest, it prints one notice line on `stderr`
+telling you to run `agent-blackboard schemas pull` (`credentials` and `mcp` do not emit this
+notice).
 
 ## Credentials
 
