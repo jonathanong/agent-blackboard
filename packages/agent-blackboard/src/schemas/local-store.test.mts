@@ -130,6 +130,13 @@ describe('local schema store', () => {
     expect(readBack).toEqual(withManifestSchema)
     expect(readLocalBundle(dir, 'https://other.example.com')).toBeUndefined()
 
+    // Torn write (a version file modified without updating manifest) fails bundleHash check
+    writeFileSync(
+      join(versionsDir, 'finding@1.json'),
+      `${JSON.stringify({ ...SAMPLE_BUNDLE.schemas[0]!.versions[0]!, schema: { type: 'object', additionalProperties: false } }, null, 2)}\n`,
+    )
+    expect(readLocalBundle(dir, 'https://example.com/api')).toBeUndefined()
+
     // Corrupt version record (empty object) makes readLocalBundle return undefined so pull heals
     writeFileSync(join(versionsDir, 'finding@1.json'), '{}')
     expect(readLocalBundle(dir)).toBeUndefined()

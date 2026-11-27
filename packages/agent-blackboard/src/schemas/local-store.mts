@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import type {
@@ -20,6 +20,8 @@ export interface LocalSchemaManifest {
   pulledAt: string
   /** Normalized server base URL this cache was pulled from. */
   source?: string
+  /** SHA-256 digest of all version files so torn writes fail verification on read. */
+  bundleHash?: string
   schemas: Array<SchemaSummary & { versions: number[] }>
 }
 
@@ -110,12 +112,15 @@ export function writeLocalBundle(
   let versionCount = 0
 
   const manifestSchemas: LocalSchemaManifest['schemas'] = []
+  const hash = createHash('sha256')
   for (const entry of bundle.schemas) {
     const versionNumbers: number[] = []
     for (const versionRecord of entry.versions) {
       const fileName = `${formatSchemaRef(entry.id, versionRecord.version)}.json`
+      const serialized = `${JSON.stringify(versionRecord, null, 2)}\n`
       keepVersions.add(fileName)
-      writeFileAtomic(join(versionsDir, fileName), `${JSON.stringify(versionRecord, null, 2)}\n`)
+      hash.update(`${fileName}\0${serialized}\0`)
+      writeFileAtomic(join(versionsDir, fileName), serialized)
       versionNumbers.push(versionRecord.version)
       versionCount += 1
     }
@@ -139,6 +144,7 @@ export function writeLocalBundle(
     revision: bundle.revision,
     pulledAt: now().toISOString(),
     ...(source === undefined ? {} : { source }),
+    bundleHash: hash.digest('hex'),
     schemas: manifestSchemas,
   }
   writeFileAtomic(join(dir, MANIFEST_FILE), `${JSON.stringify(manifest, null, 2)}\n`)
@@ -169,14 +175,17 @@ export function readLocalBundle(dir: string, expectedSource?: string): SchemaBun
   if (expectedSource !== undefined && manifest.source !== expectedSource) return undefined
   const versionsDir = join(dir, VERSIONS_DIR)
   const schemas: SchemaWithVersions[] = []
+  const hash = createHash('sha256')
   try {
     for (const entry of manifest.schemas) {
       if (!isValidSchemaId(entry.id) || !Array.isArray(entry.versions)) return undefined
       const versions: SchemaVersionRecord[] = []
       for (const versionNum of entry.versions) {
-        const filePath = join(versionsDir, `${formatSchemaRef(entry.id, versionNum)}.json`)
-        const parsed = JSON.parse(readFileSync(filePath, 'utf8')) as unknown
+        const fileName = `${formatSchemaRef(entry.id, versionNum)}.json`
+        const raw = readFileSync(join(versionsDir, fileName), 'utf8')
+        const parsed = JSON.parse(raw) as unknown
         if (!isValidVersionRecord(parsed, entry.id, versionNum)) return undefined
+        hash.update(`${fileName}\0${raw}\0`)
         versions.push(parsed)
       }
       const { versions: _v, ...summary } = entry
@@ -185,5 +194,6 @@ export function readLocalBundle(dir: string, expectedSource?: string): SchemaBun
   } catch {
     return undefined
   }
+  if (manifest.bundleHash !== hash.digest('hex')) return undefined
   return { revision: manifest.revision, schemas }
 }
