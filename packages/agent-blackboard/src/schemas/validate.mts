@@ -63,6 +63,9 @@ export function validateAgainstBundle(
     })
   }
 
+  if ((validate as { $async?: boolean }).$async) {
+    throw new Error(`Local schema ${ref} uses unsupported $async validation`)
+  }
   const valid = Boolean(validate!(data))
   const errors: SchemaValidationIssue[] = valid
     ? []

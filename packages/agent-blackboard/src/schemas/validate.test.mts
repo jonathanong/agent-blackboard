@@ -173,5 +173,30 @@ describe('offline schema validation', () => {
         {},
       ),
     ).toThrow(/failed to compile/)
+    expect(() =>
+      validateAgainstBundle(
+        {
+          revision: 1,
+          schemas: [
+            {
+              ...BUNDLE.schemas[0]!,
+              id: 'async-schema',
+              versions: [
+                {
+                  id: 'async-schema',
+                  version: 1,
+                  ref: 'async-schema@1',
+                  schema: { $async: true, type: 'object' },
+                  createdAt: '2026-01-01T00:00:00.000Z',
+                  createdBy: 'ops',
+                },
+              ],
+            },
+          ],
+        },
+        'async-schema',
+        {},
+      ),
+    ).toThrow(/\$async/)
   })
 })

@@ -8,7 +8,12 @@ import {
   putSchemaRequest,
 } from '../client/schemas-client.mjs'
 import { isValidSchemaId, parseSchemaRef } from '../schemas/id.mjs'
-import { readLocalBundle, resolveSchemasDir, writeLocalBundle } from '../schemas/local-store.mjs'
+import {
+  normalizeRegistrySource,
+  readLocalBundle,
+  resolveSchemasDir,
+  writeLocalBundle,
+} from '../schemas/local-store.mjs'
 import { validateAgainstLocalSchemas } from '../schemas/validate.mjs'
 import { parseArgs, stringFlag, type ParsedArgs } from './args.mjs'
 import type { CliContext } from './context.mjs'
@@ -59,9 +64,10 @@ async function readJsonObjectFile(
 async function runPull(args: string[], ctx: CliContext): Promise<void> {
   const { flags } = parseArgs(args)
   const dir = resolveSchemasDir(ctx.cwd, ctx.env, optionalDirFlag(flags, 'pull'))
-  // Validate the full local bundle before sending If-None-Match so a missing/corrupt version file heals on pull.
-  const local = readLocalBundle(dir)
   const config = clientConfigFromEnv(ctx.env)
+  const source = normalizeRegistrySource(config.baseUrl)
+  // Validate the full local bundle and server origin before sending If-None-Match so corrupt or cross-server caches heal.
+  const local = readLocalBundle(dir, source)
   const fetched = await fetchSchemaBundleRequest(config, local?.revision)
   if (fetched.notModified) {
     const versionCount = local
@@ -77,7 +83,7 @@ async function runPull(args: string[], ctx: CliContext): Promise<void> {
     writeLine(ctx.stdout, JSON.stringify(result))
     return
   }
-  const counts = writeLocalBundle(dir, fetched.bundle)
+  const counts = writeLocalBundle(dir, fetched.bundle, undefined, source)
   const result: PullSchemasResult = {
     upToDate: false,
     revision: fetched.bundle.revision,

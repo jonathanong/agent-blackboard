@@ -18,7 +18,19 @@ const LATEST_DIR = 'latest'
 export interface LocalSchemaManifest {
   revision: number
   pulledAt: string
+  /** Normalized server base URL this cache was pulled from. */
+  source?: string
   schemas: Array<SchemaSummary & { versions: number[] }>
+}
+
+/** Normalizes a server `baseUrl` into a canonical cache-origin key. */
+export function normalizeRegistrySource(baseUrl: string): string {
+  try {
+    const url = new URL(baseUrl)
+    return `${url.origin}${url.pathname.replace(/\/+$/, '')}`
+  } catch {
+    return baseUrl.replace(/\/+$/, '')
+  }
 }
 
 export function resolveSchemasDir(
@@ -74,6 +86,7 @@ export function writeLocalBundle(
   dir: string,
   bundle: SchemaBundle,
   now: () => Date = () => new Date(),
+  source?: string,
 ): { schemaCount: number; versionCount: number } {
   // Validate all ids and version numbers before writing any file so a bad bundle never leaves torn state.
   for (const entry of bundle.schemas) {
@@ -125,15 +138,35 @@ export function writeLocalBundle(
   const manifest: LocalSchemaManifest = {
     revision: bundle.revision,
     pulledAt: now().toISOString(),
+    ...(source === undefined ? {} : { source }),
     schemas: manifestSchemas,
   }
   writeFileAtomic(join(dir, MANIFEST_FILE), `${JSON.stringify(manifest, null, 2)}\n`)
   return { schemaCount: bundle.schemas.length, versionCount }
 }
 
-export function readLocalBundle(dir: string): SchemaBundle | undefined {
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isValidVersionRecord(
+  value: unknown,
+  expectedId: string,
+  expectedVersion: number,
+): value is SchemaVersionRecord {
+  return (
+    isPlainObject(value) &&
+    value.id === expectedId &&
+    value.version === expectedVersion &&
+    typeof value.ref === 'string' &&
+    isPlainObject(value.schema)
+  )
+}
+
+export function readLocalBundle(dir: string, expectedSource?: string): SchemaBundle | undefined {
   const manifest = readLocalManifest(dir)
   if (!manifest) return undefined
+  if (expectedSource !== undefined && manifest.source !== expectedSource) return undefined
   const versionsDir = join(dir, VERSIONS_DIR)
   const schemas: SchemaWithVersions[] = []
   try {
@@ -142,8 +175,9 @@ export function readLocalBundle(dir: string): SchemaBundle | undefined {
       const versions: SchemaVersionRecord[] = []
       for (const versionNum of entry.versions) {
         const filePath = join(versionsDir, `${formatSchemaRef(entry.id, versionNum)}.json`)
-        const raw = readFileSync(filePath, 'utf8')
-        versions.push(JSON.parse(raw) as SchemaVersionRecord)
+        const parsed = JSON.parse(readFileSync(filePath, 'utf8')) as unknown
+        if (!isValidVersionRecord(parsed, entry.id, versionNum)) return undefined
+        versions.push(parsed)
       }
       const { versions: _v, ...summary } = entry
       schemas.push({ ...summary, versions })

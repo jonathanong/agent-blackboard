@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { SchemaBundle } from '../client/schema-types.mjs'
 import {
   DEFAULT_SCHEMAS_RELATIVE,
+  normalizeRegistrySource,
   readLocalBundle,
   readLocalManifest,
   resolveSchemasDir,
@@ -115,15 +116,23 @@ describe('local schema store', () => {
       dir,
       withManifestSchema,
       () => new Date('2026-01-03T00:00:00.000Z'),
+      normalizeRegistrySource('https://example.com/api/'),
     )
     expect(counts).toEqual({ schemaCount: 2, versionCount: 3 })
+    expect(normalizeRegistrySource('not a url///')).toBe('not a url')
 
     const manifest = readLocalManifest(dir)
     expect(manifest?.revision).toBe(2)
     expect(manifest?.pulledAt).toBe('2026-01-03T00:00:00.000Z')
+    expect(manifest?.source).toBe('https://example.com/api')
 
-    const readBack = readLocalBundle(dir)
+    const readBack = readLocalBundle(dir, 'https://example.com/api')
     expect(readBack).toEqual(withManifestSchema)
+    expect(readLocalBundle(dir, 'https://other.example.com')).toBeUndefined()
+
+    // Corrupt version record (empty object) makes readLocalBundle return undefined so pull heals
+    writeFileSync(join(versionsDir, 'finding@1.json'), '{}')
+    expect(readLocalBundle(dir)).toBeUndefined()
 
     // Missing version file makes readLocalBundle return undefined so pull heals the cache
     rmSync(join(versionsDir, 'finding@1.json'))
