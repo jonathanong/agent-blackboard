@@ -1,4 +1,4 @@
-import type { SnapshotCounts, SnapshotManifest } from './types.mjs'
+import type { SnapshotCounts, SnapshotManifest } from './snapshot-types.mjs'
 
 const SESSION_ID = /^[A-Za-z0-9._:-]+$/
 

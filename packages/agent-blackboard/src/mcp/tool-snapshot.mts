@@ -5,7 +5,8 @@ import {
   optionalPositiveNumber,
   requiredString,
 } from './validate.mjs'
-import type { ClientConfig, SnapshotSelection } from '../client/types.mjs'
+import type { SnapshotSelection } from '../client/snapshot-types.mjs'
+import type { ClientConfig } from '../client/types.mjs'
 
 function parentSessionId(value: unknown): string | null {
   const id = nullableString(value, 'parentSessionId')

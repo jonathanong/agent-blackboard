@@ -1,7 +1,7 @@
 import { Snapshots } from '../client/snapshots.mjs'
 import { cleanupSnapshotPartitions } from '../client/snapshot-partition-cleanup.mjs'
 import { partitionSnapshot } from '../client/snapshot-partitions.mjs'
-import type { SnapshotSelection } from '../client/types.mjs'
+import type { SnapshotSelection } from '../client/snapshot-types.mjs'
 import { parseArgs, stringFlag } from './args.mjs'
 import type { CliContext } from './context.mjs'
 import { clientConfigFromEnv } from './env.mjs'

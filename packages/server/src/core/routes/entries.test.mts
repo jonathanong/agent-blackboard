@@ -218,4 +218,32 @@ describe('entries route', () => {
     expect(isolated.status).toBe(201)
     expect(await json(isolated)).toMatchObject({ warning: { code: 'schema_validation_failed' } })
   })
+
+  it('redacts known credentials on append and reports redactedCount without leaking secrets', async () => {
+    const clientToken = ['abb', 'sk', 'a'.repeat(22), 'b'.repeat(24)].join('_')
+    const ghToken = ['ghp', '1234567890abcdef1234567890'].join('_')
+    const res = await handleEntriesRoute(
+      request({
+        method: 'POST',
+        body: { data: { log: `cli=${clientToken} gh=${ghToken}` } },
+      }),
+      store,
+      's',
+    )
+    expect(res.status).toBe(201)
+    const body = (await json(res)) as Record<string, unknown>
+    expect(body.redactedCount).toBe(2)
+    expect(body.data).toEqual({
+      log: 'cli=[REDACTED:agent_blackboard_client_token] gh=[REDACTED:github_token]',
+    })
+    expect(JSON.stringify(body)).not.toContain(clientToken)
+    expect(JSON.stringify(body)).not.toContain(ghToken)
+
+    const clean = await handleEntriesRoute(
+      request({ method: 'POST', body: { data: { log: 'clean' } } }),
+      store,
+      's',
+    )
+    expect((await json(clean)) as Record<string, unknown>).not.toHaveProperty('redactedCount')
+  })
 })

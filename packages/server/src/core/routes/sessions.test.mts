@@ -325,4 +325,20 @@ describe('sessions route', () => {
     vi.spyOn(store, 'listSessions').mockRejectedValueOnce(boom)
     await expect(handleSessionsRoute(request(), store)).rejects.toBe(boom)
   })
+
+  it('redacts credentials in session patch data and reports redactedCount', async () => {
+    const credId = (await store.listCredentials())[0]!.id
+    await store.createSession({ credId, id: 's', parentSessionId: null, ...AGENT })
+    const adminToken = ['abb', 'admin', 'prod', 'd'.repeat(24)].join('_')
+    const res = await handleSessionsRoute(
+      request({ method: 'PATCH', body: { data: { note: `token=${adminToken}` } } }),
+      store,
+      's',
+    )
+    expect(res.status).toBe(200)
+    const payload = (await body(res)) as Record<string, unknown>
+    expect(payload.redactedCount).toBe(1)
+    expect(payload.data).toEqual({ note: 'token=[REDACTED:agent_blackboard_admin_token]' })
+    expect(JSON.stringify(payload)).not.toContain(adminToken)
+  })
 })

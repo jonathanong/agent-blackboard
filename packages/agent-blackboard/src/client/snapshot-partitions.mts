@@ -19,7 +19,7 @@ import type {
   SnapshotManifest,
   SnapshotPartitionOptions,
   SnapshotPartitionResult,
-} from './types.mjs'
+} from './snapshot-types.mjs'
 
 const MAX_SESSIONS = 25
 const MAX_BYTES = 1024 * 1024

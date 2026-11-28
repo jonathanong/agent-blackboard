@@ -97,19 +97,22 @@ export type {
   GetRawEntriesQuery,
   ListSessionsQuery,
   PatchSessionInput,
+  PatchSessionResult,
   ReadRetryOptions,
   Session,
   SessionEntry,
   StructuredEntryFormat,
+} from './client/types.mjs'
+export type {
+  SnapshotChecksum,
+  SnapshotCleanupOptions,
   SnapshotCounts,
   SnapshotExportOptions,
   SnapshotExportResult,
-  SnapshotChecksum,
-  SnapshotCleanupOptions,
   SnapshotManifest,
   SnapshotPartition,
   SnapshotPartitionOptions,
   SnapshotPartitionResult,
   SnapshotSelection,
   SnapshotVerification,
-} from './client/types.mjs'
+} from './client/snapshot-types.mjs'
