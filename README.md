@@ -43,7 +43,8 @@ Of course, you can read the session logs as part of the distill process or as pa
 - `packages/server` — Lambda + DynamoDB service deployed with CloudFormation.
 - `packages/agent-blackboard` — published as `agent-blackboard`; client library, CLI,
   and MCP server.
-- `plugins/agent-blackboard` — Claude Code and Codex plugin with MCP registration and usage skill.
+- `plugins/agent-blackboard` — Claude Code and Codex plugin with MCP registration, usage skill, and
+  `distill` skill.
 
 DynamoDB uses one table with multiple items: one metadata item per session and one item per entry.
 Entries are never stored in a nested array. Session metadata tracks `lastEntryAt`; each entry
