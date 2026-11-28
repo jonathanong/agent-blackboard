@@ -1,0 +1,14 @@
+{
+  "name": "agent-journaling",
+  "description": "Opinionated skills that tell an agent when to journal friction to agent-blackboard - CI failures, unclear test failures, hard local setup, ambiguous code or docs, tool friction, and corrections - and how: registered schema, evidence, references, and a short recommendation.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Jonathan Ong",
+    "email": "jonathanrichardong@gmail.com"
+  },
+  "homepage": "https://github.com/jongleberry/agent-blackboard",
+  "repository": "https://github.com/jongleberry/agent-blackboard",
+  "license": "MIT",
+  "keywords": ["journal", "friction", "agent", "retrospective", "self-improvement"],
+  "skills": "./skills/"
+}

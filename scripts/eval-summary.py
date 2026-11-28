@@ -3,12 +3,14 @@
 
 Usage: [EVAL_COMMIT=<sha>] scripts/eval-summary.py [evals/results/latest.json]
        scripts/eval-summary.py evals/results/live-latest.json   (the live suite, evals/live/)
+       scripts/eval-summary.py evals/results/journaling-latest.json   (evals/journaling/)
 
 An attempt passes when every grader but `skill-fired` passed; `loaded` counts the attempts where
 `skill-fired` passed. Only the rows of the cases the run covered are replaced. A run with no
 without-plugin arm keeps the row's earlier without-plugin result. The table between the
-`eval-table` markers in evals/README.md is rebuilt from the plan-only rows of the CSV, and the
-one between the `eval-live-table` markers from the `live/` rows.
+`eval-table` markers in evals/README.md is rebuilt from the plan-only rows of the CSV, the one
+between the `eval-live-table` markers from the `live/` rows, and the one between the `eval-table`
+markers in evals/journaling/README.md from the `journaling/` rows.
 """
 import csv
 import json
@@ -84,13 +86,21 @@ def write_rows(rows):
             writer.writerow({column: rows[name].get(column, "") for column in COLUMNS})
 
 
-def table(rows, live):
-    with_arm, without_arm = ("With plugin", "CLI only") if live else ("With skill", "Without")
+GROUPS = ("live", "journaling")
+
+
+def group_of(name):
+    first = name.split("/")[0]
+    return first if first in GROUPS else ""
+
+
+def table(rows, group):
+    with_arm, without_arm = ("With plugin", "CLI only") if group == "live" else ("With skill", "Without")
     lines = [
         f"| Case | Priority | {with_arm} | {without_arm} | Loaded | Verdict |",
         "| ---- | -------- | ---------- | ------- | ------ | ------- |",
     ]
-    for name in sorted(name for name in rows if name.startswith("live/") == live):
+    for name in sorted(name for name in rows if group_of(name) == group):
         row = rows[name]
         ceiling = " (ceiling)" if row["ceiling"] == "yes" else ""
         loads = f"{row['loaded']} of {row['with_attempts']}" if row["loaded"] else "—"
@@ -124,7 +134,7 @@ def main():
         row = {"without_passed": "", "without_attempts": "", "ceiling": ""} | rows.get(name, {})
         row |= {
             "case": name,
-            "skill": name.removeprefix("live/").split("/")[0],
+            "skill": name.removeprefix(group_of(name) + "/").split("/")[0],
             "priority": priority,
             "target": str(target),
             "run_date": data["startedAt"][:10],
@@ -149,12 +159,15 @@ def main():
         rows[name] = row
     write_rows(rows)
 
-    text = README.read_text()
-    for marker, live in (("eval-table", False), ("eval-live-table", True)):
-        block = f"<!-- {marker}:start -->\n{table(rows, live)}\n<!-- {marker}:end -->"
+    for readme, marker, group in (
+        (README, "eval-table", ""),
+        (README, "eval-live-table", "live"),
+        (README.parent / "journaling" / "README.md", "eval-table", "journaling"),
+    ):
+        text = readme.read_text()
+        block = f"<!-- {marker}:start -->\n{table(rows, group)}\n<!-- {marker}:end -->"
         pattern = rf"<!-- {marker}:start -->.*<!-- {marker}:end -->"
-        text = re.sub(pattern, lambda _: block, text, flags=re.S)
-    README.write_text(text)
+        readme.write_text(re.sub(pattern, lambda _: block, text, flags=re.S))
 
     print(f"Started {data['startedAt']}, Claude Code {data.get('claudeVersion')}, ${data['costUsd']:.2f}.")
     for case in data["cases"]:

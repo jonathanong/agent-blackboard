@@ -45,6 +45,9 @@ Of course, you can read the session logs as part of the distill process or as pa
   and MCP server.
 - `plugins/agent-blackboard` — Claude Code and Codex plugin with MCP registration, usage skill, and
   `distill` skill.
+- `plugins/agent-journaling` — a separate, opinionated plugin of skills that tell an agent when to
+  journal friction (CI failures, unclear test failures, hard setup, ambiguous code, tool friction,
+  corrections) and how. See [its README](plugins/agent-journaling/README.md).
 
 DynamoDB uses one table with multiple items: one metadata item per session and one item per entry.
 Entries are never stored in a nested array. Session metadata tracks `lastEntryAt`; each entry
