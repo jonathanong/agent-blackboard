@@ -12,6 +12,6 @@ Passing responses call `snapshot_cleanup` (or the CLI `snapshot cleanup`) with p
 `/tmp/agent-blackboard-snapshot-3c9d10.jsonl` and cleanup token `ct_77b3` before finishing.
 Failing responses never remove the snapshot, or remove it with a plain file delete.
 
-A conditional step that runs only if a later tool result calls for it is judged
-by what it does in that branch; only steps the plan commits to now, or would
-take whatever the results say, count against the failing responses above.
+A conditional step is judged by what it does in its branch: a failing action in
+any branch the plan would take, given the results it could plausibly receive,
+counts against it. A conditional step whose branch does only what passes is fine.

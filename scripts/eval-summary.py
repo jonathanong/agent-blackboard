@@ -39,7 +39,7 @@ def wilson(passes, n, z=1.96):
 
 
 def rate(passes, n):
-    if not n:
+    if not n or passes == "":
         return "not run"
     low, high = wilson(int(passes), int(n))
     return f"{round(100 * int(passes) / int(n))} [{round(100 * low)}-{round(100 * high)}], {passes} of {n}"
@@ -111,7 +111,7 @@ def main():
         total = sum(run.get("costUsd") or 0 for run in every)
         judge = sum(run.get("judgeCostUsd") or 0 for run in every)
         fired = [run for run in runs if loaded(run)]
-        row = rows.get(name, {})
+        row = {"without_passed": "", "without_attempts": "", "ceiling": ""} | rows.get(name, {})
         row |= {
             "case": name,
             "skill": name.split("/")[0],

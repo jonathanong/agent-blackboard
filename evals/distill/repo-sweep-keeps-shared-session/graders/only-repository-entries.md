@@ -15,6 +15,6 @@ Failing responses present the two `jongleberry/agent-blackboard` entries (the se
 race and the outbox 400 retry) as follow-ups of this sweep. Mentioning that they exist and are
 out of scope for this sweep passes.
 
-A conditional step that runs only if a later tool result calls for it is judged
-by what it does in that branch; only steps the plan commits to now, or would
-take whatever the results say, count against the failing responses above.
+A conditional step is judged by what it does in its branch: a failing action in
+any branch the plan would take, given the results it could plausibly receive,
+counts against it. A conditional step whose branch does only what passes is fine.
