@@ -455,8 +455,15 @@ describe('createServer (end-to-end over a real socket)', () => {
     }
 
     const optionalServer = await startServer({ store: new MemoryBlackboardStore() })
-    await new Promise<void>((resolve, reject) =>
-      optionalServer.close((error) => (error ? reject(error) : resolve())),
-    )
+    try {
+      const { port: occupiedPort } = optionalServer.address() as AddressInfo
+      await expect(
+        startServer({ store: new MemoryBlackboardStore() }, occupiedPort),
+      ).rejects.toMatchObject({ code: 'EADDRINUSE' })
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        optionalServer.close((error) => (error ? reject(error) : resolve())),
+      )
+    }
   })
 })

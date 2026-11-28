@@ -120,8 +120,12 @@ export function createServer(deps: ServerDeps): Server {
 export async function startServer(deps: ServerDeps, port = 0): Promise<Server> {
   await assertSchemaEnforcementReady(deps.store, deps.env ?? {})
   const server = createServer(deps)
-  await new Promise<void>((resolve) => {
-    server.listen(port, resolve)
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(port, () => {
+      server.off('error', reject)
+      resolve()
+    })
   })
   return server
 }
