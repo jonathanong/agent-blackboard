@@ -33,11 +33,24 @@ export async function streamResponseBody(
   body: BodyChunk | AsyncIterable<BodyChunk>,
   sink: ResponseStreamSink,
 ): Promise<void> {
+  let wrote = false
   if (typeof body === 'string' || body instanceof Uint8Array) {
-    if (body.length > 0) await sink.write(body)
+    if (body.length > 0) {
+      await sink.write(body)
+      wrote = true
+    }
   } else {
-    for await (const chunk of body) await sink.write(chunk)
+    for await (const chunk of body) {
+      await sink.write(chunk)
+      wrote = true
+    }
   }
+  // AWS Lambda's `HttpResponseStream.from` flushes the HTTP status/headers prelude
+  // lazily in `_onBeforeFirstWrite`, which only fires on `stream.write()` (not
+  // `stream.end()`). Emit a zero-length write for empty bodies (e.g. 304 Not
+  // Modified) so Lambda sends the real status and headers instead of defaulting
+  // to `200 OK` with `application/octet-stream`.
+  if (!wrote) await sink.write('')
   await sink.end()
 }
 
