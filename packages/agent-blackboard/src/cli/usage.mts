@@ -23,6 +23,9 @@ Usage:
   agent-blackboard schemas list
   agent-blackboard schemas get <id>[@<version>]
   agent-blackboard schemas validate <id>[@<version>] <file> [--dir <path>]
+  agent-blackboard outbox status [--dir <path>]
+  agent-blackboard outbox flush [--session-id <id>] [--dir <path>]
+  agent-blackboard outbox prune [--id <id>] [--session-id <id>] [--dir <path>]
   agent-blackboard credentials <subcommand>
   agent-blackboard mcp
 
@@ -35,4 +38,5 @@ Env:
   AGENT_BLACKBOARD_TOKEN          Client credential
   AGENT_BLACKBOARD_ADMIN_TOKEN    Admin credential
   AGENT_BLACKBOARD_SCHEMAS_DIR    Optional local schema cache directory
+  AGENT_BLACKBOARD_OUTBOX_DIR     Optional local entry outbox directory
 `

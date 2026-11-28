@@ -1,5 +1,6 @@
 import { handleEntryAppend } from './tool-append.mjs'
 import { handleEntryGet } from './tool-get.mjs'
+import { handleOutboxFlush, handleOutboxPruneRejected, handleOutboxStatus } from './tool-outbox.mjs'
 import {
   handleSchemaGet,
   handleSchemaList,
@@ -48,6 +49,12 @@ export function dispatchTool(
       return handleSchemaPull(args, config, resolution)
     case 'schema_validate':
       return handleSchemaValidate(args, config, resolution)
+    case 'outbox_status':
+      return handleOutboxStatus(args, config, resolution)
+    case 'outbox_flush':
+      return handleOutboxFlush(args, config, resolution)
+    case 'outbox_prune_rejected':
+      return handleOutboxPruneRejected(args, config, resolution)
     default:
       throw new Error(`Unknown tool: ${name}`)
   }

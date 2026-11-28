@@ -17,6 +17,19 @@ export type { AuthOptions } from './client/auth.mjs'
 export { AgentBlackboardError } from './client/errors.mjs'
 export { Entries } from './client/entries.mjs'
 export { formatError } from './format-error.mjs'
+export { Outbox } from './outbox/client.mjs'
+export { resolveOutboxDir } from './outbox/store.mjs'
+export type {
+  OutboxFlushOptions,
+  OutboxFlushResult,
+  OutboxLocationOptions,
+  OutboxPendingRecord,
+  OutboxPruneOptions,
+  OutboxPruneResult,
+  OutboxRejectedRecord,
+  OutboxSessionCounts,
+  OutboxStatus,
+} from './outbox/types.mjs'
 export { Schemas } from './client/schemas.mjs'
 export type { LocalSchemaOptions } from './client/schemas.mjs'
 export { Sessions } from './client/sessions.mjs'
@@ -98,9 +111,11 @@ export type {
   ListSessionsQuery,
   PatchSessionInput,
   PatchSessionResult,
+  QueuedEntryResult,
   ReadRetryOptions,
   Session,
   SessionEntry,
+  StoredEntryResult,
   StructuredEntryFormat,
 } from './client/types.mjs'
 export type {

@@ -7,6 +7,8 @@ export interface ClientConfig {
   readRetry?: ReadRetryOptions
   /** Optional observer invoked whenever a response carries `x-schema-registry-revision`. */
   onSchemaRevision?: (revision: number) => void
+  /** Local directory for queuing failed `entry_append` writes when the server is unreachable. */
+  outboxDir?: string
 }
 
 /** Bounded retry settings for GET requests that fail before a response or transiently. */
@@ -40,11 +42,26 @@ export interface SessionEntry {
   expiresAt?: string
 }
 
-export interface AppendEntryResult extends SessionEntry {
+export interface StoredEntryResult extends SessionEntry {
+  queued?: false
   warning?: SchemaShadowWarning
   redactedCount?: number
   duplicate?: boolean
 }
+
+export interface QueuedEntryResult {
+  queued: true
+  outboxId: string
+  sessionId: string
+  data: Record<string, unknown>
+  schemaId?: string
+  schemaVersion?: number
+  sourceEventId: string
+  queuedAt: string
+  error: string
+}
+
+export type AppendEntryResult = StoredEntryResult | QueuedEntryResult
 
 export interface PatchSessionResult extends Session {
   redactedCount?: number

@@ -195,3 +195,34 @@ copy avoids rewriting disk.
 Validates `data` offline against a locally pulled schema (`<id>` or `<id>@<version>`). Admin
 operations (`put`, `promote`, `report`, `remove`) are intentionally CLI/admin-only and are never
 exposed over MCP.
+
+## `outbox_status`
+
+```json
+{ "dir": "/optional/override/path" }
+```
+
+Reports pending and rejected entry counts per session in the local worktree outbox
+(`<worktree>/.local/agent-blackboard/outbox` by default, or `AGENT_BLACKBOARD_OUTBOX_DIR` / `dir`),
+plus `rejectedRecords` with their saved server errors. When `entry_append` cannot reach the server
+(network failure, `5xx`, `429`, `408`, or `401`), it queues the entry here and returns
+`{ "queued": true, "outboxId": "...", ... }`.
+
+## `outbox_flush`
+
+```json
+{ "sessionId": "worker-456", "dir": "/optional/override/path" }
+```
+
+Delivers queued entries to the server (all sessions when `sessionId` is omitted). Permanent `4xx`
+rejections (such as schema validation failures) are moved to `rejected/` with their server error so
+remaining entries still flush cleanly.
+
+## `outbox_prune_rejected`
+
+```json
+{ "id": "optional-outbox-id", "sessionId": "worker-456", "dir": "/optional/override/path" }
+```
+
+Deletes permanently rejected records from the local outbox (all, or filtered by `id` and/or
+`sessionId`).
