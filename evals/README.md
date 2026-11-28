@@ -2,9 +2,11 @@
 
 These evals measure whether the plugin's two skills change what an agent does with
 agent-blackboard. `agent-blackboard` covers how to create sessions and write entries. `distill`
-covers how to turn snapshots into follow-ups. Each case runs twice: once with the plugin loaded,
-and once as a no-plugin baseline. Both arms see the same list of MCP tools. The gap between the
-arms answers one question: does the skill make the agent follow a rule it would otherwise break?
+covers how to turn snapshots into follow-ups. Each case runs twice, with the skills and without
+them. The plugin's MCP server runs in neither arm. Both arms get the same plain-text list of its
+tools in the system prompt, and the agent writes out the calls it would make. This is a
+skills-only comparison, not a test of the installed plugin. The gap between the arms answers one
+question: does the skill make the agent follow a rule it would otherwise break?
 
 ## Current results
 
