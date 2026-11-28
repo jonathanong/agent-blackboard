@@ -8,11 +8,13 @@ export type SessionStoreErrorCode =
   | 'schema_not_found'
   | 'schema_deprecated'
   | 'schema_conflict'
+  | 'source_event_conflict'
 
 export class SessionStoreError extends Error {
   constructor(
     readonly code: SessionStoreErrorCode,
     message: string,
+    readonly details?: Record<string, unknown>,
   ) {
     super(message)
     this.name = 'SessionStoreError'

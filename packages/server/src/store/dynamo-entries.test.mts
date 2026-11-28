@@ -2,6 +2,7 @@ import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
 import { describe, expect, it, vi } from 'vitest'
 import { dynamoAppendEntry, dynamoGetEntries, itemToEntry } from './dynamo-entries.mjs'
 import type { RetentionPolicy } from './retention.mjs'
+import { entryContentHash } from './source-event.mjs'
 
 interface Command {
   constructor: { name: string }
@@ -250,5 +251,110 @@ describe('DynamoDB entries', () => {
       collect(dynamoGetEntries(doc, 'T', 'c', 's', { sessionVerified: true })),
     ).resolves.toEqual([])
     expect(seen).toEqual(['QueryCommand'])
+  })
+
+  it('writes sourceEventId atomically, returns duplicates, rejects conflicts, and surfaces missing entry', async () => {
+    expect(itemToEntry({ ...entry(), sourceEventId: 'evt-1' })).toMatchObject({
+      sourceEventId: 'evt-1',
+    })
+
+    // 1. New write with sourceEventId puts 3 TransactItems (session update, entry put, source-event put)
+    let txInput: Record<string, unknown> | undefined
+    const createDoc = client((command) => {
+      txInput = command.input
+      return {}
+    })
+    const created = await dynamoAppendEntry(createDoc, 'T', RETENTION, () => NOW, {
+      credId: 'c',
+      sessionId: 's',
+      data: { note: 'hello' },
+      sourceEventId: 'evt-1',
+    })
+    expect(created.sourceEventId).toBe('evt-1')
+    expect(created.duplicate).toBeUndefined()
+    expect((txInput!.TransactItems as unknown[]).length).toBe(3)
+
+    // 2. Duplicate returns stored entry without re-writing
+    const matchingHash = entryContentHash({ data: { note: 'hello' } })
+    const dupDoc = client((command) => {
+      if (command.constructor.name === 'TransactWriteCommand') throw canceled()
+      const key = command.input.Key as { PK: string }
+      if (key.PK.startsWith('SOURCE_EVENTS#')) {
+        return {
+          Item: {
+            sourceEventId: 'evt-1',
+            contentHash: matchingHash,
+            entryCreatedAt: NOW.toISOString(),
+          },
+        }
+      }
+      return { Item: { ...entry(), data: { note: 'hello' }, sourceEventId: 'evt-1' } }
+    })
+    const dup = await dynamoAppendEntry(dupDoc, 'T', RETENTION, () => NOW, {
+      credId: 'c',
+      sessionId: 's',
+      data: { note: 'hello' },
+      sourceEventId: 'evt-1',
+    })
+    expect(dup.duplicate).toBe(true)
+    expect(dup.sourceEventId).toBe('evt-1')
+
+    // 3. Conflict throws source_event_conflict naming stored entry
+    await expect(
+      dynamoAppendEntry(dupDoc, 'T', RETENTION, () => NOW, {
+        credId: 'c',
+        sessionId: 's',
+        data: { note: 'different' },
+        sourceEventId: 'evt-1',
+      }),
+    ).rejects.toMatchObject({
+      code: 'source_event_conflict',
+      details: {
+        existingEntry: { sessionId: 's', createdAt: NOW.toISOString(), sourceEventId: 'evt-1' },
+      },
+    })
+
+    // 4. Timestamp collision with sourceEventId falls through and retries when source-event does not exist
+    let txCalls = 0
+    const retryDoc = client((command) => {
+      if (command.constructor.name === 'TransactWriteCommand' && txCalls++ === 0) throw canceled()
+      if (command.constructor.name === 'GetCommand') {
+        const key = command.input.Key as { PK: string }
+        if (key.PK.startsWith('SOURCE_EVENTS#')) return {}
+        return { Item: session() }
+      }
+      return {}
+    })
+    const retried = await dynamoAppendEntry(retryDoc, 'T', RETENTION, () => NOW, {
+      credId: 'c',
+      sessionId: 's',
+      data: { note: 'hello' },
+      sourceEventId: 'evt-2',
+    })
+    expect(retried.createdAt).toBe('2026-01-01T00:00:00.001Z')
+
+    // 5. Missing entry behind an existing source-event record surfaces an internal error
+    const brokenDoc = client((command) => {
+      if (command.constructor.name === 'TransactWriteCommand') throw canceled()
+      const key = command.input.Key as { PK: string }
+      if (key.PK.startsWith('SOURCE_EVENTS#')) {
+        return {
+          Item: {
+            sourceEventId: 'evt-1',
+            contentHash: matchingHash,
+            entryCreatedAt: NOW.toISOString(),
+          },
+        }
+      }
+      return {}
+    })
+    await expect(
+      dynamoAppendEntry(brokenDoc, 'T', RETENTION, () => NOW, {
+        credId: 'c',
+        sessionId: 's',
+        data: { note: 'hello' },
+        sourceEventId: 'evt-1',
+      }),
+    ).rejects.toThrow(/stored entry missing/)
   })
 })

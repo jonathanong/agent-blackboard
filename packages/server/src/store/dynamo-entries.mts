@@ -1,11 +1,13 @@
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
 import { QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb'
 import { redactCredentials } from '../core/redact.mjs'
-import type { Session, SessionEntry } from '../core/types.mjs'
+import type { AppendedSessionEntry, Session, SessionEntry } from '../core/types.mjs'
 import { entrySk, entriesPk, sessionSk, sessionsPk } from './dynamo-keys.mjs'
 import { dynamoGetSession } from './dynamo-sessions.mjs'
+import { resolveExistingSourceEvent, sourceEventPutItem } from './dynamo-source-events.mjs'
 import { SessionStoreError } from './errors.mjs'
 import { computeEntryExpiry, resolveEntryTtlDays, type RetentionPolicy } from './retention.mjs'
+import { entryContentHash } from './source-event.mjs'
 import type { GetEntriesOptions, NewSessionEntry } from './store.mjs'
 
 const QUERY_PAGE_LIMIT = 100
@@ -18,6 +20,7 @@ export function itemToEntry(item: Record<string, unknown>): SessionEntry {
     data: item.data as Record<string, unknown>,
     ...(typeof item.schemaId === 'string' ? { schemaId: item.schemaId } : {}),
     ...(typeof item.schemaVersion === 'number' ? { schemaVersion: item.schemaVersion } : {}),
+    ...(typeof item.sourceEventId === 'string' ? { sourceEventId: item.sourceEventId } : {}),
     ...(typeof item.ttl === 'number' ? { expiresAt: new Date(item.ttl * 1000).toISOString() } : {}),
   }
 }
@@ -39,8 +42,16 @@ export async function dynamoAppendEntry(
   retention: RetentionPolicy,
   now: () => Date,
   input: NewSessionEntry,
-): Promise<SessionEntry> {
+): Promise<AppendedSessionEntry> {
   const { value: redactedData } = redactCredentials(input.data)
+  const contentHash =
+    input.sourceEventId !== undefined
+      ? entryContentHash({
+          data: redactedData,
+          schemaId: input.schemaId,
+          schemaVersion: input.schemaVersion,
+        })
+      : undefined
   let effectiveTtlDays = retention.ttlDays
   let timestamp = now().getTime()
   if (retention.ttlOverrides.size > 0) {
@@ -60,40 +71,59 @@ export async function dynamoAppendEntry(
       data: redactedData,
       ...(input.schemaId !== undefined ? { schemaId: input.schemaId } : {}),
       ...(input.schemaVersion !== undefined ? { schemaVersion: input.schemaVersion } : {}),
+      ...(input.sourceEventId !== undefined ? { sourceEventId: input.sourceEventId } : {}),
+    }
+    const transactItems: Array<Record<string, unknown>> = [
+      {
+        Update: {
+          TableName: tableName,
+          Key: { PK: sessionsPk(input.credId), SK: sessionSk(input.sessionId) },
+          UpdateExpression: 'SET lastEntryAt = :createdAt',
+          ConditionExpression:
+            'attribute_exists(PK) AND (attribute_not_exists(lastEntryAt) OR lastEntryAt < :createdAt)',
+          ExpressionAttributeValues: { ':createdAt': createdAt },
+        },
+      },
+      {
+        Put: {
+          TableName: tableName,
+          Item: {
+            PK: entriesPk(input.credId, input.sessionId),
+            SK: entrySk(createdAt),
+            entityType: 'entry',
+            ...storedEntry,
+            ttl,
+          },
+          ConditionExpression: 'attribute_not_exists(PK)',
+        },
+      },
+    ]
+    if (input.sourceEventId !== undefined) {
+      transactItems.push(
+        sourceEventPutItem(
+          tableName,
+          { ...input, sourceEventId: input.sourceEventId },
+          contentHash!,
+          createdAt,
+          ttl,
+        ),
+      )
     }
     try {
-      await doc.send(
-        new TransactWriteCommand({
-          TransactItems: [
-            {
-              Update: {
-                TableName: tableName,
-                Key: { PK: sessionsPk(input.credId), SK: sessionSk(input.sessionId) },
-                UpdateExpression: 'SET lastEntryAt = :createdAt',
-                ConditionExpression:
-                  'attribute_exists(PK) AND (attribute_not_exists(lastEntryAt) OR lastEntryAt < :createdAt)',
-                ExpressionAttributeValues: { ':createdAt': createdAt },
-              },
-            },
-            {
-              Put: {
-                TableName: tableName,
-                Item: {
-                  PK: entriesPk(input.credId, input.sessionId),
-                  SK: entrySk(createdAt),
-                  entityType: 'entry',
-                  ...storedEntry,
-                  ttl,
-                },
-                ConditionExpression: 'attribute_not_exists(PK)',
-              },
-            },
-          ],
-        }),
-      )
+      await doc.send(new TransactWriteCommand({ TransactItems: transactItems }))
       return { ...storedEntry, expiresAt }
     } catch (error) {
       if (!(error instanceof Error) || error.name !== 'TransactionCanceledException') throw error
+      if (input.sourceEventId !== undefined) {
+        const duplicate = await resolveExistingSourceEvent(
+          doc,
+          tableName,
+          { ...input, sourceEventId: input.sourceEventId },
+          contentHash!,
+          itemToEntry,
+        )
+        if (duplicate) return duplicate
+      }
       const session = await requireSession(doc, tableName, input.credId, input.sessionId)
       effectiveTtlDays = resolveEntryTtlDays(retention, session.data)
       timestamp = Math.max(

@@ -1,4 +1,5 @@
 import type {
+  AppendedSessionEntry,
   CredentialRecord,
   SchemaBundle,
   SchemaRecord,
@@ -48,6 +49,7 @@ export interface NewSessionEntry {
   data: Record<string, unknown>
   schemaId?: string
   schemaVersion?: number
+  sourceEventId?: string
 }
 
 export interface NewSession {
@@ -149,7 +151,7 @@ export interface BlackboardStore {
   patchSession(credId: string, patch: SessionPatch): Promise<Session>
   archiveSession(credId: string, sessionId: string): Promise<Session>
 
-  appendEntry(entry: NewSessionEntry): Promise<SessionEntry>
+  appendEntry(entry: NewSessionEntry): Promise<AppendedSessionEntry>
   getEntries(
     credId: string,
     sessionId: string,

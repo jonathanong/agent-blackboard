@@ -20,6 +20,14 @@ export function entrySk(createdAt: string): string {
   return `ENTRY#${createdAt}`
 }
 
+export function sourceEventsPk(credId: string, sessionId: string): string {
+  return `SOURCE_EVENTS#${credId}#${sessionId}`
+}
+
+export function sourceEventSk(sourceEventId: string): string {
+  return `SOURCE_EVENT#${sourceEventId}`
+}
+
 export const SCHEMA_REGISTRY_PK = 'SCHEMA_REGISTRY'
 export const SCHEMA_REGISTRY_SK = 'META'
 export const SCHEMAS_PK = 'SCHEMAS'

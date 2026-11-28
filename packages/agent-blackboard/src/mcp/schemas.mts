@@ -151,7 +151,7 @@ export const ENTRY_TOOLS: Tool[] = [
   {
     name: 'entry_append',
     description:
-      'Appends an entry to an existing session, including an archived one. Optionally names a registered schemaId (and schemaVersion) for server-side validation.',
+      'Appends an entry to an existing session, including an archived one. Optionally names a registered schemaId (and schemaVersion) for server-side validation and a per-session sourceEventId for idempotent retries.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -162,6 +162,11 @@ export const ENTRY_TOOLS: Tool[] = [
           type: 'integer',
           minimum: 1,
           description: 'Optional pinned schema version number (requires schemaId).',
+        },
+        sourceEventId: {
+          type: 'string',
+          description:
+            'Optional per-session event id for idempotent writes: identical content returns the stored entry with duplicate: true; different content fails with 409.',
         },
       },
       required: ['data'],

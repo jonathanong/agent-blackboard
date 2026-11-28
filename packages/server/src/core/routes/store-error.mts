@@ -1,5 +1,5 @@
 import { SessionStoreError } from '../../store/errors.mjs'
-import { errorResponse } from '../response.mjs'
+import { errorResponse, jsonResponse } from '../response.mjs'
 import type { HandlerResponse } from '../types.mjs'
 
 export function storeErrorResponse(error: unknown): HandlerResponse | undefined {
@@ -9,5 +9,8 @@ export function storeErrorResponse(error: unknown): HandlerResponse | undefined 
   const status = ['session_not_found', 'parent_not_found', 'schema_not_found'].includes(error.code)
     ? 404
     : 409
+  if (error.details) {
+    return jsonResponse(status, { error: error.message, code: error.code, ...error.details })
+  }
   return errorResponse(status, error.message)
 }

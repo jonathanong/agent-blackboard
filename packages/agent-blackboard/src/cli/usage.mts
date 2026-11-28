@@ -7,8 +7,8 @@ Usage:
   agent-blackboard sessions get <id>
   agent-blackboard sessions patch <id> --data <json>
   agent-blackboard sessions archive <id>
-  agent-blackboard append [--session-id <id>] [--schema <id>[@<version>]] <json>
-  agent-blackboard append [--session-id <id>] [--schema <id>[@<version>]] --file <json|markdown|text>
+  agent-blackboard append [--session-id <id>] [--schema <id>[@<version>]] [--source-event-id <id>] <json>
+  agent-blackboard append [--session-id <id>] [--schema <id>[@<version>]] [--source-event-id <id>] --file <json|markdown|text>
   agent-blackboard get [--session-id <id>] [--format json|jsonl|markdown]
   agent-blackboard snapshot export [--path <absolute-path>] [--agent <name>] [--version <version>]
     [--parent-session-id <id>|--root-only] [--data <json>] [--inactive-for-hours <hours>]

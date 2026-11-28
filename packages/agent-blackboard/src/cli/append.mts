@@ -65,6 +65,10 @@ export async function runAppend(argv: string[], ctx: CliContext): Promise<void> 
   if (schemaFlag !== undefined && !parsedSchema) {
     throw new CliError(`Invalid --schema reference: ${schemaFlag}`)
   }
+  const sourceEventId = stringFlag(flags, 'source-event-id')
+  if (flags['source-event-id'] !== undefined && !sourceEventId) {
+    throw new CliError('append requires an id after --source-event-id.')
+  }
   const data = file
     ? await readFileData(file)
     : parseJsonObject(positional[0] ?? (await readStdin(ctx.stdin)))
@@ -73,6 +77,7 @@ export async function runAppend(argv: string[], ctx: CliContext): Promise<void> 
     data,
     ...(parsedSchema ? { schemaId: parsedSchema.id } : {}),
     ...(parsedSchema?.version !== undefined ? { schemaVersion: parsedSchema.version } : {}),
+    ...(sourceEventId !== undefined ? { sourceEventId } : {}),
   })
   writeLine(ctx.stdout, JSON.stringify(entry))
 }

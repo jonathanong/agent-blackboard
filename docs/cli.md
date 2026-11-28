@@ -60,7 +60,9 @@ agent-blackboard get --session-id worker-456 --format markdown
 
 `append` and `get` take `--session-id`, or resolve it from the harness environment when omitted.
 Pass `--schema <id>[@<version>]` to validate the entry against a registered JSON Schema on the
-server (latest version if `@<version>` is omitted). Entries are append-only: there is no `patch`
+server (latest version if `@<version>` is omitted), and optional `--source-event-id <id>` for
+per-session idempotent writes (identical retries return the stored entry with `duplicate: true`;
+conflicting content fails with HTTP `409`). Entries are append-only: there is no `patch`
 command for entries; to record an update, append a new entry. Reads stream bytes to stdout without
 buffering the full response.
 

@@ -1,5 +1,5 @@
 import { redactCredentials } from '../core/redact.mjs'
-import type { Session, SessionEntry } from '../core/types.mjs'
+import type { AppendedSessionEntry, Session, SessionEntry } from '../core/types.mjs'
 import { SessionStoreError } from './errors.mjs'
 import { matchesListFilter, resumeIndex, sortSessions } from './memory-session-query.mjs'
 import { decodeSessionCursor, encodeSessionCursor } from './session-cursor.mjs'
@@ -9,6 +9,7 @@ import {
   resolveEntryTtlDays,
   type RetentionPolicy,
 } from './retention.mjs'
+import { entryContentHash, sourceEventConflictError } from './source-event.mjs'
 import {
   DEFAULT_SESSIONS_LIMIT,
   MAX_SESSIONS_LIMIT,
@@ -24,6 +25,7 @@ import {
 export class MemorySessionStore {
   readonly #sessions = new Map<string, Session>()
   readonly #entries = new Map<string, SessionEntry>()
+  readonly #sourceEvents = new Map<string, { contentHash: string; entry: SessionEntry }>()
   readonly #now: () => Date
   readonly #retention: RetentionPolicy
 
@@ -121,11 +123,33 @@ export class MemorySessionStore {
     return archived
   }
 
-  appendEntry(input: NewSessionEntry): SessionEntry {
+  appendEntry(input: NewSessionEntry): AppendedSessionEntry {
     const sessionKey = this.#sessionKey(input.credId, input.sessionId)
     const session = this.#sessions.get(sessionKey)
     if (!session) {
       throw new SessionStoreError('session_not_found', `session not found: ${input.sessionId}`)
+    }
+    const { value: redactedData } = redactCredentials(input.data)
+    let contentHash: string | undefined
+    let seKey: string | undefined
+    if (input.sourceEventId !== undefined) {
+      contentHash = entryContentHash({
+        data: redactedData,
+        schemaId: input.schemaId,
+        schemaVersion: input.schemaVersion,
+      })
+      seKey = `${input.credId}\0${input.sessionId}\0${input.sourceEventId}`
+      const existing = this.#sourceEvents.get(seKey)
+      if (existing) {
+        if (existing.contentHash !== contentHash) {
+          throw sourceEventConflictError(
+            input.sessionId,
+            existing.entry.createdAt,
+            input.sourceEventId,
+          )
+        }
+        return { ...existing.entry, duplicate: true }
+      }
     }
     const timestamp = Math.max(
       this.#now().getTime(),
@@ -133,16 +157,19 @@ export class MemorySessionStore {
     )
     const effectiveTtlDays = resolveEntryTtlDays(this.#retention, session.data)
     const { expiresAt } = computeEntryExpiry(timestamp, effectiveTtlDays)
-    const { value: redactedData } = redactCredentials(input.data)
     const entry: SessionEntry = {
       sessionId: input.sessionId,
       createdAt: new Date(timestamp).toISOString(),
       data: redactedData,
       ...(input.schemaId !== undefined ? { schemaId: input.schemaId } : {}),
       ...(input.schemaVersion !== undefined ? { schemaVersion: input.schemaVersion } : {}),
+      ...(input.sourceEventId !== undefined ? { sourceEventId: input.sourceEventId } : {}),
       expiresAt,
     }
     this.#entries.set(this.#entryKey(input.credId, input.sessionId, timestamp), entry)
+    if (seKey !== undefined) {
+      this.#sourceEvents.set(seKey, { contentHash: contentHash!, entry })
+    }
     this.#sessions.set(sessionKey, { ...session, lastEntryAt: entry.createdAt })
     return entry
   }

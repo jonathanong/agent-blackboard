@@ -7,6 +7,7 @@ import { runSchemasConformance } from './schemas.mjs'
 import { runSessionLifecycleConformance } from './session-lifecycle.mjs'
 import { runSessionPaginationConformance } from './session-pagination.mjs'
 import { runSessionsConformance } from './sessions.mjs'
+import { runSourceEventsConformance } from './source-events.mjs'
 
 export type { ConformanceRetentionOptions } from './retention.mjs'
 
@@ -25,6 +26,7 @@ export function runStoreConformance(
   runEntriesConformance(() => makeStore())
   runRedactionConformance(() => makeStore())
   runRetentionConformance(makeStore)
+  runSourceEventsConformance(() => makeStore())
   runCredentialsConformance(() => makeStore())
   runSchemasConformance(() => makeStore())
 }

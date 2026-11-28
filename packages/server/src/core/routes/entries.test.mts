@@ -246,4 +246,49 @@ describe('entries route', () => {
     )
     expect((await json(clean)) as Record<string, unknown>).not.toHaveProperty('redactedCount')
   })
+
+  it('handles sourceEventId new (201), duplicate (200), conflict (409), and invalid id (400)', async () => {
+    expect(
+      (
+        await handleEntriesRoute(
+          request({ method: 'POST', body: { data: {}, sourceEventId: '   ' } }),
+          store,
+          's',
+        )
+      ).status,
+    ).toBe(400)
+
+    const first = await handleEntriesRoute(
+      request({ method: 'POST', body: { data: { note: 'hi' }, sourceEventId: 'evt-1' } }),
+      store,
+      's',
+    )
+    expect(first.status).toBe(201)
+    const firstBody = (await json(first)) as Record<string, unknown>
+    expect(firstBody.sourceEventId).toBe('evt-1')
+    expect(firstBody.duplicate).toBeUndefined()
+
+    const dup = await handleEntriesRoute(
+      request({ method: 'POST', body: { data: { note: 'hi' }, sourceEventId: 'evt-1' } }),
+      store,
+      's',
+    )
+    expect(dup.status).toBe(200)
+    expect(await json(dup)).toEqual({ ...firstBody, duplicate: true })
+
+    const conflict = await handleEntriesRoute(
+      request({ method: 'POST', body: { data: { note: 'changed' }, sourceEventId: 'evt-1' } }),
+      store,
+      's',
+    )
+    expect(conflict.status).toBe(409)
+    expect(await json(conflict)).toMatchObject({
+      code: 'source_event_conflict',
+      existingEntry: {
+        sessionId: 's',
+        createdAt: firstBody.createdAt,
+        sourceEventId: 'evt-1',
+      },
+    })
+  })
 })

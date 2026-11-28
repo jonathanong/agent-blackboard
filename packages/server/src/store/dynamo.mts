@@ -1,4 +1,5 @@
 import type {
+  AppendedSessionEntry,
   CredentialRecord,
   SchemaBundle,
   SchemaShadowReport,
@@ -71,7 +72,7 @@ export function createDynamoStore(options: DynamoStoreOptions = {}): BlackboardS
     archiveSession(credId: string, sessionId: string): Promise<Session> {
       return dynamoArchiveSession(doc, tableName, now, credId, sessionId)
     },
-    appendEntry(entry: NewSessionEntry): Promise<SessionEntry> {
+    appendEntry(entry: NewSessionEntry): Promise<AppendedSessionEntry> {
       return dynamoAppendEntry(doc, tableName, retention, now, entry)
     },
     getEntries(
