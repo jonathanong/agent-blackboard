@@ -74,7 +74,8 @@ pnpm run evals:summary                      # write cases.csv and rebuild the RE
 - After a measured run, add an entry at the top of `HISTORY.md` with the date, commit, models,
   attempts per arm, and cost, split into agent and judges. Then run `pnpm run evals:summary`.
   It replaces the run's rows in `cases.csv` and rebuilds the table between the `eval-table`
-  markers in `README.md`. Do not edit that table or `cases.csv` by hand.
+  markers in `README.md`; run `pnpm run oxfmt` after it. Do not edit that table or `cases.csv` by
+  hand.
 - Changing a case, grader, or tested skill updates `README.md` and `HISTORY.md` in the same pull
   request. A change with no run still gets a `HISTORY.md` entry. Mark the affected rows in
   `README.md` as not re-measured.

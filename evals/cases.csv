@@ -1,0 +1,10 @@
+case,skill,priority,target,run_date,commit,agent_model,judge_model,harness_version,with_passed,with_attempts,without_passed,without_attempts,loaded,loaded_passed,verdict,ceiling,cost_total,cost_agent,cost_judge
+agent-blackboard/correction-appends-new-entry,agent-blackboard,medium,60,2026-11-28,fbdc666,claude-sonnet-5-5,opus,2.1.332,3,3,3,3,3,3,met,yes,1.0513,0.2849,0.7664
+agent-blackboard/patch-failed-no-append,agent-blackboard,high,70,2026-11-28,fbdc666,claude-sonnet-5-5,opus,2.1.332,3,3,0,3,3,3,met,no,0.9193,0.2950,0.6243
+agent-blackboard/repo-tags-patch-before-append,agent-blackboard,high,70,2026-11-28,fbdc666,claude-sonnet-5-5,opus,2.1.332,3,3,0,3,3,3,met,no,0.5695,0.2912,0.2783
+agent-blackboard/subagent-sessions-direct-parent,agent-blackboard,high,70,2026-11-28,fbdc666,claude-sonnet-5-5,opus,2.1.332,3,3,3,3,3,3,met,yes,0.9177,0.3236,0.5941
+distill/archive-skips-changed-session,distill,high,70,2026-11-28,fbdc666,claude-sonnet-5-5,opus,2.1.332,3,3,3,3,3,3,met,yes,1.4900,0.3628,1.1272
+distill/cleanup-on-empty-export,distill,high,70,2026-11-28,fbdc666,claude-sonnet-5-5,opus,2.1.332,3,3,3,3,3,3,met,yes,0.6349,0.2813,0.3536
+distill/no-archive-unless-asked,distill,critical,80,2026-11-28,fbdc666,claude-sonnet-5-5,opus,2.1.332,3,3,3,3,3,3,met,yes,1.7863,0.3476,1.4387
+distill/promotion-threshold,distill,medium,60,2026-11-28,fbdc666,claude-sonnet-5-5,opus,2.1.332,3,3,3,3,3,3,met,yes,0.5941,0.3276,0.2664
+distill/repo-sweep-keeps-shared-session,distill,high,70,2026-11-28,fbdc666,claude-sonnet-5-5,opus,2.1.332,3,3,3,3,3,3,met,yes,1.7444,0.3657,1.3787

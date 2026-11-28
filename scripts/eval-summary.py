@@ -54,11 +54,11 @@ def passed(run):
     return run.get("error") is None and bool(graders) and all(g["passed"] for g in graders)
 
 
-def priority_of(tags):
-    for tag in tags or []:
-        if tag.startswith("priority-"):
-            return tag.removeprefix("priority-")
-    return "medium"
+def priority_of(name):
+    """The case's `priority-*` tag, read from its prompt.md, since the results file omits tags."""
+    front = (ROOT / "evals" / name / "prompt.md").read_text().split("\n---", 1)[0]
+    match = re.search(r"^tags:.*\bpriority-(\w+)", front, flags=re.M)
+    return match.group(1) if match else "medium"
 
 
 def read_rows():
@@ -104,7 +104,7 @@ def main():
         name = re.sub(r"^.*?evals/", "", case["dir"])
         runs = case["arms"]["with"]
         without = case["arms"].get("without") or []
-        priority = priority_of(case.get("tags"))
+        priority = priority_of(name)
         target = TARGETS[priority]
         wins = sum(map(passed, runs))
         every = runs + without
