@@ -163,7 +163,13 @@ describe('client entry outbox', () => {
       // Flushing a queued entry that the server already accepted counts as delivered + duplicate
       enqueueOutboxEntry(
         outboxDir,
-        { sessionId: 's1', data: { note: 'offline finding' }, sourceEventId: queued.sourceEventId },
+        {
+          sessionId: 's1',
+          data: { note: 'offline finding' },
+          schemaId: 'finding',
+          schemaVersion: 1,
+          sourceEventId: queued.sourceEventId,
+        },
         'timeout',
       )
       expect(await onlineOutbox.flush({ sessionId: 's1' })).toEqual({
@@ -427,7 +433,7 @@ describe('client entry outbox', () => {
         outboxDir,
         { sessionId: 's-b', data: { fail503: true } },
         'net',
-        undefined,
+        () => new Date(Date.now() + 10_000),
         outboxTargetFromConfig({ baseUrl: server.baseUrl, token: tokenCredB }),
       )
       expect(await outboxB.flush()).toEqual({
