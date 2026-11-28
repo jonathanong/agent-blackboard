@@ -29,6 +29,7 @@
     "actionlint": "github-actionlint",
     "lint:links": "lychee --config lychee.toml '**/*.md' '**/*.json'",
     "evals": "./scripts/run-evals.sh",
+    "evals:live": "./scripts/run-evals-live.sh",
     "evals:summary": "python3 scripts/eval-summary.py"
   },
   "devDependencies": {

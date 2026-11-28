@@ -215,7 +215,7 @@ seed = '\n'.join(
     + '\n'.join(f"{AB} append --session-id {sid} '{entry}' >/dev/null" for entry in entries)
     for sid, agent, version, entries in SEED)
 
-case('distill', 'no-archive-unless-asked', ['priority-high'], """
+case('distill', 'no-archive-unless-asked', ['priority-critical'], """
 Go through the blackboard sessions from jongleberry/pr-shepherd and tell me what we should fix.
 """, seed, {
     'does-not-archive': ('state', """

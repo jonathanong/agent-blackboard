@@ -2,6 +2,79 @@
 
 Newest first. Each entry names the run's commit, models, attempts, and cost.
 
+## 2026-11-28: plan-only `agent-blackboard` cases re-measured after the skill change
+
+- Commit `f8464c6`, Claude Code 2.1.332. Agent `claude-sonnet-5-5`, judge Opus. With-skill arm
+  only (`EVAL_ABLATION=none`), 3 attempts. Cost $1.90: $0.68 agent, $1.22 judges.
+- The `agent-blackboard` skill's repository paragraph now says to read the session's tags before
+  merging (the live entry below). The baseline does not see the skill, so its column stays from
+  `ecfc9aa`.
+- Result: 3 of 3 on all four `agent-blackboard` cases, as before. No regression.
+
+## 2026-11-28: live suite measured
+
+- Commit `f8464c6`, Claude Code 2.1.332. Agent `claude-sonnet-5-5`, judge Opus. 3 attempts per
+  arm, 8 for `friction-misleading-error`. Cost $6.06: $3.52 agent, $2.54 judges.
+- The run used the tree that became `f8464c6`, minus two changes that cannot move a score: each
+  scaffold now ends with a read so `report.md` always exists, and the live
+  `no-archive-unless-asked` is now tagged `priority-critical`, as in the plan-only suite, instead
+  of high.
+- Suite changes since the first live run below: the system prompt no longer names the CLI; the
+  new `repo-tags-cli-named` case keeps that wording; the skill says to read a session's tags
+  before merging into them. Rows cannot be compared with the first live run.
+- Scores, with plugin against CLI only: `patch-failed-no-append` 3 of 3 vs 0 of 3; both repo-tags
+  cases 3 of 3 vs 0 of 3; `friction-misleading-error` 8 of 8 vs 4 of 8;
+  `subagent-sessions-direct-parent` and `no-archive-unless-asked` 3 of 3 vs 3 of 3.
+- The four CLI-only friction failures made no blackboard write, so the harness had written no
+  `report.md` and the grader errored instead of failing. Their traces confirm no write. The
+  scaffold change above makes such an attempt a plain FAIL.
+- Finding: with the plugin, agents used the MCP tools for every case except
+  `repo-tags-cli-named` (CLI only). The skill loaded in 0 of 8 friction attempts, and the MCP tools
+  alone were enough to record the friction.
+
+## 2026-11-28: friction loading with "friction" in the skill description
+
+- The same tree as the run above, with the `agent-blackboard` skill description changed to "Use
+  when recording progress, decisions, findings, or friction (a misleading error, a workaround, a
+  gotcha)". With-plugin arm only, 8 attempts. Cost $1.02: $0.60 agent, $0.42 judges.
+- Loading stayed at 0 of 8 against 0 of 8 in the same session's control (the run above). Every
+  attempt still recorded the friction through the MCP tools. The description change was
+  reverted.
+
+## 2026-11-28: first live run, with the CLI named in the system prompt (superseded)
+
+- Commit `332688b` plus the uncommitted live suite. Same models. 3 attempts per arm, 8 for
+  friction. Cost $4.70: $3.02 agent, $1.68 judges.
+- The shared system prompt said the `agent-blackboard` CLI was on PATH. With the plugin, agents
+  made 0 MCP calls and 43 CLI calls in the five `agent-blackboard` cases; only `distill` used MCP.
+- Scores, with plugin against CLI only: `patch-failed-no-append` 3 of 3 vs 0 of 3;
+  `repo-tags-patch-before-append` 0 of 3 vs 0 of 3; `friction-misleading-error` 8 of 8 vs 8 of 8
+  (loaded 3 of 8); the other two 3 of 3 vs 3 of 3.
+- The with-plugin repo-tags failures were real. Each agent loaded the skill, never read the
+  session, and patched `repositories` to `["jongleberry/pr-shepherd"]`, dropping
+  `jongleberry/agent-blackboard`. The skill said to merge into the cumulative list but not to read
+  it first, and its CLI example patches a fresh session with one repository.
+- A one-attempt pilot without the CLI named ($0.41) showed the plugin agent using MCP and
+  `session_ensure`, which returns the current tags, while the CLI-only agent still found the CLI
+  with `which`. The suite switched to that prompt.
+
+## 2026-11-28: live suite built and piloted
+
+- Cost about $2.10: one-attempt pilots of one case ($0.36) and all five cases ($1.30), and about
+  $0.50 of probes.
+- What the probes found about `claude plugin eval` 2.1.332 on Linux:
+  - Sandboxed Bash cannot write anywhere, the workspace included, and every call exits 1 because
+    Bash cannot write its working-directory file. File edits go through Write and Edit.
+  - Sandboxed Bash cannot reach a host server directly, but it can through the sandbox's proxy
+    once `--allow-tools "WebFetch(domain:localhost)"` is granted. Node's `fetch` needs
+    `NODE_USE_ENV_PROXY=1` with `NO_PROXY` cleared.
+  - Sandboxed Bash can read the plugin root only in the with-plugin arm, so the scaffold copies
+    the CLI into the attempt's HOME.
+  - A parent Claude Code session's `CLAUDE_TMPDIR` leaks into the attempts and must be unset.
+  - A real MCP server starts with the workspace as its working directory.
+- Hence the design in `evals/live/harness/`: one host server holds every attempt's state in that
+  attempt's workspace, keyed by a token that encodes the workspace path.
+
 ## 2026-11-28: `patch-failed-no-append` re-measured after a grader clarification
 
 - Commit `8e60c5f`, same models, 3 attempts per arm. Cost $0.72: $0.29 agent, $0.44 judges.

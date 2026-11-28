@@ -1,7 +1,7 @@
 schema_version: '1.1'
 name: live-no-archive-unless-asked
 runs: 3
-tags: [live, distill, priority-high]
+tags: [live, distill, priority-critical]
 context:
   scaffold_script: scaffold.sh
 execution:

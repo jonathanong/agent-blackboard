@@ -11,6 +11,9 @@ pnpm run evals distill                      # one skill's cases (any case tag wo
 EVAL_FLAGS='--runs 1' pnpm run evals        # pilot a new case
 EVAL_FLAGS='--case promotion-threshold' pnpm run evals   # one case
 pnpm run evals:summary                      # write cases.csv and rebuild the README table
+pnpm run evals:live                         # the live suite, both arms
+EVAL_FLAGS='--runs 1 --case *repo-tags*' pnpm run evals:live   # pilot live cases
+pnpm run evals:summary evals/results/live-latest.json         # record a live run
 ```
 
 - Sonnet (`claude-sonnet-5-5`) is the agent and Opus is the judge. Measure with three attempts
@@ -26,6 +29,8 @@ pnpm run evals:summary                      # write cases.csv and rebuild the RE
   make a row pass.
 
 ## Cases
+
+These rules are for the plan-only suite. The live suite's are in the next section.
 
 - Layout: `evals/<skill>/<case>/prompt.md` and `graders/*.md`. `<skill>` is the plugin skill
   under test (`agent-blackboard` or `distill`).
@@ -51,12 +56,33 @@ pnpm run evals:summary                      # write cases.csv and rebuild the RE
   real hostnames, tokens, or emails. Do not write `https://` URLs in prompts, because
   `pnpm run lint:links` would check them.
 
+## Live cases
+
+- Layout: `evals/live/<skill>/<case>/case.yaml`, `scaffold.sh`, and `graders/*.md`, written by
+  `evals/live/generate.py`. Never edit them by hand; run the generator and `pnpm run oxfmt`.
+- Run them only through `scripts/run-evals-live.sh`. It starts `evals/live/harness/harness.mjs` as
+  the server, points the staged plugin's MCP server and the `agent-blackboard` on PATH at it,
+  unsets `AGENT_BLACKBOARD_URL` and the tokens, and refuses to run if the staged MCP config still
+  names `npx` or an `https:` URL. Never pass a live run's `--scaffold`, `--allow-real-servers`, or
+  `--allow-tools` flags to any other suite.
+- The arms are the installed plugin (skills and MCP server) and no plugin. Both arms have the
+  CLI. Do not name the CLI or the MCP tools in the shared system prompt, except in a case built to
+  test that wording (`repo-tags-cli-named`).
+- Each scaffold seeds its attempt's blackboard with the CLI, which writes nothing outside the
+  workspace and the attempt's HOME. Say in the grader which sessions and entries the scaffold
+  created.
+- Grade the end state: `llm` graders on `.eval-blackboard/report.md` (sessions and entries) or
+  `.eval-blackboard/log.jsonl` (the order of writes), with `focus: {source: file, path: ...}`. Add
+  a `last_message` grader only for what the agent reports.
+- A case that leaves the blackboard out of the prompt measures loading. Run it with eight
+  attempts so a loading rate can be quoted.
+
 ## Graders
 
 - Every case has `graders/skill-fired.md`, a `tool_used` grader on `Skill`. Anchor its pattern
   with the opening quote (`"(?:[\w-]+:)?distill"`) so `retrospective-distill` does not match.
-- Every case has at least one `llm` grader on `last_message` that checks the outcome. State what
-  passes and what fails, and say that a correct refusal passes.
+- Every plan-only case has at least one `llm` grader on `last_message` that checks the outcome.
+  State what passes and what fails, and say that a correct refusal passes.
 - Grade the rule the case is named for. Do not make a grader also require rules that other cases
   check.
 - Do not use a regex over the whole message to check that an action is absent. "I will not call
@@ -64,7 +90,7 @@ pnpm run evals:summary                      # write cases.csv and rebuild the RE
 
 ## Actions a case must never perform
 
-- Never pass `--mocks off`, `--allow-real-servers`, `--scaffold`, or `--allow-tools`. With the
+- In the plan-only suite, never pass `--mocks off`, `--allow-real-servers`, `--scaffold`, or `--allow-tools`. With the
   default `--mocks record` and no `evals/mocks/`, the plugin's MCP server is not started. Started,
   it would write to whatever `AGENT_BLACKBOARD_URL` and `AGENT_BLACKBOARD_TOKEN` are set.
 - Never read or print credentials or dump the environment.
