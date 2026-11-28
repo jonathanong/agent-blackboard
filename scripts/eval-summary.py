@@ -2,11 +2,13 @@
 """Records a `claude plugin eval` results file in evals/cases.csv and rebuilds the README table.
 
 Usage: [EVAL_COMMIT=<sha>] scripts/eval-summary.py [evals/results/latest.json]
+       scripts/eval-summary.py evals/results/live-latest.json   (the live suite, evals/live/)
 
 An attempt passes when every grader but `skill-fired` passed; `loaded` counts the attempts where
 `skill-fired` passed. Only the rows of the cases the run covered are replaced. A run with no
 without-plugin arm keeps the row's earlier without-plugin result. The table between the
-`eval-table` markers in evals/README.md is rebuilt from the whole CSV.
+`eval-table` markers in evals/README.md is rebuilt from the plan-only rows of the CSV, and the
+one between the `eval-live-table` markers from the `live/` rows.
 """
 import csv
 import json
@@ -56,8 +58,13 @@ def passed(run):
 
 
 def priority_of(name):
-    """The case's `priority-*` tag, read from its prompt.md, since the results file omits tags."""
-    front = (ROOT / "evals" / name / "prompt.md").read_text().split("\n---", 1)[0]
+    """The case's `priority-*` tag, read from its prompt.md or case.yaml, since the results file
+    omits tags."""
+    case_dir = ROOT / "evals" / name
+    if (case_dir / "prompt.md").exists():
+        front = (case_dir / "prompt.md").read_text().split("\n---", 1)[0]
+    else:
+        front = (case_dir / "case.yaml").read_text()
     match = re.search(r"^tags:.*\bpriority-(\w+)", front, flags=re.M)
     return match.group(1) if match else "medium"
 
@@ -77,12 +84,13 @@ def write_rows(rows):
             writer.writerow({column: rows[name].get(column, "") for column in COLUMNS})
 
 
-def table(rows):
+def table(rows, live):
+    with_arm, without_arm = ("With plugin", "CLI only") if live else ("With skill", "Without")
     lines = [
-        "| Case | Priority | With skill | Without | Loaded | Verdict |",
+        f"| Case | Priority | {with_arm} | {without_arm} | Loaded | Verdict |",
         "| ---- | -------- | ---------- | ------- | ------ | ------- |",
     ]
-    for name in sorted(rows):
+    for name in sorted(name for name in rows if name.startswith("live/") == live):
         row = rows[name]
         ceiling = " (ceiling)" if row["ceiling"] == "yes" else ""
         loads = f"{row['loaded']} of {row['with_attempts']}" if row["loaded"] else "—"
@@ -116,7 +124,7 @@ def main():
         row = {"without_passed": "", "without_attempts": "", "ceiling": ""} | rows.get(name, {})
         row |= {
             "case": name,
-            "skill": name.split("/")[0],
+            "skill": name.removeprefix("live/").split("/")[0],
             "priority": priority,
             "target": str(target),
             "run_date": data["startedAt"][:10],
@@ -142,8 +150,10 @@ def main():
     write_rows(rows)
 
     text = README.read_text()
-    block = f"<!-- eval-table:start -->\n{table(rows)}\n<!-- eval-table:end -->"
-    text = re.sub(r"<!-- eval-table:start -->.*<!-- eval-table:end -->", block, text, flags=re.S)
+    for marker, live in (("eval-table", False), ("eval-live-table", True)):
+        block = f"<!-- {marker}:start -->\n{table(rows, live)}\n<!-- {marker}:end -->"
+        pattern = rf"<!-- {marker}:start -->.*<!-- {marker}:end -->"
+        text = re.sub(pattern, lambda _: block, text, flags=re.S)
     README.write_text(text)
 
     print(f"Started {data['startedAt']}, Claude Code {data.get('claudeVersion')}, ${data['costUsd']:.2f}.")

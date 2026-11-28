@@ -87,9 +87,11 @@ npx -y agent-blackboard@0.8.0 snapshot cleanup --path /tmp/agent-blackboard-snap
 Output defaults to JSON; pass `--format jsonl` or `--format markdown` for streaming or
 human-readable reads.
 
-Before appending a repository-tagged entry, merge its tags into the session's cumulative list,
-normalize the list, and wait for `sessions patch` to succeed. If it fails, do not append; start a
-new session after archival because archived metadata cannot be patched. The entry tag remains the
+Before appending a repository-tagged entry, read the session's current `data.repositories`
+(`sessions get <id>`) and merge the entry's tags into that list: a patch replaces the whole
+array, so patching only the new repository drops the ones already there. Normalize the list and
+wait for `sessions patch` to succeed. If it fails, do not append; start a new session after
+archival because archived metadata cannot be patched. The entry tag remains the
 authority for repository-scoped evidence. A session can span repositories, so a repository-scoped
 review includes only entries whose tag array contains the selected repository and does not archive
 the shared session until all of its tagged repositories have been reviewed.

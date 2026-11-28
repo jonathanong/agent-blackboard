@@ -21,7 +21,7 @@ trap 'rm -rf "$stage"' EXIT
 cp -R .claude-plugin plugins "$stage/"
 mkdir "$stage/evals"
 for dir in evals/*/; do
-  [ "$dir" = evals/results/ ] || cp -R "$dir" "$stage/evals/"
+  case $dir in evals/results/ | evals/live/) ;; *) cp -R "$dir" "$stage/evals/" ;; esac
 done
 mkdir -p evals/results
 
