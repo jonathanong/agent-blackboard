@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -38,6 +38,28 @@ describe('client entry outbox', () => {
 
   it('classifies retryable vs permanent append failures', () => {
     expect(isRetryableAppendError(new TypeError('fetch failed'))).toBe(true)
+    expect(isRetryableAppendError(new DOMException('aborted', 'AbortError'))).toBe(true)
+    expect(isRetryableAppendError(new DOMException('timed out', 'TimeoutError'))).toBe(true)
+    expect(
+      isRetryableAppendError(Object.assign(new Error('refused'), { code: 'ECONNREFUSED' })),
+    ).toBe(true)
+    expect(
+      isRetryableAppendError(Object.assign(new Error('undici'), { code: 'UND_ERR_SOCKET' })),
+    ).toBe(true)
+    expect(
+      isRetryableAppendError(
+        new TypeError('socket error', {
+          cause: Object.assign(new Error('reset'), { code: 'ECONNRESET' }),
+        }),
+      ),
+    ).toBe(true)
+    expect(
+      isRetryableAppendError(
+        new TypeError('baseUrl must use HTTPS; HTTP is allowed only for local loopback servers'),
+      ),
+    ).toBe(false)
+    expect(isRetryableAppendError(new RangeError('bad'))).toBe(false)
+    expect(isRetryableAppendError('not-an-error')).toBe(false)
     expect(isRetryableAppendError(new AgentBlackboardError('unauth', 401, {}))).toBe(true)
     expect(isRetryableAppendError(new AgentBlackboardError('timeout', 408, {}))).toBe(true)
     expect(isRetryableAppendError(new AgentBlackboardError('rate', 429, {}))).toBe(true)
@@ -247,5 +269,87 @@ describe('client entry outbox', () => {
     const rec = enqueueOutboxEntry(dir, { sessionId: 's', data: {} }, 'e')
     expect(() => updatePendingError(dir, 'existing-dir.json', rec, 'boom')).toThrow()
     expect(readdirSync(join(dir, 'pending')).some((name) => name.endsWith('.tmp'))).toBe(false)
+  })
+
+  it('binds sourceEventId and snapshots data before the first POST, deduplicating lost responses', async () => {
+    const outboxDir = tempDir()
+    const stored: Array<Record<string, unknown>> = []
+    let dropFirstResponse = true
+    const fixture = await startHttpFixture((req, res) => {
+      const body = JSON.parse(req.body) as Record<string, unknown>
+      const existing = stored.find((e) => e.sourceEventId === body.sourceEventId)
+      if (existing) {
+        sendJson(res, 200, { ...existing, duplicate: true })
+        return
+      }
+      const created = { sessionId: 's1', createdAt: '2026-01-01T00:00:00.000Z', ...body }
+      stored.push(created)
+      if (dropFirstResponse) {
+        dropFirstResponse = false
+        // Server committed the write, then connection dropped before the client got a response
+        res.socket?.destroy()
+        return
+      }
+      sendJson(res, 201, created)
+    })
+    try {
+      const entries = new Entries({ baseUrl: fixture.baseUrl, token: 't', outboxDir })
+      const mutableData = { note: 'original' }
+      const pendingPromise = entries.append({ sessionId: 's1', data: mutableData })
+      // Mutate caller's object synchronously while the POST is in flight
+      mutableData.note = 'mutated-after-call'
+      const queued = await pendingPromise
+      expect(queued.queued).toBe(true)
+      if (!queued.queued) throw new Error('expected queued result')
+      expect(queued.data).toEqual({ note: 'original' })
+      expect(queued.sourceEventId).toBe(stored[0]!.sourceEventId)
+
+      const outbox = new Outbox({ baseUrl: fixture.baseUrl, token: 't', outboxDir })
+      expect(await outbox.flush()).toEqual({
+        dir: outboxDir,
+        delivered: 1,
+        duplicates: 1,
+        rejected: 0,
+        remaining: 0,
+      })
+      expect(stored).toHaveLength(1)
+    } finally {
+      await fixture.close()
+    }
+  })
+
+  it('does not queue configuration errors, rethrows non-ENOENT dir errors, and isolates corrupt files', async () => {
+    const outboxDir = tempDir()
+    // Non-HTTPS remote URL must throw immediately instead of queuing
+    await expect(
+      new Entries({ baseUrl: 'http://example.com', token: 't', outboxDir }).append({
+        sessionId: 's1',
+        data: { note: 'bad-url' },
+      }),
+    ).rejects.toThrow(/HTTPS/)
+    const outbox = new Outbox({ baseUrl: 'http://localhost:1', token: 't', outboxDir })
+    expect(outbox.status().pending).toBe(0)
+
+    // Non-ENOENT directory error (e.g. pending is a file -> ENOTDIR) propagates
+    const brokenRoot = tempDir()
+    writeFileSync(join(brokenRoot, 'pending'), 'not-a-dir')
+    expect(() =>
+      new Outbox({ baseUrl: 'http://localhost:1', token: 't', outboxDir: brokenRoot }).status(),
+    ).toThrow()
+
+    // Corrupt / malformed JSON files are reported without blocking valid records
+    const valid = enqueueOutboxEntry(outboxDir, { sessionId: 's1', data: { ok: 1 } }, 'net')
+    const corruptPending = join(outboxDir, 'pending', '0000-corrupt.json')
+    const malformedPending = join(outboxDir, 'pending', '0001-malformed.json')
+    writeFileSync(corruptPending, '{truncated')
+    writeFileSync(malformedPending, JSON.stringify({ id: 'x' }))
+    mkdirSync(join(outboxDir, 'rejected'), { recursive: true })
+    const corruptRejected = join(outboxDir, 'rejected', '0000-bad-rejected.json')
+    writeFileSync(corruptRejected, JSON.stringify({ ...valid }))
+
+    const status = outbox.status()
+    expect(status.pending).toBe(1)
+    expect(status.rejected).toBe(0)
+    expect(status.corruptFiles).toEqual([corruptPending, malformedPending, corruptRejected])
   })
 })

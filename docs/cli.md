@@ -162,7 +162,10 @@ matches. Credential commands are never exposed over MCP.
 
 When `agent-blackboard append` cannot reach the server (network error, `5xx`, `429`, `408`, or
 expired `401` credential), it buffers the entry in `<worktree>/.local/agent-blackboard/outbox`
-(override with `AGENT_BLACKBOARD_OUTBOX_DIR`) and prints a JSON object with `"queued": true`.
+(override with `AGENT_BLACKBOARD_OUTBOX_DIR`), exits `0`, and prints a JSON object with
+`"queued": true` (so callers that check exit status should inspect `queued` if they need to
+distinguish immediate delivery from buffered writes). Permanent `4xx` rejections (such as `400`,
+`403`, `404`, or `409`) still fail immediately with a non-zero exit code without queuing.
 
 ```sh
 agent-blackboard outbox status [--dir <path>]

@@ -16,7 +16,10 @@ describe('runAppend', () => {
     try {
       const first = createFakeContext({ env: ENV(fixture.baseUrl) })
       await runAppend(['--session-id', 's', '{"a":1}'], first)
-      expect(JSON.parse(fixture.requests[0]!.body)).toEqual({ data: { a: 1 } })
+      expect(JSON.parse(fixture.requests[0]!.body)).toEqual({
+        data: { a: 1 },
+        sourceEventId: expect.stringMatching(/^outbox-/),
+      })
       expect(first.stdoutLines).toEqual([`${JSON.stringify(entry)}\n`])
       const second = createFakeContext({
         env: ENV(fixture.baseUrl),
@@ -30,6 +33,7 @@ describe('runAppend', () => {
       expect(JSON.parse(fixture.requests.at(-1)!.body)).toEqual({
         data: { a: 1 },
         schemaId: 'finding',
+        sourceEventId: expect.stringMatching(/^outbox-/),
       })
       await runAppend(
         ['--session-id', 's', '--schema', 'finding@2', '--source-event-id', 'evt-9', '{"a":1}'],
@@ -65,7 +69,10 @@ describe('runAppend', () => {
           ['--session-id', 's', '--file', path],
           createFakeContext({ env: ENV(fixture.baseUrl) }),
         )
-        expect(JSON.parse(fixture.requests.at(-1)!.body)).toEqual({ data })
+        expect(JSON.parse(fixture.requests.at(-1)!.body)).toEqual({
+          data,
+          sourceEventId: expect.stringMatching(/^outbox-/),
+        })
       }
     } finally {
       await fixture.close()

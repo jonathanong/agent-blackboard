@@ -27,6 +27,8 @@ export interface OutboxStatus {
   rejected: number
   sessions: Record<string, OutboxSessionCounts>
   rejectedRecords: OutboxRejectedRecord[]
+  /** Paths of unreadable or malformed `.json` files skipped in `pending/` or `rejected/`. */
+  corruptFiles?: string[]
 }
 
 export interface OutboxFlushOptions {

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { formatError } from '../format-error.mjs'
 import { isRetryableAppendError } from '../outbox/classify.mjs'
 import { enqueueOutboxEntry } from '../outbox/store.mjs'
@@ -32,11 +33,21 @@ export async function appendEntry(
   config: ClientConfig,
   input: AppendEntryInput,
 ): Promise<AppendEntryResult> {
+  // When outbox fallback is enabled, freeze the payload and bind a stable sourceEventId
+  // before the first POST so a stored-but-unacknowledged response deduplicates on flush.
+  const prepared: AppendEntryInput =
+    config.outboxDir !== undefined
+      ? {
+          ...input,
+          data: structuredClone(input.data),
+          sourceEventId: input.sourceEventId ?? `outbox-${randomUUID()}`,
+        }
+      : input
   try {
-    return await sendAppendEntry(config, input)
+    return await sendAppendEntry(config, prepared)
   } catch (error) {
     if (config.outboxDir !== undefined && isRetryableAppendError(error)) {
-      const record = enqueueOutboxEntry(config.outboxDir, input, formatError(error))
+      const record = enqueueOutboxEntry(config.outboxDir, prepared, formatError(error))
       return {
         queued: true,
         outboxId: record.id,

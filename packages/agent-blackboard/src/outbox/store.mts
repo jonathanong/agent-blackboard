@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { rmSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import type { AppendEntryInput } from '../client/types.mjs'
 import { enclosingWorktreeRoot } from '../session-id/persist.mjs'
+import { readValidatedRecords, writeJsonAtomic } from './fs.mjs'
 import type {
   OutboxPendingRecord,
   OutboxPruneOptions,
@@ -16,6 +17,30 @@ export const DEFAULT_OUTBOX_RELATIVE = '.local/agent-blackboard/outbox'
 const PENDING_DIR = 'pending'
 const REJECTED_DIR = 'rejected'
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isPendingRecord(value: unknown): value is OutboxPendingRecord {
+  return (
+    isPlainObject(value) &&
+    typeof value.id === 'string' &&
+    typeof value.queuedAt === 'string' &&
+    typeof value.sessionId === 'string' &&
+    isPlainObject(value.data) &&
+    typeof value.sourceEventId === 'string' &&
+    typeof value.lastError === 'string'
+  )
+}
+
+function isRejectedRecord(value: unknown): value is OutboxRejectedRecord {
+  return (
+    isPendingRecord(value) &&
+    typeof (value as unknown as Record<string, unknown>).rejectedAt === 'string' &&
+    typeof (value as unknown as Record<string, unknown>).error === 'string'
+  )
+}
+
 /** Resolves the worktree-scoped or overridden local outbox directory. */
 export function resolveOutboxDir(
   cwd: string,
@@ -26,41 +51,6 @@ export function resolveOutboxDir(
   const envDir = env.AGENT_BLACKBOARD_OUTBOX_DIR?.trim()
   if (envDir) return resolve(cwd, envDir)
   return join(enclosingWorktreeRoot(cwd), DEFAULT_OUTBOX_RELATIVE)
-}
-
-function writeJsonAtomic(targetPath: string, payload: unknown): void {
-  mkdirSync(dirname(targetPath), { recursive: true, mode: 0o700 })
-  const temp = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
-  try {
-    writeFileSync(temp, `${JSON.stringify(payload, null, 2)}\n`, {
-      encoding: 'utf8',
-      flag: 'wx',
-      mode: 0o600,
-    })
-    renameSync(temp, targetPath)
-  } catch (error) {
-    rmSync(temp, { force: true })
-    throw error
-  }
-}
-
-function listJsonFiles(dir: string): string[] {
-  try {
-    return readdirSync(dir)
-      .filter((name) => name.endsWith('.json'))
-      .sort()
-  } catch {
-    return []
-  }
-}
-
-function readRecords<T>(dir: string): Array<{ fileName: string; record: T }> {
-  const results: Array<{ fileName: string; record: T }> = []
-  for (const fileName of listJsonFiles(dir)) {
-    const raw = readFileSync(join(dir, fileName), 'utf8')
-    results.push({ fileName, record: JSON.parse(raw) as T })
-  }
-  return results
 }
 
 /** Appends a failed entry write into `<dir>/pending/` atomically. */
@@ -90,13 +80,7 @@ export function enqueueOutboxEntry(
 export function readOutboxPending(
   dir: string,
 ): Array<{ fileName: string; record: OutboxPendingRecord }> {
-  return readRecords<OutboxPendingRecord>(join(dir, PENDING_DIR))
-}
-
-function readOutboxRejected(
-  dir: string,
-): Array<{ fileName: string; record: OutboxRejectedRecord }> {
-  return readRecords<OutboxRejectedRecord>(join(dir, REJECTED_DIR))
+  return readValidatedRecords(join(dir, PENDING_DIR), isPendingRecord).records
 }
 
 export function updatePendingError(
@@ -145,17 +129,19 @@ function ensureCounts(
 
 /** Summarizes pending and rejected entry counts per session plus rejected error details. */
 export function getOutboxStatus(dir: string): OutboxStatus {
-  const pending = readOutboxPending(dir)
-  const rejected = readOutboxRejected(dir)
+  const pending = readValidatedRecords(join(dir, PENDING_DIR), isPendingRecord)
+  const rejected = readValidatedRecords(join(dir, REJECTED_DIR), isRejectedRecord)
   const sessions: Record<string, OutboxSessionCounts> = {}
-  for (const { record } of pending) ensureCounts(sessions, record.sessionId).pending += 1
-  for (const { record } of rejected) ensureCounts(sessions, record.sessionId).rejected += 1
+  for (const { record } of pending.records) ensureCounts(sessions, record.sessionId).pending += 1
+  for (const { record } of rejected.records) ensureCounts(sessions, record.sessionId).rejected += 1
+  const corruptFiles = [...pending.corruptFiles, ...rejected.corruptFiles]
   return {
     dir,
-    pending: pending.length,
-    rejected: rejected.length,
+    pending: pending.records.length,
+    rejected: rejected.records.length,
     sessions,
-    rejectedRecords: rejected.map(({ record }) => record),
+    rejectedRecords: rejected.records.map(({ record }) => record),
+    ...(corruptFiles.length > 0 ? { corruptFiles } : {}),
   }
 }
 
@@ -164,7 +150,7 @@ export function pruneOutboxRejected(
   dir: string,
   options: Pick<OutboxPruneOptions, 'id' | 'sessionId'> = {},
 ): OutboxPruneResult {
-  const rejected = readOutboxRejected(dir)
+  const rejected = readValidatedRecords(join(dir, REJECTED_DIR), isRejectedRecord).records
   let removed = 0
   for (const { fileName, record } of rejected) {
     const matchesId = options.id === undefined || record.id === options.id

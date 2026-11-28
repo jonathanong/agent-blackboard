@@ -45,6 +45,8 @@ interface ClientConfig {
   token: string // abb_sk_<credentialId>_<secret>
   readRetry?: ReadRetryOptions
   onSchemaRevision?: (revision: number) => void
+  /** Local directory for buffering entry appends when the server is unreachable or returns retryable errors. */
+  outboxDir?: string
 }
 
 interface ReadRetryOptions {
@@ -330,12 +332,50 @@ interface SessionEntry {
   expiresAt?: string
 }
 
-interface AppendEntryResult extends SessionEntry {
+interface StoredEntryResult extends SessionEntry {
+  queued?: false
   warning?: SchemaShadowWarning // present when accepted under per-version or global shadow mode
   redactedCount?: number // present when server-side credential redaction replaced one or more secrets
   duplicate?: true // present when sourceEventId matched an existing entry with identical content
 }
+
+interface QueuedEntryResult {
+  queued: true
+  outboxId: string
+  sessionId: string
+  data: Record<string, unknown>
+  schemaId?: string
+  schemaVersion?: number
+  sourceEventId: string
+  queuedAt: string
+  error: string
+}
+
+type AppendEntryResult = StoredEntryResult | QueuedEntryResult
 ```
+
+When `ClientConfig.outboxDir` is set, `Entries.append` assigns a stable `sourceEventId` (unless
+supplied) and snapshots `data` before sending the initial POST; on transport failures or retryable
+HTTP statuses (`401`, `408`, `429`, `5xx`) it writes the entry into `<outboxDir>/pending/` and
+resolves with a `QueuedEntryResult` (`queued: true`). Check `if (result.queued)` to narrow
+`AppendEntryResult`.
+
+## `Outbox`
+
+Create one instance with `new Outbox(config: ClientConfig)` to inspect, flush, or prune buffered
+entries (or call `resolveOutboxDir(cwd, env, explicitDir?)` to locate the default worktree outbox):
+
+```ts
+const outbox = new Outbox({ ...config, outboxDir })
+
+const status = outbox.status() // { dir, pending, rejected, sessions, rejectedRecords, corruptFiles? }
+const flushed = await outbox.flush() // { dir, delivered, duplicates, rejected, remaining }
+const pruned = outbox.pruneRejected({ sessionId: 'root-123' })
+```
+
+`flush()` replays pending entries in timestamp order with their original `sourceEventId`, moves
+permanent `4xx` rejections aside into `rejected/` without blocking later entries, and stops on the
+first retryable transport or server error.
 
 `data` is JSON-serializable object data; when validated against a registered schema, `schemaId` and
 `schemaVersion` record the exact immutable schema version used at write time. Avoid `undefined`,
@@ -466,8 +506,12 @@ The package root exports:
 
 - configuration: `ClientConfig`, `ReadRetryOptions`, `AuthOptions`;
 - sessions: `Session`, `CreateSessionInput`, `PatchSessionInput`, `ListSessionsQuery`;
-- entries: `SessionEntry`, `AppendEntryInput`, `AppendEntryResult`, `GetEntriesQuery`,
-  `GetRawEntriesQuery`, `EntryWireFormat`, `StructuredEntryFormat`;
+- entries: `SessionEntry`, `AppendEntryInput`, `StoredEntryResult`, `QueuedEntryResult`,
+  `AppendEntryResult`, `GetEntriesQuery`, `GetRawEntriesQuery`, `EntryWireFormat`,
+  `StructuredEntryFormat`;
+- outbox: `Outbox`, `resolveOutboxDir`, `OutboxPendingRecord`, `OutboxRejectedRecord`,
+  `OutboxSessionCounts`, `OutboxStatus`, `OutboxFlushOptions`, `OutboxFlushResult`,
+  `OutboxPruneOptions`, `OutboxPruneResult`, `OutboxLocationOptions`;
 - credentials: `CredentialCreated`, `CredentialSummary`;
 - schemas: `Schemas`, `LocalSchemaOptions`, `resolveSchemasDir`, `validateAgainstBundle`,
   `validateAgainstLocalSchemas`, `SchemaSummary`, `SchemaVersionMode`, `SchemaVersionRecord`,
