@@ -99,9 +99,9 @@ Run cleanup in a `finally`-style step regardless of success, empty results, or e
 
 ## CLI fallback
 
-When MCP is unavailable, run the identical sequence through `agent-blackboard`:
+When MCP is unavailable, run the identical sequence through the published CLI:
 
-- `agent-blackboard snapshot export [filters...]`
-- `agent-blackboard snapshot partition --path <path> --cleanup-token <token>`
-- `agent-blackboard sessions get <id>` and `agent-blackboard sessions archive <id>` (only when explicitly asked and `lastEntryAt` still matches the export)
-- `agent-blackboard snapshot cleanup --path <path> [--directory <dir>] --cleanup-token <token>`
+- `npx -y agent-blackboard@0.8.0 snapshot export [filters...]`
+- `npx -y agent-blackboard@0.8.0 snapshot partition --path <path> --cleanup-token <token>`
+- `npx -y agent-blackboard@0.8.0 sessions get <id>` and `npx -y agent-blackboard@0.8.0 sessions archive <id>` (only when explicitly asked and `lastEntryAt` still matches the export)
+- `npx -y agent-blackboard@0.8.0 snapshot cleanup --path <path> [--directory <dir>] --cleanup-token <token>`

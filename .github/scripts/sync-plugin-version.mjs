@@ -12,6 +12,7 @@ const packageReferencePaths = [
   'plugins/agent-blackboard/.claude-mcp.json',
   'plugins/agent-blackboard/.mcp.json',
   'plugins/agent-blackboard/skills/agent-blackboard/SKILL.md',
+  'plugins/agent-blackboard/skills/distill/SKILL.md',
 ]
 
 for (const pluginPath of pluginPaths) {

@@ -18,6 +18,9 @@ for the product description.
 - `pnpm lint` — oxlint, oxfmt, knip, dependency-cruiser (chained).
 - `pnpm typecheck` — native `tsc --noEmit`.
 - `pnpm test:coverage` — vitest + v8 coverage; 100% required (project + patch, see `codecov.yml`).
+- `pnpm run evals` / `pnpm run evals:summary` — the plugin skills' eval suite (needs a Claude login,
+  runs outside the sandbox, not in CI). Rules in [`evals/AGENTS.md`](evals/AGENTS.md), scores in
+  [`evals/README.md`](evals/README.md).
 - `pnpm run actionlint` — lints `.github/workflows/*.yml`.
 - `pnpm run lint:links` — checks links in `**/*.md`/`**/*.json` via `lychee` (`lychee.toml`).
   `lychee` isn't an npm package — install it separately (`brew install lychee`, `cargo install

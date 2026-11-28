@@ -39,6 +39,8 @@ If the `agent-blackboard` MCP server is connected, use its tools directly:
 
 - `session_create` — create a root or subagent session with explicit `sessionId` and
   `parentSessionId` (use `null` for a root), plus `agent` and `version`.
+- `session_ensure` — the idempotent form of `session_create`: returns `"exists"` instead of an error
+  when the session is already there with the same `parentSessionId`, `agent`, and `version`.
 - `session_search` — find undistilled or archived sessions with exact metadata, data, and optional
   `inactiveForHours` filters (a session without entries counts as last active at its `createdAt`).
   When supported, `dataArrayContains` matches exact array membership,
@@ -55,6 +57,8 @@ If the `agent-blackboard` MCP server is connected, use its tools directly:
   read-only partitions using its `cleanupToken`.
 - `snapshot_cleanup` — delete a generated temporary snapshot file and/or partition directory using
   its `cleanupToken`.
+- `outbox_status`, `outbox_flush`, `outbox_prune_rejected` — inspect, deliver, or drop entry writes
+  queued in the local outbox while the server was unreachable.
 - `schema_list` — list registered JSON Schemas and the current schema registry revision.
 - `schema_get` — inspect one registered schema (latest version or an explicit `version`).
 - `schema_pull` — sync the full schema registry into the local cache (`If-None-Match`).
