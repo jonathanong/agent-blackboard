@@ -95,6 +95,7 @@ describe('DynamoDB entries', () => {
     })
     expect(operations[1]!.Put!.Item).toMatchObject({ PK: 'ENTRIES#c#s' })
     expect(operations[1]!.Put!.Item.ttl).toBe(Math.floor(NOW.getTime() / 1000) + TTL_DAYS * 86400)
+    expect(operations[1]!.Put!.Item).not.toHaveProperty('expiresAt')
   })
 
   it('applies per-repository TTL overrides from session data before writing', async () => {

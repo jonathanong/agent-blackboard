@@ -51,13 +51,14 @@ default `agent-blackboard` stack name.
 
 ## Environment
 
-| Variable                             | Meaning                                            |
-| ------------------------------------ | -------------------------------------------------- |
-| `AGENT_BLACKBOARD_TABLE`             | DynamoDB table; default `AgentBlackboard`          |
-| `AGENT_BLACKBOARD_TTL_DAYS`          | Per-entry retention from creation; default 90 days |
-| `AGENT_BLACKBOARD_ADMIN_CREDENTIALS` | Base64 JSON `[{ "name", "token" }]`                |
-| `AGENT_BLACKBOARD_STORE=memory`      | Use memory storage locally                         |
-| `PORT`                               | Local port; default 3000                           |
+| Variable                             | Meaning                                                     |
+| ------------------------------------ | ----------------------------------------------------------- |
+| `AGENT_BLACKBOARD_TABLE`             | DynamoDB table; default `AgentBlackboard`                   |
+| `AGENT_BLACKBOARD_TTL_DAYS`          | Per-entry retention from creation; default 90 days          |
+| `AGENT_BLACKBOARD_TTL_OVERRIDES`     | Optional JSON object mapping `owner/repo` to retention days |
+| `AGENT_BLACKBOARD_ADMIN_CREDENTIALS` | Base64 JSON `[{ "name", "token" }]`                         |
+| `AGENT_BLACKBOARD_STORE=memory`      | Use memory storage locally                                  |
+| `PORT`                               | Local port; default 3000                                    |
 
 ## Storage
 

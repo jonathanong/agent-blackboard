@@ -11,6 +11,7 @@
 // Usage: pnpm --filter agent-blackboard-server run deploy
 // Env: AWS_REGION or AWS_DEFAULT_REGION (or `aws configure`'s default),
 //      AGENT_BLACKBOARD_ADMIN_CREDENTIALS (required), AGENT_BLACKBOARD_TTL_DAYS (optional),
+//      AGENT_BLACKBOARD_TTL_OVERRIDES (optional, JSON object mapping repository to TTL days),
 //      AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT (optional, "optional", "shadow", or "required"),
 //      STACK_NAME (optional, default "agent-blackboard").
 import { bundle } from './bundle.mjs'
@@ -174,6 +175,7 @@ export async function deploy(argv = process.argv.slice(2)) {
     doc: migrationClient(region),
     tableName,
     ttlDays,
+    ttlOverrides: parameters.AgentBlackboardTtlOverrides,
   })
   console.error(`Entry metadata migration: ${JSON.stringify(migration)}`)
   return outputs

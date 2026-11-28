@@ -60,6 +60,7 @@ export async function dynamoAppendEntry(
       ...(input.schemaVersion !== undefined ? { schemaVersion: input.schemaVersion } : {}),
       expiresAt,
     }
+    const { expiresAt: _expiresAt, ...storedEntry } = entry
     try {
       await doc.send(
         new TransactWriteCommand({
@@ -81,7 +82,7 @@ export async function dynamoAppendEntry(
                   PK: entriesPk(input.credId, input.sessionId),
                   SK: entrySk(createdAt),
                   entityType: 'entry',
-                  ...entry,
+                  ...storedEntry,
                   ttl,
                 },
                 ConditionExpression: 'attribute_not_exists(PK)',
