@@ -139,12 +139,16 @@ to the archived parent.
   "sessionId": "worker-456",
   "schemaId": "finding",
   "schemaVersion": 1,
+  "sourceEventId": "evt-123",
   "data": { "title": "found the edge case" }
 }
 ```
 
 `schemaId` (and optional `schemaVersion`, which requires `schemaId`) validates the entry against a
-registered JSON Schema on the server before writing. Returns the created `SessionEntry` (including
+registered JSON Schema on the server before writing. Optional `sourceEventId` provides per-session
+idempotency: retrying the same `sourceEventId` with identical content returns the stored entry with
+`duplicate: true` without writing again, while reusing it with different content fails with HTTP
+`409` (`source_event_conflict`) naming the stored entry. Returns the created `SessionEntry` (including
 resolved `schemaId` and `schemaVersion` when validated, plus a non-blocking `warning` object if a
 shadow-mode validation failed). The server supplies `createdAt`; the caller
 supplies everything else. Appending also updates the session's `lastEntryAt`, including for archived

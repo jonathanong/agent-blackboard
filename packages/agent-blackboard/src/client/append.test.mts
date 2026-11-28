@@ -18,6 +18,14 @@ describe('appendEntry', () => {
         url: '/sessions/s%2F1/entries',
       })
       expect(JSON.parse(fixture.requests[0]!.body)).toEqual({ data: { a: 1 } })
+      await appendEntry(
+        { baseUrl: fixture.baseUrl, token: 't' },
+        { sessionId: 's/1', data: { a: 1 }, sourceEventId: 'evt-1' },
+      )
+      expect(JSON.parse(fixture.requests[1]!.body)).toEqual({
+        data: { a: 1 },
+        sourceEventId: 'evt-1',
+      })
     } finally {
       await fixture.close()
     }

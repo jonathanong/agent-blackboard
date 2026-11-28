@@ -1,4 +1,5 @@
 import type {
+  AppendedSessionEntry,
   CredentialRecord,
   SchemaBundle,
   SchemaShadowReport,
@@ -76,8 +77,17 @@ export class MemoryBlackboardStore implements BlackboardStore {
     return this.#sessions.archiveSession(credId, sessionId)
   }
 
-  async appendEntry(input: NewSessionEntry): Promise<SessionEntry> {
+  async appendEntry(input: NewSessionEntry): Promise<AppendedSessionEntry> {
     return this.#sessions.appendEntry(input)
+  }
+
+  async resolveSourceEvent(
+    credId: string,
+    sessionId: string,
+    sourceEventId: string,
+    contentHash: string,
+  ): Promise<AppendedSessionEntry | undefined> {
+    return this.#sessions.resolveSourceEvent(credId, sessionId, sourceEventId, contentHash)
   }
 
   getEntries(

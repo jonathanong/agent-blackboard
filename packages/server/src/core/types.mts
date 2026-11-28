@@ -67,7 +67,13 @@ export interface SessionEntry {
   data: Record<string, unknown>
   schemaId?: string
   schemaVersion?: number
+  sourceEventId?: string
   expiresAt?: string
+}
+
+/** Result returned by `appendEntry`; sets `duplicate: true` when an existing `sourceEventId` matched. */
+export interface AppendedSessionEntry extends SessionEntry {
+  duplicate?: boolean
 }
 
 /** A stored API credential. The raw token is never persisted or returned after creation. */

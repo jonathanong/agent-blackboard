@@ -14,10 +14,15 @@ export function handleEntryAppend(
   if (schemaVersion !== undefined && schemaId === undefined) {
     throw new Error('"schemaVersion" requires "schemaId".')
   }
+  const sourceEventId =
+    args.sourceEventId === undefined
+      ? undefined
+      : requiredString(args.sourceEventId, 'sourceEventId')
   return appendEntry(config, {
     sessionId: toolSessionId(args, resolution),
     data: expectObject(args.data, 'data'),
     ...(schemaId !== undefined ? { schemaId } : {}),
     ...(schemaVersion !== undefined ? { schemaVersion } : {}),
+    ...(sourceEventId !== undefined ? { sourceEventId } : {}),
   })
 }

@@ -1,6 +1,7 @@
 import { resolveClientCredential } from '../../auth/client.mjs'
 import { validateEntryWrite, type SchemaEnforcementEnv } from '../../schemas/enforce.mjs'
 import { SessionStoreError } from '../../store/errors.mjs'
+import { entryContentHash, isValidSourceEventId } from '../../store/source-event.mjs'
 import type { BlackboardStore } from '../../store/store.mjs'
 import { readJsonBody } from '../body.mjs'
 import { FORMAT_CONTENT_TYPE, formatEntries, resolveFormat } from '../format.mjs'
@@ -40,9 +41,41 @@ async function appendEntry(
   if (!body) return errorResponse(400, 'body must be a JSON object')
   const data = objectData(body.data)
   if (!data) return errorResponse(400, 'data must be an object')
+  let sourceEventId: string | undefined
+  if (body.sourceEventId !== undefined) {
+    if (!isValidSourceEventId(body.sourceEventId)) {
+      return errorResponse(400, 'sourceEventId must be a non-empty string up to 256 characters')
+    }
+    sourceEventId = body.sourceEventId
+  }
   const { value: redactedData, redactedCount } = redactCredentials(data)
+  const sourceEventContentHash =
+    sourceEventId !== undefined
+      ? entryContentHash({
+          data: redactedData,
+          schemaId: typeof body.schemaId === 'string' ? body.schemaId : undefined,
+          schemaVersion: typeof body.schemaVersion === 'number' ? body.schemaVersion : undefined,
+        })
+      : undefined
   const validation = await validateEntryWrite(store, body, redactedData, env)
-  if (!validation.ok) return jsonResponse(validation.status, validation.body)
+  if (!validation.ok) {
+    if (sourceEventId !== undefined) {
+      try {
+        const existing = await store.resolveSourceEvent(
+          credId,
+          sessionId,
+          sourceEventId,
+          sourceEventContentHash!,
+        )
+        if (existing) return jsonResponse(200, existing)
+      } catch (error) {
+        const response = storeErrorResponse(error)
+        if (response) return response
+        throw error
+      }
+    }
+    return jsonResponse(validation.status, validation.body)
+  }
   try {
     const entry = await store.appendEntry({
       credId,
@@ -52,7 +85,13 @@ async function appendEntry(
       ...(validation.schemaVersion !== undefined
         ? { schemaVersion: validation.schemaVersion }
         : {}),
+      ...(sourceEventId !== undefined
+        ? { sourceEventId, sourceEventContentHash: sourceEventContentHash! }
+        : {}),
     })
+    const headers =
+      validation.revision !== undefined ? revisionHeaders(validation.revision) : undefined
+    if (entry.duplicate) return jsonResponse(200, entry, headers)
     if (validation.shadowFailure) {
       try {
         await store.recordSchemaShadowFailure({ ...validation.shadowFailure, sessionId })
@@ -65,11 +104,7 @@ async function appendEntry(
       ...(validation.warning ? { warning: validation.warning } : {}),
       ...(redactedCount > 0 ? { redactedCount } : {}),
     }
-    return jsonResponse(
-      201,
-      responseBody,
-      validation.revision !== undefined ? revisionHeaders(validation.revision) : undefined,
-    )
+    return jsonResponse(201, responseBody, headers)
   } catch (error) {
     const response = storeErrorResponse(error)
     if (response) return response

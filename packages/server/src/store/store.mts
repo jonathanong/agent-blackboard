@@ -1,4 +1,5 @@
 import type {
+  AppendedSessionEntry,
   CredentialRecord,
   SchemaBundle,
   SchemaRecord,
@@ -48,6 +49,9 @@ export interface NewSessionEntry {
   data: Record<string, unknown>
   schemaId?: string
   schemaVersion?: number
+  sourceEventId?: string
+  /** Optional caller-scoped content hash used when comparing `sourceEventId` retries. */
+  sourceEventContentHash?: string
 }
 
 export interface NewSession {
@@ -149,7 +153,13 @@ export interface BlackboardStore {
   patchSession(credId: string, patch: SessionPatch): Promise<Session>
   archiveSession(credId: string, sessionId: string): Promise<Session>
 
-  appendEntry(entry: NewSessionEntry): Promise<SessionEntry>
+  appendEntry(entry: NewSessionEntry): Promise<AppendedSessionEntry>
+  resolveSourceEvent(
+    credId: string,
+    sessionId: string,
+    sourceEventId: string,
+    contentHash: string,
+  ): Promise<AppendedSessionEntry | undefined>
   getEntries(
     credId: string,
     sessionId: string,

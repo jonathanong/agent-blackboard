@@ -36,12 +36,14 @@ export interface SessionEntry {
   data: Record<string, unknown>
   schemaId?: string
   schemaVersion?: number
+  sourceEventId?: string
   expiresAt?: string
 }
 
 export interface AppendEntryResult extends SessionEntry {
   warning?: SchemaShadowWarning
   redactedCount?: number
+  duplicate?: boolean
 }
 
 export interface PatchSessionResult extends Session {
@@ -90,6 +92,7 @@ export interface AppendEntryInput {
   data: Record<string, unknown>
   schemaId?: string
   schemaVersion?: number
+  sourceEventId?: string
 }
 
 export type EntryWireFormat = 'json' | 'jsonl' | 'markdown'

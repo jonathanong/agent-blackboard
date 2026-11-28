@@ -1,4 +1,5 @@
 import type {
+  AppendedSessionEntry,
   CredentialRecord,
   SchemaBundle,
   SchemaShadowReport,
@@ -13,7 +14,7 @@ import {
   dynamoGetCredentialById,
   dynamoListCredentials,
 } from './dynamo-credentials.mjs'
-import { dynamoAppendEntry, dynamoGetEntries } from './dynamo-entries.mjs'
+import { dynamoAppendEntry, dynamoGetEntries, dynamoResolveSourceEvent } from './dynamo-entries.mjs'
 import {
   dynamoGetSchema,
   dynamoGetSchemaBundle,
@@ -71,8 +72,16 @@ export function createDynamoStore(options: DynamoStoreOptions = {}): BlackboardS
     archiveSession(credId: string, sessionId: string): Promise<Session> {
       return dynamoArchiveSession(doc, tableName, now, credId, sessionId)
     },
-    appendEntry(entry: NewSessionEntry): Promise<SessionEntry> {
+    appendEntry(entry: NewSessionEntry): Promise<AppendedSessionEntry> {
       return dynamoAppendEntry(doc, tableName, retention, now, entry)
+    },
+    resolveSourceEvent(
+      credId: string,
+      sessionId: string,
+      sourceEventId: string,
+      contentHash: string,
+    ): Promise<AppendedSessionEntry | undefined> {
+      return dynamoResolveSourceEvent(doc, tableName, credId, sessionId, sourceEventId, contentHash)
     },
     getEntries(
       credId: string,

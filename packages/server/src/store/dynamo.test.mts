@@ -42,6 +42,7 @@ describe('createDynamoStore wiring', () => {
       if (command.constructor.name === 'GetCommand') {
         getCount += 1
         const key = command.input.Key as { PK: string }
+        if (key.PK.startsWith('SOURCE_EVENTS')) return {}
         if (key.PK.startsWith('ENTRIES'))
           return { Item: { ...entry, PK: key.PK, SK: `ENTRY#${entry.createdAt}` } }
         return { Item: session }
@@ -74,6 +75,7 @@ describe('createDynamoStore wiring', () => {
       ...entry,
       expiresAt: '2026-04-01T00:00:00.000Z',
     })
+    await expect(store.resolveSourceEvent('c', 's', 'evt-missing', 'hash')).resolves.toBeUndefined()
     await expect(collect(store.getEntries('c', 's'))).resolves.toEqual([entry])
     expect(getCount).toBeGreaterThan(0)
   })

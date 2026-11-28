@@ -32,13 +32,14 @@ describe('runAppend', () => {
         schemaId: 'finding',
       })
       await runAppend(
-        ['--session-id', 's', '--schema', 'finding@2', '{"a":1}'],
+        ['--session-id', 's', '--schema', 'finding@2', '--source-event-id', 'evt-9', '{"a":1}'],
         createFakeContext({ env: ENV(fixture.baseUrl) }),
       )
       expect(JSON.parse(fixture.requests.at(-1)!.body)).toEqual({
         data: { a: 1 },
         schemaId: 'finding',
         schemaVersion: 2,
+        sourceEventId: 'evt-9',
       })
     } finally {
       await fixture.close()
@@ -84,6 +85,9 @@ describe('runAppend', () => {
     await expect(runAppend(['--session-id', 's', '--schema'], ctx)).rejects.toThrow('--schema')
     await expect(runAppend(['--session-id', 's', '--schema', 'bad/id', '{}'], ctx)).rejects.toThrow(
       '--schema',
+    )
+    await expect(runAppend(['--session-id', 's', '--source-event-id'], ctx)).rejects.toThrow(
+      '--source-event-id',
     )
     await expect(
       runAppend(['--session-id', 's', '--file', 'entry.json', '{}'], ctx),

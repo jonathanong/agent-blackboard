@@ -1,5 +1,5 @@
 import { redactCredentials } from '../core/redact.mjs'
-import type { Session, SessionEntry } from '../core/types.mjs'
+import type { AppendedSessionEntry, Session, SessionEntry } from '../core/types.mjs'
 import { SessionStoreError } from './errors.mjs'
 import { matchesListFilter, resumeIndex, sortSessions } from './memory-session-query.mjs'
 import { decodeSessionCursor, encodeSessionCursor } from './session-cursor.mjs'
@@ -9,6 +9,7 @@ import {
   resolveEntryTtlDays,
   type RetentionPolicy,
 } from './retention.mjs'
+import { MemorySourceEventIndex } from './memory-source-events.mjs'
 import {
   DEFAULT_SESSIONS_LIMIT,
   MAX_SESSIONS_LIMIT,
@@ -24,6 +25,7 @@ import {
 export class MemorySessionStore {
   readonly #sessions = new Map<string, Session>()
   readonly #entries = new Map<string, SessionEntry>()
+  readonly #sourceEvents = new MemorySourceEventIndex()
   readonly #now: () => Date
   readonly #retention: RetentionPolicy
 
@@ -121,28 +123,44 @@ export class MemorySessionStore {
     return archived
   }
 
-  appendEntry(input: NewSessionEntry): SessionEntry {
+  resolveSourceEvent(
+    credId: string,
+    sessionId: string,
+    sourceEventId: string,
+    contentHash: string,
+  ): AppendedSessionEntry | undefined {
+    return this.#sourceEvents.resolve(credId, sessionId, sourceEventId, contentHash)
+  }
+
+  appendEntry(input: NewSessionEntry): AppendedSessionEntry {
     const sessionKey = this.#sessionKey(input.credId, input.sessionId)
     const session = this.#sessions.get(sessionKey)
     if (!session) {
       throw new SessionStoreError('session_not_found', `session not found: ${input.sessionId}`)
     }
+    const { value: redactedData } = redactCredentials(input.data)
+    const { contentHash, existing } = this.#sourceEvents.prepare(input, redactedData)
+    if (existing) return existing
     const timestamp = Math.max(
       this.#now().getTime(),
       session.lastEntryAt === null ? 0 : Date.parse(session.lastEntryAt) + 1,
     )
     const effectiveTtlDays = resolveEntryTtlDays(this.#retention, session.data)
     const { expiresAt } = computeEntryExpiry(timestamp, effectiveTtlDays)
-    const { value: redactedData } = redactCredentials(input.data)
     const entry: SessionEntry = {
       sessionId: input.sessionId,
       createdAt: new Date(timestamp).toISOString(),
       data: redactedData,
       ...(input.schemaId !== undefined ? { schemaId: input.schemaId } : {}),
       ...(input.schemaVersion !== undefined ? { schemaVersion: input.schemaVersion } : {}),
+      ...(input.sourceEventId !== undefined ? { sourceEventId: input.sourceEventId } : {}),
       expiresAt,
     }
-    this.#entries.set(this.#entryKey(input.credId, input.sessionId, timestamp), entry)
+    this.#entries.set(
+      this.#entryKey(input.credId, input.sessionId, timestamp),
+      structuredClone(entry),
+    )
+    this.#sourceEvents.record(input, contentHash, entry)
     this.#sessions.set(sessionKey, { ...session, lastEntryAt: entry.createdAt })
     return entry
   }

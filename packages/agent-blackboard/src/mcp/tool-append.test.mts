@@ -14,7 +14,13 @@ it('requires sessionId/data and appends one entry', async () => {
     ).toEqual(entry)
     expect(
       await handleEntryAppend(
-        { sessionId: 's', data: { title: 'x' }, schemaId: 'finding', schemaVersion: 2 },
+        {
+          sessionId: 's',
+          data: { title: 'x' },
+          schemaId: 'finding',
+          schemaVersion: 2,
+          sourceEventId: 'evt-1',
+        },
         { baseUrl: fixture.baseUrl, token: 't' },
       ),
     ).toEqual(entry)
@@ -22,6 +28,7 @@ it('requires sessionId/data and appends one entry', async () => {
       data: { title: 'x' },
       schemaId: 'finding',
       schemaVersion: 2,
+      sourceEventId: 'evt-1',
     })
     expect(() =>
       handleEntryAppend(
