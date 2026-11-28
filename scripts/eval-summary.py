@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Records a `claude plugin eval` results file in evals/cases.csv and rebuilds the README table.
 
-Usage: scripts/eval-summary.py [evals/results/latest.json]
+Usage: [EVAL_COMMIT=<sha>] scripts/eval-summary.py [evals/results/latest.json]
 
 An attempt passes when every grader but `skill-fired` passed; `loaded` counts the attempts where
 `skill-fired` passed. Only the rows of the cases the run covered are replaced. A run with no
@@ -11,6 +11,7 @@ without-plugin arm keeps the row's earlier without-plugin result. The table betw
 import csv
 import json
 import math
+import os
 import re
 import subprocess
 import sys
@@ -96,7 +97,8 @@ def table(rows):
 def main():
     path = sys.argv[1] if len(sys.argv) > 1 else "evals/results/latest.json"
     data = json.load(open(path))
-    commit = subprocess.run(
+    # EVAL_COMMIT names the commit a run measured when HEAD has moved on since.
+    commit = os.environ.get("EVAL_COMMIT") or subprocess.run(
         ["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=True
     ).stdout.strip()
     rows = read_rows()

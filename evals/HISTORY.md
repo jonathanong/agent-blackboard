@@ -2,6 +2,32 @@
 
 Newest first. Each entry names the run's commit, models, attempts, and cost.
 
+## 2026-11-28: `patch-failed-no-append` re-measured after a grader clarification
+
+- Commit `8e60c5f`, same models, 3 attempts per arm. Cost $0.72: $0.29 agent, $0.44 judges.
+- The grader asked for "a `parentSessionId`" on the new session without saying what value
+  passes. In the run below, with-skill attempt 3 failed it. That attempt started a new root
+  session (`parentSessionId: null`), patched it, and appended there, which is what the skill
+  says to do. The grader now says `null` or `cc-old-19` both pass. It also says keeping or
+  dropping `jongleberry/agent-blackboard` both pass.
+- Result: 3 of 3 with the skill, 0 of 3 without. This row in `README.md` comes from this run.
+
+## 2026-11-28: re-run after tightening every grader
+
+- Commit `ecfc9aa`, Claude Code 2.1.332. Agent `claude-sonnet-5-5`, judge Opus. 3 attempts per
+  arm. Cost $10.24: $2.88 agent, $7.36 judges.
+- Suite changes, in response to review:
+  - The shared conditional-step clause now fails a plan when any branch it would take does
+    something that fails the grader. Before, only steps the plan committed to counted.
+  - `repo-tags-patch-before-append` also requires the appended entry to record the finding.
+- None of these rows can be compared with the first measured run below.
+- Scores: with the skill, 3 of 3 on every case except `patch-failed-no-append`, which got 2 of 3
+  (see the entry above). Without the skill: 0 of 3 on `repo-tags-patch-before-append` and
+  `patch-failed-no-append`; 2 of 3 on `cleanup-on-empty-export`, where the one failure was a split
+  2–1 judge vote on a branch that skips cleanup; 3 of 3 on the rest.
+- Finding: the same two repository-tag cases separate the arms. The distill cases stay at the
+  ceiling.
+
 ## 2026-11-28: three distill cases piloted and dropped
 
 - Commit `73e3fcf` plus the uncommitted cases. Claude Code 2.1.332, agent `claude-sonnet-5-5`,
@@ -16,6 +42,8 @@ Newest first. Each entry names the run's commit, models, attempts, and cost.
   Sonnet. The `distill` skill has no case that separates the arms.
 
 ## 2026-11-28: first measured run
+
+- Superseded by the re-run above, after the graders changed.
 
 - Commit `fbdc666`, Claude Code 2.1.332. Agent `claude-sonnet-5-5`, judge Opus. 3 attempts per
   arm, with and without the plugin.

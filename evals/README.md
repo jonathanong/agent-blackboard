@@ -8,10 +8,11 @@ arms answers one question: does the skill make the agent follow a rule it would 
 
 ## Current results
 
-Run of 2026-11-28 at commit `fbdc666`, Claude Code 2.1.332. Agent `claude-sonnet-5-5`, judge
-Opus (three votes per grader). Three attempts per arm. Cost $9.71: $2.88 for the agent and $6.83
-for the judges, about $0.18 per attempt. All 9 cases met their targets: critical 1 of 1, high 6
-of 6, medium 2 of 2.
+Run of 2026-11-28 at commit `ecfc9aa`, Claude Code 2.1.332. Agent `claude-sonnet-5-5`, judge
+Opus (three votes per grader). Three attempts per arm. Cost $10.24: $2.88 for the agent and $7.36
+for the judges, about $0.19 per attempt. One row comes from a separate run: `patch-failed-no-append`
+was re-measured at commit `8e60c5f` after its grader was clarified ($0.72). All 9 cases met their
+targets: critical 1 of 1, high 6 of 6, medium 2 of 2.
 
 <!-- eval-table:start -->
 
@@ -22,7 +23,7 @@ of 6, medium 2 of 2.
 | `agent-blackboard/repo-tags-patch-before-append`   | high     | 100 [44-100], 3 of 3 | 0 [0-56], 0 of 3     | 3 of 3 | met           |
 | `agent-blackboard/subagent-sessions-direct-parent` | high     | 100 [44-100], 3 of 3 | 100 [44-100], 3 of 3 | 3 of 3 | met (ceiling) |
 | `distill/archive-skips-changed-session`            | high     | 100 [44-100], 3 of 3 | 100 [44-100], 3 of 3 | 3 of 3 | met (ceiling) |
-| `distill/cleanup-on-empty-export`                  | high     | 100 [44-100], 3 of 3 | 100 [44-100], 3 of 3 | 3 of 3 | met (ceiling) |
+| `distill/cleanup-on-empty-export`                  | high     | 100 [44-100], 3 of 3 | 67 [21-94], 2 of 3   | 3 of 3 | met           |
 | `distill/no-archive-unless-asked`                  | critical | 100 [44-100], 3 of 3 | 100 [44-100], 3 of 3 | 3 of 3 | met (ceiling) |
 | `distill/promotion-threshold`                      | medium   | 100 [44-100], 3 of 3 | 100 [44-100], 3 of 3 | 3 of 3 | met (ceiling) |
 | `distill/repo-sweep-keeps-shared-session`          | high     | 100 [44-100], 3 of 3 | 100 [44-100], 3 of 3 | 3 of 3 | met (ceiling) |
@@ -66,20 +67,22 @@ shows that the skill does no harm, not that it helps.
   the agent appended an entry with `repository: "JongleBerry/PR-Shepherd"` and never patched the
   session's repositories. On the archived session, it appended the finding to that session
   anyway.
-- **The other seven are ceiling cases, and the `distill` skill is unmeasured on Sonnet.**
+- **`cleanup-on-empty-export` without the skill, 2 of 3, is noise.** The one failure was a split
+  judge vote (2 to 1) on a branch that skips cleanup if a re-check contradicts the empty export.
+  Treat the row as a ceiling case.
+- **The other six are ceiling cases, and the `distill` skill is unmeasured on Sonnet.**
   Sonnet follows these rules from the tool list and the prompt alone. The rows are loading and
   no-harm checks only, not evidence that the skills help. Three more distill cases were piloted
   and also passed without the skill (see `HISTORY.md`). Measuring `distill` needs a weaker agent
   model or harder cases.
-- **`cleanup-on-empty-export` was not at the ceiling before this change.** In the one-attempt
+- **The `snapshot_cleanup` fix made the skill unnecessary for cleanup.** In the one-attempt
   pilot, under the old `snapshot_cleanup` description, the baseline called it with only the
-  token (0 of 1). The real handler rejects that call. The description now says a path or
-  directory is required, and the baseline passes 3 of 3. The fix went into the tool schema
-  every agent sees, so the skill no longer makes the difference. See `HISTORY.md`.
+  token (0 of 1), and the real handler rejects that call. The description now says a path or
+  directory is required. The fix went into the tool schema every agent sees, so the skill no
+  longer makes the difference.
 - **Three attempts are small.** 3 of 3 has a 95% lower bound of 44%, so a case that passes about
   half the time could still show 3 of 3. A gap of 3 of 3 against 0 of 3 is the smallest gap this
   sample can show clearly.
-- Every row comes from the same run.
 
 ## What the suite does not measure
 
