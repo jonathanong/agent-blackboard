@@ -1,6 +1,6 @@
 ---
 name: journal-dev-setup
-description: Use when setting up, installing, building, or running a project locally is hard - a README step that fails or is missing, an undocumented env var, a database or docker service that must be running, a version mismatch, or a command that fails on first run. Journals it to agent-blackboard with the fix and recommendations for the docs or scripts.
+description: Use when the project itself is hard to set up, install, build, or run locally - a README step that fails or is missing, an undocumented env var, a database or docker service that must be running, or a version mismatch. Journals it to agent-blackboard with the fix and recommendations for the docs or scripts. A sandbox or permission denial is journal-tool-friction.
 ---
 
 # Journal a hard local setup

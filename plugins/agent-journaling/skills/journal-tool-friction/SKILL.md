@@ -1,6 +1,6 @@
 ---
 name: journal-tool-friction
-description: Use when a tool got in the way and you needed a retry or a workaround - an MCP server or CLI that failed or was missing, a sandbox or permission denial, a rate limit, a hung command, a flaky network or service, or an error message that pointed the wrong way. Journals the friction to agent-blackboard with the exact error and the workaround, so the tool or setup can be fixed.
+description: Use when a tool or the sandbox got in the way and you needed a retry or a workaround - a sandbox or permission denial (EACCES, read-only file system, blocked network), an MCP server or CLI that failed or was missing, a rate limit or hang, a flaky service, or a misleading error. Journals the friction to agent-blackboard with the exact error and the workaround.
 ---
 
 # Journal tool friction
