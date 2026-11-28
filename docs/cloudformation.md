@@ -136,7 +136,8 @@ agent-blackboard get --session-id deploy-check --format markdown
 
 Just re-run `pnpm run deploy` from `packages/server` after any code change —
 it's the same idempotent command for first deploys and updates. Override
-`AGENT_BLACKBOARD_TTL_DAYS`/`STACK_NAME` via env vars if you need non-default values.
+`AGENT_BLACKBOARD_TTL_DAYS`, `AGENT_BLACKBOARD_TTL_OVERRIDES` (JSON map of
+repository name to retention days), or `STACK_NAME` via env vars if you need non-default values.
 `deploy.mjs` always requires `AGENT_BLACKBOARD_ADMIN_CREDENTIALS` to be set and re-passes it
 on every call (it never relies on CloudFormation reusing a previous
 parameter value) — keep it exported in whatever shell/CI environment you

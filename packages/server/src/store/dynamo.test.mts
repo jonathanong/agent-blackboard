@@ -70,9 +70,10 @@ describe('createDynamoStore wiring', () => {
       store.patchSession('c', { sessionId: 's', data: { branch: 'main' } }),
     ).resolves.toMatchObject({ id: 's' })
     await expect(store.archiveSession('c', 's')).resolves.toMatchObject({ archivedAt: 'later' })
-    await expect(store.appendEntry({ credId: 'c', sessionId: 's', data: {} })).resolves.toEqual(
-      entry,
-    )
+    await expect(store.appendEntry({ credId: 'c', sessionId: 's', data: {} })).resolves.toEqual({
+      ...entry,
+      expiresAt: '2026-04-01T00:00:00.000Z',
+    })
     await expect(collect(store.getEntries('c', 's'))).resolves.toEqual([entry])
     expect(getCount).toBeGreaterThan(0)
   })
@@ -191,10 +192,12 @@ describe('DynamoDB credentials', () => {
 describe('Dynamo config', () => {
   const originalTable = process.env.AGENT_BLACKBOARD_TABLE
   const originalTtl = process.env.AGENT_BLACKBOARD_TTL_DAYS
+  const originalOverrides = process.env.AGENT_BLACKBOARD_TTL_OVERRIDES
 
   beforeEach(() => {
     delete process.env.AGENT_BLACKBOARD_TABLE
     delete process.env.AGENT_BLACKBOARD_TTL_DAYS
+    delete process.env.AGENT_BLACKBOARD_TTL_OVERRIDES
   })
 
   afterEach(() => {
@@ -202,23 +205,48 @@ describe('Dynamo config', () => {
     else process.env.AGENT_BLACKBOARD_TABLE = originalTable
     if (originalTtl === undefined) delete process.env.AGENT_BLACKBOARD_TTL_DAYS
     else process.env.AGENT_BLACKBOARD_TTL_DAYS = originalTtl
+    if (originalOverrides === undefined) delete process.env.AGENT_BLACKBOARD_TTL_OVERRIDES
+    else process.env.AGENT_BLACKBOARD_TTL_OVERRIDES = originalOverrides
   })
 
-  it('constructs defaults and reads table/ttl environment values', async () => {
+  it('constructs defaults and reads table/ttl/override environment values', async () => {
     const defaults = createDynamoStore({ client: client(() => ({})) })
     await defaults.createCredential('uses-default-clock')
     process.env.AGENT_BLACKBOARD_TABLE = 'FromEnv'
     process.env.AGENT_BLACKBOARD_TTL_DAYS = '45'
+    process.env.AGENT_BLACKBOARD_TTL_OVERRIDES = '{"org/short":14}'
     let seen: Record<string, unknown> | undefined
     const store = createDynamoStore({
       client: client((command) => {
+        if (command.constructor.name === 'GetCommand') {
+          return { Item: { ...session, data: { repository: 'org/short' } } }
+        }
         seen = command.input
         return {}
       }),
       now: () => NOW,
     })
-    await store.appendEntry({ credId: 'c', sessionId: 's', data: {} })
-    const items = seen!.TransactItems as Array<{ Update?: { TableName?: string } }>
+    const appended = await store.appendEntry({ credId: 'c', sessionId: 's', data: {} })
+    const items = seen!.TransactItems as Array<{
+      Update?: { TableName?: string }
+      Put?: { Item: { ttl: number } }
+    }>
     expect(items[0]?.Update?.TableName).toBe('FromEnv')
+    expect(items[1]?.Put?.Item.ttl).toBe(Math.floor(NOW.getTime() / 1000) + 14 * 86400)
+    expect(appended.expiresAt).toBe('2026-01-15T00:00:00.000Z')
+
+    const explicitStore = createDynamoStore({
+      client: client((command) => {
+        if (command.constructor.name === 'GetCommand') {
+          return { Item: { ...session, data: { repository: 'org/explicit' } } }
+        }
+        return {}
+      }),
+      ttlDays: 60,
+      ttlOverrides: { 'org/explicit': 10 },
+      now: () => NOW,
+    })
+    const explicitEntry = await explicitStore.appendEntry({ credId: 'c', sessionId: 's', data: {} })
+    expect(explicitEntry.expiresAt).toBe('2026-01-11T00:00:00.000Z')
   })
 })

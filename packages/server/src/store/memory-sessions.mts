@@ -3,6 +3,12 @@ import { SessionStoreError } from './errors.mjs'
 import { matchesListFilter, resumeIndex, sortSessions } from './memory-session-query.mjs'
 import { decodeSessionCursor, encodeSessionCursor } from './session-cursor.mjs'
 import {
+  computeEntryExpiry,
+  DEFAULT_TTL_DAYS,
+  resolveEntryTtlDays,
+  type RetentionPolicy,
+} from './retention.mjs'
+import {
   DEFAULT_SESSIONS_LIMIT,
   MAX_SESSIONS_LIMIT,
   type GetEntriesOptions,
@@ -18,9 +24,14 @@ export class MemorySessionStore {
   readonly #sessions = new Map<string, Session>()
   readonly #entries = new Map<string, SessionEntry>()
   readonly #now: () => Date
+  readonly #retention: RetentionPolicy
 
-  constructor(now: () => Date) {
+  constructor(
+    now: () => Date,
+    retention: RetentionPolicy = { ttlDays: DEFAULT_TTL_DAYS, ttlOverrides: new Map() },
+  ) {
     this.#now = now
+    this.#retention = retention
   }
 
   createSession(input: NewSession): Session {
@@ -118,12 +129,15 @@ export class MemorySessionStore {
       this.#now().getTime(),
       session.lastEntryAt === null ? 0 : Date.parse(session.lastEntryAt) + 1,
     )
+    const effectiveTtlDays = resolveEntryTtlDays(this.#retention, session.data)
+    const { expiresAt } = computeEntryExpiry(timestamp, effectiveTtlDays)
     const entry: SessionEntry = {
       sessionId: input.sessionId,
       createdAt: new Date(timestamp).toISOString(),
       data: input.data,
       ...(input.schemaId !== undefined ? { schemaId: input.schemaId } : {}),
       ...(input.schemaVersion !== undefined ? { schemaVersion: input.schemaVersion } : {}),
+      expiresAt,
     }
     this.#entries.set(this.#entryKey(input.credId, input.sessionId, timestamp), entry)
     this.#sessions.set(sessionKey, { ...session, lastEntryAt: entry.createdAt })

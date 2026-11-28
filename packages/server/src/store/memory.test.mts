@@ -6,7 +6,7 @@ import { encodeSessionCursor } from './session-cursor.mjs'
 
 const NOW = new Date('2026-01-01T00:00:00.000Z')
 
-runStoreConformance(() => new MemoryBlackboardStore({ now: () => NOW }))
+runStoreConformance((options) => new MemoryBlackboardStore({ now: () => NOW, ...options }))
 
 describe('MemoryBlackboardStore', () => {
   it('uses the default clock when none is injected', async () => {
