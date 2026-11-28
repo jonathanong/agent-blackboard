@@ -58,7 +58,7 @@ trap 'kill "$server" 2>/dev/null; rm -rf "$stage"' EXIT
 for _ in $(seq 50); do
   grep -q listening "$stage/server.log" && break
   kill -0 "$server" 2>/dev/null || break
-  read -r -t 0.2 _ < /dev/zero 2>/dev/null || true
+  sleep 0.2
 done
 grep -q listening "$stage/server.log" || { cat "$stage/server.log" >&2; echo "eval harness did not start" >&2; exit 1; }
 mkdir -p evals/results
