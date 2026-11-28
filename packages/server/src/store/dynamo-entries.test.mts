@@ -336,9 +336,79 @@ describe('DynamoDB entries', () => {
     })
     expect(retried.createdAt).toBe('2026-01-01T00:00:00.001Z')
 
-    // 5. Missing entry behind an existing source-event record surfaces an internal error
-    const brokenDoc = client((command) => {
+    // 5. Expired/missing entry behind a stale source-event marker deletes the stale marker and writes fresh
+    let staleAttempts = 0
+    let deletedKey: Record<string, unknown> | undefined
+    const staleDoc = client((command) => {
+      if (command.constructor.name === 'TransactWriteCommand' && staleAttempts++ === 0) {
+        throw canceled()
+      }
+      if (command.constructor.name === 'DeleteCommand') {
+        deletedKey = command.input.Key as Record<string, unknown>
+        return {}
+      }
+      if (command.constructor.name === 'GetCommand') {
+        const key = command.input.Key as { PK: string }
+        if (key.PK.startsWith('SOURCE_EVENTS#')) {
+          return {
+            Item: {
+              sourceEventId: 'evt-1',
+              contentHash: matchingHash,
+              entryCreatedAt: NOW.toISOString(),
+            },
+          }
+        }
+        if (key.PK.startsWith('SESSIONS#')) return { Item: session() }
+        return {}
+      }
+      return {}
+    })
+    const healed = await dynamoAppendEntry(staleDoc, 'T', RETENTION, () => NOW, {
+      credId: 'c',
+      sessionId: 's',
+      data: { note: 'hello' },
+      sourceEventId: 'evt-1',
+    })
+    expect(deletedKey).toEqual({ PK: 'SOURCE_EVENTS#c#s', SK: 'SOURCE_EVENT#evt-1' })
+    expect(healed.duplicate).toBeUndefined()
+    expect(healed.createdAt).toBe('2026-01-01T00:00:00.001Z')
+
+    // 6. Conditional delete race on a stale marker is ignored; unexpected delete errors propagate
+    let raceAttempts = 0
+    const racedDoc = client((command) => {
+      if (command.constructor.name === 'TransactWriteCommand' && raceAttempts++ === 0) {
+        throw canceled()
+      }
+      if (command.constructor.name === 'DeleteCommand') {
+        throw Object.assign(new Error('changed'), { name: 'ConditionalCheckFailedException' })
+      }
+      if (command.constructor.name === 'GetCommand') {
+        const key = command.input.Key as { PK: string }
+        if (key.PK.startsWith('SOURCE_EVENTS#')) {
+          return {
+            Item: {
+              sourceEventId: 'evt-1',
+              contentHash: matchingHash,
+              entryCreatedAt: NOW.toISOString(),
+            },
+          }
+        }
+        if (key.PK.startsWith('SESSIONS#')) return { Item: session() }
+        return {}
+      }
+      return {}
+    })
+    const healedAfterRace = await dynamoAppendEntry(racedDoc, 'T', RETENTION, () => NOW, {
+      credId: 'c',
+      sessionId: 's',
+      data: { note: 'hello' },
+      sourceEventId: 'evt-1',
+    })
+    expect(healedAfterRace.duplicate).toBeUndefined()
+
+    const failingDeleteDoc = client((command) => {
       if (command.constructor.name === 'TransactWriteCommand') throw canceled()
+      if (command.constructor.name === 'DeleteCommand') throw new Error('delete failed')
       const key = command.input.Key as { PK: string }
       if (key.PK.startsWith('SOURCE_EVENTS#')) {
         return {
@@ -352,12 +422,12 @@ describe('DynamoDB entries', () => {
       return {}
     })
     await expect(
-      dynamoAppendEntry(brokenDoc, 'T', RETENTION, () => NOW, {
+      dynamoAppendEntry(failingDeleteDoc, 'T', RETENTION, () => NOW, {
         credId: 'c',
         sessionId: 's',
         data: { note: 'hello' },
         sourceEventId: 'evt-1',
       }),
-    ).rejects.toThrow(/stored entry missing/)
+    ).rejects.toThrow('delete failed')
   })
 })

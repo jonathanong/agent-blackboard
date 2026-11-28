@@ -1,5 +1,5 @@
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
-import { GetCommand } from '@aws-sdk/lib-dynamodb'
+import { DeleteCommand, GetCommand } from '@aws-sdk/lib-dynamodb'
 import type { AppendedSessionEntry, SessionEntry } from '../core/types.mjs'
 import { entrySk, entriesPk, sourceEventSk, sourceEventsPk } from './dynamo-keys.mjs'
 import { sourceEventConflictError } from './source-event.mjs'
@@ -69,9 +69,25 @@ export async function resolveExistingSourceEvent(
     }),
   )
   if (!entryResult.Item) {
-    throw new Error(
-      `stored entry missing for sourceEventId "${input.sourceEventId}" (${input.sessionId}@${entryCreatedAt})`,
-    )
+    // DynamoDB TTL deletes expired items asynchronously, so the entry can vanish while its
+    // source-event marker still exists. Remove the stale marker conditionally so the retry can
+    // write a fresh entry instead of failing repeatedly until the marker is reaped.
+    try {
+      await doc.send(
+        new DeleteCommand({
+          TableName: tableName,
+          Key: {
+            PK: sourceEventsPk(input.credId, input.sessionId),
+            SK: sourceEventSk(input.sourceEventId),
+          },
+          ConditionExpression: 'entryCreatedAt = :entryCreatedAt',
+          ExpressionAttributeValues: { ':entryCreatedAt': entryCreatedAt },
+        }),
+      )
+    } catch (error) {
+      if (!(error instanceof Error) || error.name !== 'ConditionalCheckFailedException') throw error
+    }
+    return undefined
   }
   return { ...mapEntry(entryResult.Item), duplicate: true }
 }
