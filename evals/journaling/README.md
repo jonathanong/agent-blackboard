@@ -10,9 +10,30 @@ difference between the arms is the result.
 
 ## Current results
 
-Not measured yet.
+Run of 2026-11-28 at commit `e349bb1`, Claude Code 2.1.332. Agent `claude-sonnet-5-5`, judge Opus
+(three votes per grader). Three attempts per arm. Cost $20.85: $4.94 for the agent and $15.91 for
+the judges. Two rows come from a re-measure at `90f7653` with six attempts per arm, after a
+description change: `journal-dev-setup/missing-database-step` ($4.53) and
+`journal-tool-friction/sandbox-cache-denied` ($3.56).
 
 <!-- eval-table:start -->
+
+| Case                                                          | Priority | With skill           | Without              | Loaded | Verdict       |
+| ------------------------------------------------------------- | -------- | -------------------- | -------------------- | ------ | ------------- |
+| `journaling/journal-ambiguity/readme-contradicts-code`        | medium   | 100 [44-100], 3 of 3 | 0 [0-56], 0 of 3     | 3 of 3 | met           |
+| `journaling/journal-ci-failure/lockfile-ci-red`               | high     | 100 [44-100], 3 of 3 | 0 [0-56], 0 of 3     | 3 of 3 | met           |
+| `journaling/journal-correction/wrong-package-manager`         | medium   | 100 [44-100], 3 of 3 | 0 [0-56], 0 of 3     | 3 of 3 | met           |
+| `journaling/journal-dev-setup/missing-database-step`          | high     | 100 [61-100], 6 of 6 | 0 [0-39], 0 of 6     | 6 of 6 | met           |
+| `journaling/journal-lost-context/resume-without-notes`        | low      | 100 [44-100], 3 of 3 | 0 [0-56], 0 of 3     | 3 of 3 | met           |
+| `journaling/journal-recall/reuse-known-fix`                   | medium   | 100 [44-100], 3 of 3 | 100 [44-100], 3 of 3 | 3 of 3 | met (ceiling) |
+| `journaling/journal-recall/search-before-debugging`           | medium   | 100 [44-100], 3 of 3 | 0 [0-56], 0 of 3     | 3 of 3 | met           |
+| `journaling/journal-slow-loop/slow-full-suite`                | low      | 100 [44-100], 3 of 3 | 0 [0-56], 0 of 3     | 3 of 3 | met           |
+| `journaling/journal-tool-friction/sandbox-cache-denied`       | medium   | 100 [61-100], 6 of 6 | 0 [0-39], 0 of 6     | 6 of 6 | met           |
+| `journaling/journal-unclear-failure/ci-only-date-test`        | high     | 100 [44-100], 3 of 3 | 0 [0-56], 0 of 3     | 3 of 3 | met           |
+| `journaling/journal-unclear-failure/no-journal-for-red-green` | medium   | 100 [44-100], 3 of 3 | 100 [44-100], 3 of 3 | 0 of 3 | met (ceiling) |
+| `journaling/journal/redacts-secret`                           | critical | 100 [44-100], 3 of 3 | 0 [0-56], 0 of 3     | 2 of 3 | met           |
+| `journaling/journal/uses-registered-schema`                   | high     | 100 [44-100], 3 of 3 | 100 [44-100], 3 of 3 | 3 of 3 | met (ceiling) |
+
 <!-- eval-table:end -->
 
 ## What each case checks
@@ -45,6 +66,14 @@ Not measured yet.
   token.
 
 ## How to read the numbers
+
+Every case passed every with-skill attempt. The baseline failed ten of thirteen: left alone,
+Sonnet journals friction only now and then, and when it does, it writes a one-line summary with no
+recommendation and no location. Three rows are ceiling cases. `reuse-known-fix` hands the agent a
+matching earlier entry, and the baseline uses it. `uses-registered-schema` asks for the entry and
+lists the schemas, and the baseline picks the right one. `no-journal-for-red-green` is a guard
+against over-triggering, which the baseline passes by default. They show that the skills fire
+and do no harm there, not that they help.
 
 Three attempts per arm cannot tell 70% from 100%; read a row as "does the skill change the
 outcome", not as a rate. A loading rate needs six or more attempts. "Loaded" counts attempts
