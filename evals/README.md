@@ -66,9 +66,11 @@ shows that the skill does no harm, not that it helps.
   the agent appended an entry with `repository: "JongleBerry/PR-Shepherd"` and never patched the
   session's repositories. On the archived session, it appended the finding to that session
   anyway.
-- **The other seven are ceiling cases.** Sonnet follows these rules from the tool list and the
-  prompt alone, so the rows show that the skills load and do no harm, not that they help. They
-  stay as regression checks for weaker models and harness changes.
+- **The other seven are ceiling cases, and the `distill` skill is unmeasured on Sonnet.**
+  Sonnet follows these rules from the tool list and the prompt alone. The rows are loading and
+  no-harm checks only, not evidence that the skills help. Three more distill cases were piloted
+  and also passed without the skill (see `HISTORY.md`). Measuring `distill` needs a weaker agent
+  model or harder cases.
 - **`cleanup-on-empty-export` was not at the ceiling before this change.** In the one-attempt
   pilot, under the old `snapshot_cleanup` description, the baseline called it with only the
   token (0 of 1). The real handler rejects that call. The description now says a path or

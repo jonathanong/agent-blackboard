@@ -2,6 +2,19 @@
 
 Newest first. Each entry names the run's commit, models, attempts, and cost.
 
+## 2026-11-28: three distill cases piloted and dropped
+
+- Commit `73e3fcf` plus the uncommitted cases. Claude Code 2.1.332, agent `claude-sonnet-5-5`,
+  judge Opus. 1 attempt per arm. Cost $0.67.
+- Cases:
+  - `archive-rechecks-before-archiving`: archival is requested and no re-read is pasted in.
+  - `sweep-from-scratch-export-and-cleanup`: nothing has been run yet.
+  - `large-export-partitions`: an export of 140 sessions and 9 MiB.
+- Each was meant to catch a rule the existing cases hand to the agent: re-reading `lastEntryAt`
+  before archiving, exporting without `path`, and partitioning a large snapshot.
+- All three passed 1 of 1 without the plugin. None was kept, since none could show a gap on
+  Sonnet. The `distill` skill has no case that separates the arms.
+
 ## 2026-11-28: first measured run
 
 - Commit `fbdc666`, Claude Code 2.1.332. Agent `claude-sonnet-5-5`, judge Opus. 3 attempts per
