@@ -217,14 +217,18 @@ interface AppendEntryInput {
   data: Record<string, unknown>
   schemaId?: string
   schemaVersion?: number
+  sourceEventId?: string
 }
 ```
 
 Appends one entry to any existing session, including an archived one. When `schemaId` (and optional
 `schemaVersion`) is supplied, the server validates `data` against that registered JSON Schema and
-stores the resolved `schemaId` and `schemaVersion` on the entry. The service assigns `createdAt`,
-advances the session's `lastEntryAt`, and leaves `archivedAt` unchanged; the caller cannot supply or
-override timestamps.
+stores the resolved `schemaId` and `schemaVersion` on the entry. When `sourceEventId` is supplied,
+the server enforces per-session idempotency: retrying with the same `sourceEventId` and semantic
+content returns the stored entry with `duplicate: true` (HTTP `200`), while reusing the same
+`sourceEventId` with different content rejects with HTTP `409` (`code: 'source_event_conflict'` and
+`existingEntry`). The service assigns `createdAt`, advances the session's `lastEntryAt`, and leaves
+`archivedAt` unchanged; the caller cannot supply or override timestamps.
 
 ### `get(query): AsyncIterable<SessionEntry>`
 
@@ -322,10 +326,14 @@ interface SessionEntry {
   data: Record<string, unknown>
   schemaId?: string
   schemaVersion?: number
+  sourceEventId?: string
+  expiresAt?: string
 }
 
 interface AppendEntryResult extends SessionEntry {
   warning?: SchemaShadowWarning // present when accepted under per-version or global shadow mode
+  redactedCount?: number // present when server-side credential redaction replaced one or more secrets
+  duplicate?: true // present when sourceEventId matched an existing entry with identical content
 }
 ```
 

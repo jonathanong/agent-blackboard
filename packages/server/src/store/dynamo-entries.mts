@@ -46,11 +46,12 @@ export async function dynamoAppendEntry(
   const { value: redactedData } = redactCredentials(input.data)
   const contentHash =
     input.sourceEventId !== undefined
-      ? entryContentHash({
+      ? (input.sourceEventContentHash ??
+        entryContentHash({
           data: redactedData,
           schemaId: input.schemaId,
           schemaVersion: input.schemaVersion,
-        })
+        }))
       : undefined
   let effectiveTtlDays = retention.ttlDays
   let timestamp = now().getTime()
@@ -135,6 +136,23 @@ export async function dynamoAppendEntry(
   throw new SessionStoreError(
     'timestamp_exhausted',
     `could not allocate a unique timestamp for session ${input.sessionId}`,
+  )
+}
+
+export function dynamoResolveSourceEvent(
+  doc: DynamoDBDocumentClient,
+  tableName: string,
+  credId: string,
+  sessionId: string,
+  sourceEventId: string,
+  contentHash: string,
+): Promise<AppendedSessionEntry | undefined> {
+  return resolveExistingSourceEvent(
+    doc,
+    tableName,
+    { credId, sessionId, sourceEventId },
+    contentHash,
+    itemToEntry,
   )
 }
 

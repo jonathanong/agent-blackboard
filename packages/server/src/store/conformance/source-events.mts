@@ -22,6 +22,9 @@ export function runSourceEventsConformance(makeStore: () => BlackboardStore): vo
       })
       expect(created.sourceEventId).toBe('evt-1')
       expect(created.duplicate).toBeUndefined()
+      const expectedCreated = structuredClone(created)
+      // Mutating the caller's returned object must not corrupt stored duplicate reads
+      created.data.a = 999
 
       // 2. Duplicate with semantically identical content (different key order) returns stored entry
       const duplicate = await store.appendEntry({
@@ -30,8 +33,8 @@ export function runSourceEventsConformance(makeStore: () => BlackboardStore): vo
         data: { a: 1, b: 2 },
         sourceEventId: 'evt-1',
       })
-      expect(duplicate).toEqual({ ...created, duplicate: true })
-      expect(await collect(store.getEntries(credId, sessionA))).toEqual([created])
+      expect(duplicate).toEqual({ ...expectedCreated, duplicate: true })
+      expect(await collect(store.getEntries(credId, sessionA))).toEqual([expectedCreated])
 
       // 3. Conflict with same sourceEventId and different content throws 409-mapped error naming stored entry
       await expect(

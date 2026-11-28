@@ -81,6 +81,15 @@ export class MemoryBlackboardStore implements BlackboardStore {
     return this.#sessions.appendEntry(input)
   }
 
+  async resolveSourceEvent(
+    credId: string,
+    sessionId: string,
+    sourceEventId: string,
+    contentHash: string,
+  ): Promise<AppendedSessionEntry | undefined> {
+    return this.#sessions.resolveSourceEvent(credId, sessionId, sourceEventId, contentHash)
+  }
+
   getEntries(
     credId: string,
     sessionId: string,

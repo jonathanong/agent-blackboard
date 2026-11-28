@@ -274,10 +274,12 @@ describe('DynamoDB entries', () => {
     expect(created.duplicate).toBeUndefined()
     expect((txInput!.TransactItems as unknown[]).length).toBe(3)
 
-    // 2. Duplicate returns stored entry without re-writing
+    // 2. Duplicate returns stored entry without re-writing (using ConsistentRead: true)
     const matchingHash = entryContentHash({ data: { note: 'hello' } })
+    const getConsistentReads: unknown[] = []
     const dupDoc = client((command) => {
       if (command.constructor.name === 'TransactWriteCommand') throw canceled()
+      getConsistentReads.push(command.input.ConsistentRead)
       const key = command.input.Key as { PK: string }
       if (key.PK.startsWith('SOURCE_EVENTS#')) {
         return {
@@ -298,6 +300,7 @@ describe('DynamoDB entries', () => {
     })
     expect(dup.duplicate).toBe(true)
     expect(dup.sourceEventId).toBe('evt-1')
+    expect(getConsistentReads).toEqual([true, true])
 
     // 3. Conflict throws source_event_conflict naming stored entry
     await expect(

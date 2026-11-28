@@ -291,4 +291,130 @@ describe('entries route', () => {
       },
     })
   })
+
+  it('preserves sourceEventId idempotency across schema version promotion and deprecation', async () => {
+    await store.putSchemaVersion({
+      id: 'finding',
+      schema: {
+        type: 'object',
+        properties: { title: { type: 'string' } },
+        required: ['title'],
+      },
+      actor: 'ops',
+      expectedVersion: 0,
+    })
+
+    // First write omits schemaVersion (resolved to v1)
+    const first = await handleEntriesRoute(
+      request({
+        method: 'POST',
+        body: { data: { title: 'flaky retry' }, schemaId: 'finding', sourceEventId: 'evt-schema' },
+      }),
+      store,
+      's',
+    )
+    expect(first.status).toBe(201)
+    const firstBody = (await json(first)) as Record<string, unknown>
+    expect(firstBody.schemaVersion).toBe(1)
+
+    // Promote a compatible v2 — identical unpinned retry still resolves as duplicate (200)
+    await store.putSchemaVersion({
+      id: 'finding',
+      schema: {
+        type: 'object',
+        properties: { title: { type: 'string' }, tag: { type: 'string' } },
+        required: ['title'],
+      },
+      actor: 'ops',
+      expectedVersion: 1,
+    })
+    const dupAfterV2 = await handleEntriesRoute(
+      request({
+        method: 'POST',
+        body: { data: { title: 'flaky retry' }, schemaId: 'finding', sourceEventId: 'evt-schema' },
+      }),
+      store,
+      's',
+    )
+    expect(dupAfterV2.status).toBe(200)
+    expect(await json(dupAfterV2)).toEqual({ ...firstBody, duplicate: true })
+
+    // Also pin schemaVersion on a separate write, then deprecate the schema
+    const pinned = await handleEntriesRoute(
+      request({
+        method: 'POST',
+        body: {
+          data: { title: 'pinned' },
+          schemaId: 'finding',
+          schemaVersion: 2,
+          sourceEventId: 'evt-pinned',
+        },
+      }),
+      store,
+      's',
+    )
+    expect(pinned.status).toBe(201)
+    const pinnedBody = (await json(pinned)) as Record<string, unknown>
+
+    await store.deprecateSchema('finding', 'ops')
+
+    // Identical retries after deprecation still return 200 duplicate
+    const dupAfterDep = await handleEntriesRoute(
+      request({
+        method: 'POST',
+        body: {
+          data: { title: 'pinned' },
+          schemaId: 'finding',
+          schemaVersion: 2,
+          sourceEventId: 'evt-pinned',
+        },
+      }),
+      store,
+      's',
+    )
+    expect(dupAfterDep.status).toBe(200)
+    expect(await json(dupAfterDep)).toEqual({ ...pinnedBody, duplicate: true })
+
+    // Conflicting retry after deprecation returns 409 conflict
+    const conflictAfterDep = await handleEntriesRoute(
+      request({
+        method: 'POST',
+        body: {
+          data: { title: 'changed' },
+          schemaId: 'finding',
+          schemaVersion: 2,
+          sourceEventId: 'evt-pinned',
+        },
+      }),
+      store,
+      's',
+    )
+    expect(conflictAfterDep.status).toBe(409)
+
+    // New sourceEventId after deprecation still returns the 400 schema_deprecated error
+    const newAfterDep = await handleEntriesRoute(
+      request({
+        method: 'POST',
+        body: { data: { title: 'brand new' }, schemaId: 'finding', sourceEventId: 'evt-new' },
+      }),
+      store,
+      's',
+    )
+    expect(newAfterDep.status).toBe(400)
+    expect(await json(newAfterDep)).toMatchObject({ code: 'schema_deprecated' })
+
+    // Unexpected resolveSourceEvent errors propagate
+    const boom = new Error('lookup failed')
+    vi.spyOn(store, 'resolveSourceEvent').mockRejectedValueOnce(boom)
+    await expect(
+      handleEntriesRoute(
+        request({
+          method: 'POST',
+          body: { data: { title: 'brand new' }, schemaId: 'finding', sourceEventId: 'evt-boom' },
+        }),
+        store,
+        's',
+      ),
+    ).rejects.toBe(boom)
+  })
 })

@@ -9,7 +9,7 @@ import {
   resolveEntryTtlDays,
   type RetentionPolicy,
 } from './retention.mjs'
-import { entryContentHash, sourceEventConflictError } from './source-event.mjs'
+import { MemorySourceEventIndex } from './memory-source-events.mjs'
 import {
   DEFAULT_SESSIONS_LIMIT,
   MAX_SESSIONS_LIMIT,
@@ -25,7 +25,7 @@ import {
 export class MemorySessionStore {
   readonly #sessions = new Map<string, Session>()
   readonly #entries = new Map<string, SessionEntry>()
-  readonly #sourceEvents = new Map<string, { contentHash: string; entry: SessionEntry }>()
+  readonly #sourceEvents = new MemorySourceEventIndex()
   readonly #now: () => Date
   readonly #retention: RetentionPolicy
 
@@ -123,6 +123,15 @@ export class MemorySessionStore {
     return archived
   }
 
+  resolveSourceEvent(
+    credId: string,
+    sessionId: string,
+    sourceEventId: string,
+    contentHash: string,
+  ): AppendedSessionEntry | undefined {
+    return this.#sourceEvents.resolve(credId, sessionId, sourceEventId, contentHash)
+  }
+
   appendEntry(input: NewSessionEntry): AppendedSessionEntry {
     const sessionKey = this.#sessionKey(input.credId, input.sessionId)
     const session = this.#sessions.get(sessionKey)
@@ -130,27 +139,8 @@ export class MemorySessionStore {
       throw new SessionStoreError('session_not_found', `session not found: ${input.sessionId}`)
     }
     const { value: redactedData } = redactCredentials(input.data)
-    let contentHash: string | undefined
-    let seKey: string | undefined
-    if (input.sourceEventId !== undefined) {
-      contentHash = entryContentHash({
-        data: redactedData,
-        schemaId: input.schemaId,
-        schemaVersion: input.schemaVersion,
-      })
-      seKey = `${input.credId}\0${input.sessionId}\0${input.sourceEventId}`
-      const existing = this.#sourceEvents.get(seKey)
-      if (existing) {
-        if (existing.contentHash !== contentHash) {
-          throw sourceEventConflictError(
-            input.sessionId,
-            existing.entry.createdAt,
-            input.sourceEventId,
-          )
-        }
-        return { ...existing.entry, duplicate: true }
-      }
-    }
+    const { contentHash, existing } = this.#sourceEvents.prepare(input, redactedData)
+    if (existing) return existing
     const timestamp = Math.max(
       this.#now().getTime(),
       session.lastEntryAt === null ? 0 : Date.parse(session.lastEntryAt) + 1,
@@ -166,10 +156,11 @@ export class MemorySessionStore {
       ...(input.sourceEventId !== undefined ? { sourceEventId: input.sourceEventId } : {}),
       expiresAt,
     }
-    this.#entries.set(this.#entryKey(input.credId, input.sessionId, timestamp), entry)
-    if (seKey !== undefined) {
-      this.#sourceEvents.set(seKey, { contentHash: contentHash!, entry })
-    }
+    this.#entries.set(
+      this.#entryKey(input.credId, input.sessionId, timestamp),
+      structuredClone(entry),
+    )
+    this.#sourceEvents.record(input, contentHash, entry)
     this.#sessions.set(sessionKey, { ...session, lastEntryAt: entry.createdAt })
     return entry
   }

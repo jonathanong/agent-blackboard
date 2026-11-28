@@ -50,6 +50,8 @@ export interface NewSessionEntry {
   schemaId?: string
   schemaVersion?: number
   sourceEventId?: string
+  /** Optional caller-scoped content hash used when comparing `sourceEventId` retries. */
+  sourceEventContentHash?: string
 }
 
 export interface NewSession {
@@ -152,6 +154,12 @@ export interface BlackboardStore {
   archiveSession(credId: string, sessionId: string): Promise<Session>
 
   appendEntry(entry: NewSessionEntry): Promise<AppendedSessionEntry>
+  resolveSourceEvent(
+    credId: string,
+    sessionId: string,
+    sourceEventId: string,
+    contentHash: string,
+  ): Promise<AppendedSessionEntry | undefined>
   getEntries(
     credId: string,
     sessionId: string,

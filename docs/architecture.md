@@ -72,7 +72,8 @@ One DynamoDB table stores multiple item types. There are no joins and no nested 
 | Entity          | Partition key                        | Sort key                           | Public fields                                                                                  |
 | --------------- | ------------------------------------ | ---------------------------------- | ---------------------------------------------------------------------------------------------- |
 | Session         | `SESSIONS#<credentialId>`            | `SESSION#<sessionId>`              | `id`, `parentSessionId`, `agent`, `version`, `createdAt`, `lastEntryAt`, `archivedAt`, `data`  |
-| Entry           | `ENTRIES#<credentialId>#<sessionId>` | `ENTRY#<createdAt>`                | `sessionId`, `createdAt`, `data`, optional `schemaId`, `schemaVersion`                         |
+| Entry           | `ENTRIES#<credentialId>#<sessionId>` | `ENTRY#<createdAt>`                | `sessionId`, `createdAt`, `data`, optional `schemaId`, `schemaVersion`, `sourceEventId`        |
+| Source event    | `SOURCE_EVENTS#<credId>#<sessionId>` | `SOURCE_EVENT#<sourceEventId>`     | internal idempotency index (`contentHash`, `entryCreatedAt`, TTL)                              |
 | Credential      | internal credential partition        | internal credential sort key       | `id`, `name`, `createdAt`                                                                      |
 | Schema registry | `SCHEMA_REGISTRY`                    | `META`                             | monotonic `revision`, `updatedAt`                                                              |
 | Schema head     | `SCHEMAS`                            | `SCHEMA#<schemaId>`                | `id`, `latestVersion`, `deprecatedAt`, `deprecatedBy`, audit timestamps/actors                 |
@@ -105,26 +106,26 @@ DynamoDB transactions combine the session metadata update with each entry write,
 
 ## HTTP API
 
-| Method          | Path                                     | Purpose                                                                                |
-| --------------- | ---------------------------------------- | -------------------------------------------------------------------------------------- |
-| `POST`          | `/sessions`                              | Create `{ id, parentSessionId, agent, version }`                                       |
-| `GET`           | `/sessions`                              | List sessions; supports archive and inactivity filters                                 |
-| `GET`           | `/sessions/:id`                          | Get session metadata                                                                   |
-| `PATCH`         | `/sessions/:id`                          | Patch `{ data }` or archive with `{ archived: true }`                                  |
-| `POST`          | `/sessions/:id/entries`                  | Append `{ data, schemaId?, schemaVersion? }` (validates against registry)              |
-| `GET`           | `/sessions/:id/entries`                  | Stream entries (`json`, `jsonl`, or `markdown`)                                        |
-| `GET`           | `/snapshot`                              | Stream all selected active sessions and entries as JSONL                               |
-| `GET`           | `/schemas`                               | List schema summaries (`?include=versions` returns full bundle; supports ETag)         |
-| `GET`           | `/schemas/:id`                           | Get latest version and metadata for a schema                                           |
-| `GET`           | `/schemas/:id/versions`                  | List immutable version history for a schema                                            |
-| `GET`           | `/schemas/:id/versions/:version`         | Get a specific immutable schema version                                                |
-| `PUT`           | `/schemas/:id`                           | Admin-only: publish next JSON Schema 2020-12 version (`breaking?`, `shadow?`)          |
-| `POST`          | `/schemas/:id/versions/:version/promote` | Admin-only: switch a shadow schema version to `enforced`                               |
-| `GET`           | `/schemas/:id/report`                    | Admin-only: shadow failure counts and recent examples across schema versions           |
-| `GET`           | `/schemas/:id/versions/:version/report`  | Admin-only: shadow failure counts and recent examples for one schema version           |
-| `DELETE`        | `/schemas/:id`                           | Admin-only: deprecate a schema without deleting its history                            |
-| `GET`           | `/health`                                | Unauthenticated readiness check (`200` ok, `503` if `required` has no enforced schema) |
-| `/credentials*` | admin routes                             | Manage client credentials                                                              |
+| Method          | Path                                     | Purpose                                                                                                   |
+| --------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `POST`          | `/sessions`                              | Create `{ id, parentSessionId, agent, version }`                                                          |
+| `GET`           | `/sessions`                              | List sessions; supports archive and inactivity filters                                                    |
+| `GET`           | `/sessions/:id`                          | Get session metadata                                                                                      |
+| `PATCH`         | `/sessions/:id`                          | Patch `{ data }` or archive with `{ archived: true }`                                                     |
+| `POST`          | `/sessions/:id/entries`                  | Append `{ data, schemaId?, schemaVersion?, sourceEventId? }` (`201` new, `200` duplicate, `409` conflict) |
+| `GET`           | `/sessions/:id/entries`                  | Stream entries (`json`, `jsonl`, or `markdown`)                                                           |
+| `GET`           | `/snapshot`                              | Stream all selected active sessions and entries as JSONL                                                  |
+| `GET`           | `/schemas`                               | List schema summaries (`?include=versions` returns full bundle; supports ETag)                            |
+| `GET`           | `/schemas/:id`                           | Get latest version and metadata for a schema                                                              |
+| `GET`           | `/schemas/:id/versions`                  | List immutable version history for a schema                                                               |
+| `GET`           | `/schemas/:id/versions/:version`         | Get a specific immutable schema version                                                                   |
+| `PUT`           | `/schemas/:id`                           | Admin-only: publish next JSON Schema 2020-12 version (`breaking?`, `shadow?`)                             |
+| `POST`          | `/schemas/:id/versions/:version/promote` | Admin-only: switch a shadow schema version to `enforced`                                                  |
+| `GET`           | `/schemas/:id/report`                    | Admin-only: shadow failure counts and recent examples across schema versions                              |
+| `GET`           | `/schemas/:id/versions/:version/report`  | Admin-only: shadow failure counts and recent examples for one schema version                              |
+| `DELETE`        | `/schemas/:id`                           | Admin-only: deprecate a schema without deleting its history                                               |
+| `GET`           | `/health`                                | Unauthenticated readiness check (`200` ok, `503` if `required` has no enforced schema)                    |
+| `/credentials*` | admin routes                             | Manage client credentials                                                                                 |
 
 Every authenticated response includes `x-schema-registry-revision: <n>` so clients can detect when
 their local pulled schema cache is behind the server. `GET /schemas` and

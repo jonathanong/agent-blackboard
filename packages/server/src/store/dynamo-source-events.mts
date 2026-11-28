@@ -29,10 +29,16 @@ export function sourceEventPutItem(
   }
 }
 
+export interface SourceEventLookup {
+  credId: string
+  sessionId: string
+  sourceEventId: string
+}
+
 export async function resolveExistingSourceEvent(
   doc: DynamoDBDocumentClient,
   tableName: string,
-  input: NewSessionEntry & { sourceEventId: string },
+  input: SourceEventLookup,
   contentHash: string,
   mapEntry: (item: Record<string, unknown>) => SessionEntry,
 ): Promise<AppendedSessionEntry | undefined> {
@@ -43,6 +49,7 @@ export async function resolveExistingSourceEvent(
         PK: sourceEventsPk(input.credId, input.sessionId),
         SK: sourceEventSk(input.sourceEventId),
       },
+      ConsistentRead: true,
     }),
   )
   if (!existing.Item) return undefined
@@ -58,6 +65,7 @@ export async function resolveExistingSourceEvent(
         PK: entriesPk(input.credId, input.sessionId),
         SK: entrySk(entryCreatedAt),
       },
+      ConsistentRead: true,
     }),
   )
   if (!entryResult.Item) {

@@ -1,7 +1,7 @@
 import { resolveClientCredential } from '../../auth/client.mjs'
 import { validateEntryWrite, type SchemaEnforcementEnv } from '../../schemas/enforce.mjs'
 import { SessionStoreError } from '../../store/errors.mjs'
-import { isValidSourceEventId } from '../../store/source-event.mjs'
+import { entryContentHash, isValidSourceEventId } from '../../store/source-event.mjs'
 import type { BlackboardStore } from '../../store/store.mjs'
 import { readJsonBody } from '../body.mjs'
 import { FORMAT_CONTENT_TYPE, formatEntries, resolveFormat } from '../format.mjs'
@@ -49,8 +49,33 @@ async function appendEntry(
     sourceEventId = body.sourceEventId
   }
   const { value: redactedData, redactedCount } = redactCredentials(data)
+  const sourceEventContentHash =
+    sourceEventId !== undefined
+      ? entryContentHash({
+          data: redactedData,
+          schemaId: typeof body.schemaId === 'string' ? body.schemaId : undefined,
+          schemaVersion: typeof body.schemaVersion === 'number' ? body.schemaVersion : undefined,
+        })
+      : undefined
   const validation = await validateEntryWrite(store, body, redactedData, env)
-  if (!validation.ok) return jsonResponse(validation.status, validation.body)
+  if (!validation.ok) {
+    if (sourceEventId !== undefined) {
+      try {
+        const existing = await store.resolveSourceEvent(
+          credId,
+          sessionId,
+          sourceEventId,
+          sourceEventContentHash!,
+        )
+        if (existing) return jsonResponse(200, existing)
+      } catch (error) {
+        const response = storeErrorResponse(error)
+        if (response) return response
+        throw error
+      }
+    }
+    return jsonResponse(validation.status, validation.body)
+  }
   try {
     const entry = await store.appendEntry({
       credId,
@@ -60,7 +85,9 @@ async function appendEntry(
       ...(validation.schemaVersion !== undefined
         ? { schemaVersion: validation.schemaVersion }
         : {}),
-      ...(sourceEventId !== undefined ? { sourceEventId } : {}),
+      ...(sourceEventId !== undefined
+        ? { sourceEventId, sourceEventContentHash: sourceEventContentHash! }
+        : {}),
     })
     const headers =
       validation.revision !== undefined ? revisionHeaders(validation.revision) : undefined
