@@ -52,15 +52,13 @@ export async function dynamoAppendEntry(
   for (let offset = 0; offset < TIMESTAMP_RETRIES; offset++) {
     const createdAt = new Date(timestamp).toISOString()
     const { ttl, expiresAt } = computeEntryExpiry(timestamp, effectiveTtlDays)
-    const entry: SessionEntry = {
+    const storedEntry = {
       sessionId: input.sessionId,
       createdAt,
       data: input.data,
       ...(input.schemaId !== undefined ? { schemaId: input.schemaId } : {}),
       ...(input.schemaVersion !== undefined ? { schemaVersion: input.schemaVersion } : {}),
-      expiresAt,
     }
-    const { expiresAt: _expiresAt, ...storedEntry } = entry
     try {
       await doc.send(
         new TransactWriteCommand({
@@ -91,7 +89,7 @@ export async function dynamoAppendEntry(
           ],
         }),
       )
-      return entry
+      return { ...storedEntry, expiresAt }
     } catch (error) {
       if (!(error instanceof Error) || error.name !== 'TransactionCanceledException') throw error
       const session = await requireSession(doc, tableName, input.credId, input.sessionId)

@@ -37,3 +37,45 @@ export function parseSentryDeployOptions(argv, env, git) {
 
   return { enabled: true, dsn, environment, release }
 }
+
+export function validateRetentionDeployOptions(env) {
+  const rawDays = env.AGENT_BLACKBOARD_TTL_DAYS
+  if (rawDays !== undefined && rawDays.trim() !== '') {
+    const days = Number(rawDays)
+    if (!Number.isSafeInteger(days) || days < 1) {
+      throw new Error(
+        'Invalid AGENT_BLACKBOARD_TTL_DAYS: expected a positive integer number of days',
+      )
+    }
+  }
+  const rawOverrides = env.AGENT_BLACKBOARD_TTL_OVERRIDES
+  if (rawOverrides === undefined || rawOverrides.trim() === '') return
+  let parsed
+  try {
+    parsed = JSON.parse(rawOverrides)
+  } catch {
+    throw new Error('Invalid AGENT_BLACKBOARD_TTL_OVERRIDES: must be a JSON object')
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error('Invalid AGENT_BLACKBOARD_TTL_OVERRIDES: must be a JSON object')
+  }
+  const seen = new Map()
+  for (const [key, value] of Object.entries(parsed)) {
+    const repo = key.trim().toLowerCase()
+    if (!repo) {
+      throw new Error('Invalid AGENT_BLACKBOARD_TTL_OVERRIDES: repository key must be non-empty')
+    }
+    if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) {
+      throw new Error(
+        `Invalid AGENT_BLACKBOARD_TTL_OVERRIDES["${key}"]: expected a positive integer number of days`,
+      )
+    }
+    const existing = seen.get(repo)
+    if (existing !== undefined && existing !== value) {
+      throw new Error(
+        `Invalid AGENT_BLACKBOARD_TTL_OVERRIDES: conflicting overrides for repository "${repo}"`,
+      )
+    }
+    seen.set(repo, value)
+  }
+}

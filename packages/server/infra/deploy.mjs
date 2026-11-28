@@ -15,7 +15,7 @@
 //      AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT (optional, "optional", "shadow", or "required"),
 //      STACK_NAME (optional, default "agent-blackboard").
 import { bundle } from './bundle.mjs'
-import { parseSentryDeployOptions } from './deploy-options.mjs'
+import { parseSentryDeployOptions, validateRetentionDeployOptions } from './deploy-options.mjs'
 import { migrateEntryMetadata, migrationClient } from './migrate-entry-metadata.mjs'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
@@ -116,6 +116,7 @@ export async function deploy(argv = process.argv.slice(2)) {
   const sentry = parseSentryDeployOptions(argv, process.env, (args) =>
     execFileSync('git', args, { cwd: path.resolve(infraDir, '../../..'), encoding: 'utf8' }),
   )
+  validateRetentionDeployOptions(process.env)
 
   const { zipPath } = await bundle()
   const hash = createHash('sha256')
