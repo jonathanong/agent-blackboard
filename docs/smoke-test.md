@@ -18,8 +18,9 @@ local server started with `AGENT_BLACKBOARD_STORE=memory pnpm --dir packages/ser
 >    equals the newest appended entry's `createdAt`. Remove the temporary files.
 > 3. Use CLI `sessions patch <root> --data '{"branch":"smoke"}'`. Get the root and verify the data
 >    was shallow-merged without changing its identity, parent, agent, version, or timestamps.
-> 4. Through MCP, append `{"marker":"root-mcp"}` to the root, save its `createdAt`, patch it with
->    `{"patched":true}`, and read it back. Verify both fields remain.
+> 4. Through MCP, append `{"marker":"root-mcp"}` to the root and read it back via `entry_get`. Then
+>    call `session_patch` on the root with `{"patched":true}` and verify both `branch` and `patched`
+>    remain on the session.
 > 5. Spawn one real subagent. Give it the root id and a unique child id. Tell it to use MCP
 >    `session_create` with its actual agent and version and the root as `parentSessionId`; append
 >    `{"marker":"child"}`; read its entries; and report the returned objects verbatim.

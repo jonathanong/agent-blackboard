@@ -173,17 +173,27 @@ describe('streamResponseBody', () => {
     expect(sink.ended).toBe(true)
   })
 
-  it('skips writing an empty string body but still ends', async () => {
+  it('issues a zero-length write for an empty string body so Lambda flushes the HTTP prelude', async () => {
     const sink = recordingSink()
     await streamResponseBody('', sink)
-    expect(sink.writes).toEqual([])
+    expect(sink.writes).toEqual([''])
     expect(sink.ended).toBe(true)
   })
 
-  it('skips writing an empty Uint8Array chunk but still ends', async () => {
+  it('issues a zero-length write for an empty Uint8Array chunk so Lambda flushes the HTTP prelude', async () => {
     const sink = recordingSink()
     await streamResponseBody(new Uint8Array(0), sink)
-    expect(sink.writes).toEqual([])
+    expect(sink.writes).toEqual([''])
+    expect(sink.ended).toBe(true)
+  })
+
+  it('issues a zero-length write for an empty async-iterable body (304 Not Modified)', async () => {
+    const sink = recordingSink()
+    async function* empty() {
+      // yields zero chunks, like notModifiedResponse()
+    }
+    await streamResponseBody(empty(), sink)
+    expect(sink.writes).toEqual([''])
     expect(sink.ended).toBe(true)
   })
 
@@ -381,6 +391,41 @@ describe('handle', () => {
     )
     expect(started).toEqual([{ status: 201, headers: { 'x-a': '1' } }])
     expect(sink.writes).toEqual(['created'])
+    expect(sink.ended).toBe(true)
+  })
+
+  it('flushes the HTTP prelude on 304 Not Modified empty-body responses', async () => {
+    // Models AWS Lambda HttpResponseStream.from(): prelude is only emitted on the first write(), not end().
+    let preludeFlushed: { status: number; headers: Record<string, string> } | undefined
+    const sink = recordingSink()
+    let pendingPrelude: { status: number; headers: Record<string, string> } | undefined
+    const origWrite = sink.write.bind(sink)
+    sink.write = async (chunk) => {
+      if (pendingPrelude && !preludeFlushed) preludeFlushed = pendingPrelude
+      await origWrite(chunk)
+    }
+    async function* empty() {
+      // 304 Not Modified has no body
+    }
+    await handle(
+      baseEvent({ rawPath: '/schemas', headers: { 'if-none-match': '"rev-0"' } }),
+      (status, headers) => {
+        pendingPrelude = { status, headers }
+        return sink
+      },
+      deps({
+        handleRequest: async () => ({
+          status: 304,
+          headers: { etag: '"rev-0"', 'x-schema-registry-revision': '0' },
+          body: empty(),
+        }),
+      }),
+    )
+    expect(preludeFlushed).toEqual({
+      status: 304,
+      headers: { etag: '"rev-0"', 'x-schema-registry-revision': '0' },
+    })
+    expect(sink.writes).toEqual([''])
     expect(sink.ended).toBe(true)
   })
 
