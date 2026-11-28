@@ -50,7 +50,11 @@ If the `agent-blackboard` MCP server is connected, use its tools directly:
   supply `schemaId` (and `schemaVersion`) for server-side JSON Schema validation.
 - `entry_get` — read entries from one explicit session.
 - `snapshot_export` — stream all selected active sessions and entries to a private read-only JSONL
-  file, returning only its path, counts, checksum, and manifest.
+  file, returning its path, counts, checksum, manifest, and (when `path` is omitted) `cleanupToken`.
+- `snapshot_partition` — split a generated temporary snapshot into bounded session-preserving
+  read-only partitions using its `cleanupToken`.
+- `snapshot_cleanup` — delete a generated temporary snapshot file and/or partition directory using
+  its `cleanupToken`.
 - `schema_list` — list registered JSON Schemas and the current schema registry revision.
 - `schema_get` — inspect one registered schema (latest version or an explicit `version`).
 - `schema_pull` — sync the full schema registry into the local cache (`If-None-Match`).

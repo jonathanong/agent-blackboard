@@ -7,7 +7,11 @@ import {
   handleSchemaPull,
   handleSchemaValidate,
 } from './tool-schemas.mjs'
-import { handleSnapshotExport } from './tool-snapshot.mjs'
+import {
+  handleSnapshotCleanup,
+  handleSnapshotExport,
+  handleSnapshotPartition,
+} from './tool-snapshot.mjs'
 import {
   handleSessionArchive,
   handleSessionCreate,
@@ -41,6 +45,10 @@ export function dispatchTool(
       return handleEntryGet(args, config, resolution)
     case 'snapshot_export':
       return handleSnapshotExport(args, config)
+    case 'snapshot_partition':
+      return handleSnapshotPartition(args)
+    case 'snapshot_cleanup':
+      return handleSnapshotCleanup(args)
     case 'schema_list':
       return handleSchemaList(config)
     case 'schema_get':

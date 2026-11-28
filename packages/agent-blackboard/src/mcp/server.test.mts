@@ -19,7 +19,7 @@ function text(content: unknown): string {
   return (content as Array<{ text: string }>)[0]!.text
 }
 
-it('lists fifteen tools and returns JSON text or MCP errors', async () => {
+it('lists seventeen tools and returns JSON text or MCP errors', async () => {
   const entry = { sessionId: 's', createdAt: 'now', data: {} }
   const fixture = await startHttpFixture((req, res) => {
     if (new URL(req.url, 'http://localhost').pathname !== '/snapshot') {
@@ -98,7 +98,9 @@ it('lists fifteen tools and returns JSON text or MCP errors', async () => {
       'session_ensure',
       'session_patch',
       'session_search',
+      'snapshot_cleanup',
       'snapshot_export',
+      'snapshot_partition',
     ])
     const annotations = Object.fromEntries(tools.map((tool) => [tool.name, tool.annotations]))
     expect(annotations).toEqual({
@@ -186,7 +188,19 @@ it('lists fifteen tools and returns JSON text or MCP errors', async () => {
         idempotentHint: true,
         openWorldHint: false,
       },
+      snapshot_cleanup: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
       snapshot_export: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+      snapshot_partition: {
         readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: false,
@@ -208,8 +222,20 @@ it('lists fifteen tools and returns JSON text or MCP errors', async () => {
 
     const emptySnapshot = await client.callTool({ name: 'snapshot_export', arguments: {} })
     expect(emptySnapshot.isError).toBeFalsy()
-    const emptySnapshotResult = JSON.parse(text(emptySnapshot.content)) as { path: string }
-    await rm(emptySnapshotResult.path, { force: true })
+    const emptySnapshotResult = JSON.parse(text(emptySnapshot.content)) as {
+      path: string
+      cleanupToken: string
+    }
+    expect(typeof emptySnapshotResult.cleanupToken).toBe('string')
+    const cleaned = await client.callTool({
+      name: 'snapshot_cleanup',
+      arguments: {
+        path: emptySnapshotResult.path,
+        cleanupToken: emptySnapshotResult.cleanupToken,
+      },
+    })
+    expect(cleaned.isError).toBeFalsy()
+    expect(JSON.parse(text(cleaned.content))).toEqual({ removed: true })
 
     const directory = await mkdtemp(join(tmpdir(), 'abb-mcp-snapshot-'))
     const filteredPath = join(directory, 'snapshot.jsonl')
