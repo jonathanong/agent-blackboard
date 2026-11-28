@@ -28,6 +28,12 @@ Newest first. Each entry names the run's commit, models, attempts, and cost.
 - The four CLI-only friction failures made no blackboard write, so the harness had written no
   `report.md` and the grader errored instead of failing. Their traces confirm no write. The
   scaffold change above makes such an attempt a plain FAIL.
+- Two of the four CLI-only friction failures ran `which agent-blackboard`. `which` does not
+  expand the literal `~/.local/bin` PATH entry that bash does, so those agents concluded the CLI
+  was not installed: a harness artifact, not agent behavior. The other two never looked.
+- `repo-tags-cli-named`'s system prompt is not byte-identical to the first live run's: it says
+  "already configured with a server URL and token" twice. Its 0 of 3 to 3 of 3 change rests on
+  the skill fix together with that one-clause difference.
 - Finding: with the plugin, agents used the MCP tools for every case except
   `repo-tags-cli-named` (CLI only). The skill loaded in 0 of 8 friction attempts, and the MCP tools
   alone were enough to record the friction.

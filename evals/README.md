@@ -17,7 +17,7 @@ snapshots into follow-ups), and an MCP server.
 
 Run of 2026-11-28 at commit `f8464c6`, Claude Code 2.1.332. Agent `claude-sonnet-5-5`, judge Opus
 (three votes per grader). Three attempts per arm, eight for `friction-misleading-error`. Cost
-$6.06: $3.52 for the agent and $2.54 for the judges, about $0.15 per attempt.
+$6.06: $3.52 for the agent and $2.54 for the judges, about $0.13 per attempt.
 
 <!-- eval-live-table:start -->
 
@@ -55,7 +55,14 @@ every CLI-only attempt passed.
 
 - **Four cases separate the arms.** CLI-only agents appended to the archived session (0 of 3),
   appended with a mixed-case repository and never patched the union (0 of 3 in both repo-tags
-  cases), and recorded the friction in only 4 of 8 attempts. With the plugin, all of these passed.
+  cases), and recorded the friction in only 4 of 8 attempts (see the next two bullets). With the plugin, all of
+  these passed.
+- **Read the friction gap as discoverability, and as partly a harness artifact.** Of the four
+  CLI-only failures, two never looked for a CLI. The other two ran `which agent-blackboard`, which,
+  unlike bash, does not expand the literal `~/.local/bin` entry the harness puts on PATH, so they
+  concluded the CLI was missing. In the first live run, with the CLI named in the prompt, CLI-only
+  agents recorded the friction 8 of 8. The plugin's gain here is that its tools need no
+  instructions; a CLI user whose `AGENTS.md` names the CLI would likely not see it.
 - **The friction gain comes from the MCP tools, not the skill.** The skill loaded in 0 of 8
   attempts, yet every attempt recorded the friction through the MCP tools. The four CLI-only
   failures made no blackboard write at all. Adding "friction" to the skill's description did not
