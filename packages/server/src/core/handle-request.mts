@@ -14,6 +14,7 @@ import type { BlackboardStore } from '../store/store.mjs'
 import { notFoundResponse } from './response.mjs'
 import { handleCredentialsRoute } from './routes/credentials.mjs'
 import { handleEntriesRoute } from './routes/entries.mjs'
+import { handleHealthRoute } from './routes/health.mjs'
 import { SCHEMA_REVISION_HEADER } from './routes/schemas-etag.mjs'
 import { handleSchemasRoute } from './routes/schemas.mjs'
 import { handleSessionsRoute } from './routes/sessions.mjs'
@@ -46,6 +47,7 @@ async function routeMatched(
   request: HandlerRequest,
   deps: HandleRequestDeps,
 ): Promise<HandlerResponse | undefined> {
+  if (path === '/health') return handleHealthRoute(request, deps.store, deps.env)
   if (path === '/credentials') return handleCredentialsRoute(request, deps.store, deps.env)
   if (path === '/snapshot') return handleSnapshotRoute(request, deps.store, deps.now)
   if (path === '/sessions') return handleSessionsRoute(request, deps.store)
@@ -116,7 +118,11 @@ export async function handleRequest(
   const path = normalizePath(request.path)
   const response = await routeMatched(path, request, deps)
   if (!response) return notFoundResponse()
-  if (response.status !== 401 && response.headers[SCHEMA_REVISION_HEADER] === undefined) {
+  if (
+    path !== '/health' &&
+    response.status !== 401 &&
+    response.headers[SCHEMA_REVISION_HEADER] === undefined
+  ) {
     try {
       const revision = await deps.store.getSchemaRegistryRevision()
       return {
