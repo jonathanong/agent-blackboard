@@ -117,12 +117,26 @@ function redactValue(input: unknown): RedactionResult<unknown> {
   }
   if (typeof input === 'object' && input !== null) {
     let redactedCount = 0
-    const next: Record<string, unknown> = {}
-    for (const [key, item] of Object.entries(input)) {
+    const reserved = new Set<string>()
+    const processed = Object.entries(input).map(([key, item]) => {
       const keyResult = redactString(key)
-      const valueResult = redactValue(item)
+      if (keyResult.redactedCount === 0) reserved.add(keyResult.value)
+      return { keyResult, valueResult: redactValue(item) }
+    })
+    const next: Record<string, unknown> = {}
+    const assigned = new Set<string>()
+    for (const { keyResult, valueResult } of processed) {
       redactedCount += keyResult.redactedCount + valueResult.redactedCount
-      Object.defineProperty(next, keyResult.value, {
+      let outKey = keyResult.value
+      if (keyResult.redactedCount > 0 && (reserved.has(outKey) || assigned.has(outKey))) {
+        let suffix = 2
+        while (reserved.has(`${outKey}#${suffix}`) || assigned.has(`${outKey}#${suffix}`)) {
+          suffix += 1
+        }
+        outKey = `${outKey}#${suffix}`
+      }
+      assigned.add(outKey)
+      Object.defineProperty(next, outKey, {
         value: valueResult.value,
         enumerable: true,
         writable: true,

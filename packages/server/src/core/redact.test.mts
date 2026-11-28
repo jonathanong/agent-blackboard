@@ -118,4 +118,29 @@ describe('credential redaction', () => {
     })
     expect(result.value['[REDACTED:github_token]']).toBe('value')
   })
+
+  it('preserves all values with collision-safe keys when redacted keys collide', () => {
+    const secondGithub = ['ghp', 'fedcba0987654321fedcba0987'].join('_')
+    const twoTokens = redactCredentials({ [GITHUB_CLASSIC]: 'first', [secondGithub]: 'second' })
+    expect(twoTokens.redactedCount).toBe(2)
+    expect(twoTokens.value).toEqual({
+      '[REDACTED:github_token]': 'first',
+      '[REDACTED:github_token]#2': 'second',
+    })
+
+    // Colliding with existing literal marker and #2 keys preserves every value without retaining secrets
+    const withLiterals = redactCredentials({
+      [GITHUB_CLASSIC]: 'from-secret-1',
+      [secondGithub]: 'from-secret-2',
+      '[REDACTED:github_token]': 'literal',
+      '[REDACTED:github_token]#2': 'literal-2',
+    })
+    expect(withLiterals.redactedCount).toBe(2)
+    expect(withLiterals.value).toEqual({
+      '[REDACTED:github_token]': 'literal',
+      '[REDACTED:github_token]#2': 'literal-2',
+      '[REDACTED:github_token]#3': 'from-secret-1',
+      '[REDACTED:github_token]#4': 'from-secret-2',
+    })
+  })
 })
