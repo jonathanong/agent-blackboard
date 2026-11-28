@@ -6,6 +6,7 @@ import type {
   ListSessionsQuery,
   ListSessionsResult,
   PatchSessionInput,
+  PatchSessionResult,
   Session,
 } from './types.mjs'
 
@@ -103,7 +104,7 @@ export class Sessions {
     })
   }
 
-  patch(input: PatchSessionInput): Promise<Session> {
+  patch(input: PatchSessionInput): Promise<PatchSessionResult> {
     return requestJson(this.#config, `/sessions/${encodeURIComponent(input.sessionId)}`, {
       method: 'PATCH',
       headers: JSON_HEADERS,

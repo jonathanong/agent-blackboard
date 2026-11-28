@@ -4,6 +4,7 @@ import { SessionStoreError } from '../../store/errors.mjs'
 import type { BlackboardStore } from '../../store/store.mjs'
 import { readJsonBody } from '../body.mjs'
 import { FORMAT_CONTENT_TYPE, formatEntries, resolveFormat } from '../format.mjs'
+import { redactCredentials } from '../redact.mjs'
 import {
   errorResponse,
   jsonResponse,
@@ -39,13 +40,14 @@ async function appendEntry(
   if (!body) return errorResponse(400, 'body must be a JSON object')
   const data = objectData(body.data)
   if (!data) return errorResponse(400, 'data must be an object')
-  const validation = await validateEntryWrite(store, body, data, env)
+  const { value: redactedData, redactedCount } = redactCredentials(data)
+  const validation = await validateEntryWrite(store, body, redactedData, env)
   if (!validation.ok) return jsonResponse(validation.status, validation.body)
   try {
     const entry = await store.appendEntry({
       credId,
       sessionId,
-      data,
+      data: redactedData,
       ...(validation.schemaId !== undefined ? { schemaId: validation.schemaId } : {}),
       ...(validation.schemaVersion !== undefined
         ? { schemaVersion: validation.schemaVersion }
@@ -58,7 +60,11 @@ async function appendEntry(
         // Best-effort telemetry: never fail an accepted entry write on shadow recording errors.
       }
     }
-    const responseBody = validation.warning ? { ...entry, warning: validation.warning } : entry
+    const responseBody = {
+      ...entry,
+      ...(validation.warning ? { warning: validation.warning } : {}),
+      ...(redactedCount > 0 ? { redactedCount } : {}),
+    }
     return jsonResponse(
       201,
       responseBody,

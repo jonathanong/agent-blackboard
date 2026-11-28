@@ -1,5 +1,6 @@
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
 import { QueryCommand, TransactWriteCommand } from '@aws-sdk/lib-dynamodb'
+import { redactCredentials } from '../core/redact.mjs'
 import type { Session, SessionEntry } from '../core/types.mjs'
 import { entrySk, entriesPk, sessionSk, sessionsPk } from './dynamo-keys.mjs'
 import { dynamoGetSession } from './dynamo-sessions.mjs'
@@ -39,6 +40,7 @@ export async function dynamoAppendEntry(
   now: () => Date,
   input: NewSessionEntry,
 ): Promise<SessionEntry> {
+  const { value: redactedData } = redactCredentials(input.data)
   let effectiveTtlDays = retention.ttlDays
   let timestamp = now().getTime()
   if (retention.ttlOverrides.size > 0) {
@@ -55,7 +57,7 @@ export async function dynamoAppendEntry(
     const storedEntry = {
       sessionId: input.sessionId,
       createdAt,
-      data: input.data,
+      data: redactedData,
       ...(input.schemaId !== undefined ? { schemaId: input.schemaId } : {}),
       ...(input.schemaVersion !== undefined ? { schemaVersion: input.schemaVersion } : {}),
     }

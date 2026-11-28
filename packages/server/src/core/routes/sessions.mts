@@ -1,6 +1,7 @@
 import { resolveClientCredential } from '../../auth/client.mjs'
 import type { BlackboardStore } from '../../store/store.mjs'
 import { readJsonBody } from '../body.mjs'
+import { redactCredentials } from '../redact.mjs'
 import {
   errorResponse,
   jsonResponse,
@@ -112,8 +113,13 @@ async function patchSessionData(
   data: Record<string, unknown>,
 ): Promise<HandlerResponse> {
   if (Object.keys(data).length === 0) return errorResponse(400, 'data must be a non-empty object')
+  const { value: redactedData, redactedCount } = redactCredentials(data)
   try {
-    return jsonResponse(200, await store.patchSession(credId, { sessionId, data }))
+    const session = await store.patchSession(credId, { sessionId, data: redactedData })
+    return jsonResponse(200, {
+      ...session,
+      ...(redactedCount > 0 ? { redactedCount } : {}),
+    })
   } catch (error) {
     const response = storeErrorResponse(error)
     if (response) return response

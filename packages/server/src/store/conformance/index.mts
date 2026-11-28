@@ -1,6 +1,7 @@
 import type { BlackboardStore } from '../store.mjs'
 import { runCredentialsConformance } from './credentials.mjs'
 import { runEntriesConformance } from './entries.mjs'
+import { runRedactionConformance } from './redaction.mjs'
 import { runRetentionConformance, type ConformanceRetentionOptions } from './retention.mjs'
 import { runSchemasConformance } from './schemas.mjs'
 import { runSessionLifecycleConformance } from './session-lifecycle.mjs'
@@ -22,6 +23,7 @@ export function runStoreConformance(
   runSessionPaginationConformance(() => makeStore())
   runSessionLifecycleConformance(() => makeStore())
   runEntriesConformance(() => makeStore())
+  runRedactionConformance(() => makeStore())
   runRetentionConformance(makeStore)
   runCredentialsConformance(() => makeStore())
   runSchemasConformance(() => makeStore())

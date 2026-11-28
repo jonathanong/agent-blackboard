@@ -13,14 +13,14 @@ import {
   writeSnapshotMarker,
 } from './snapshot-artifact-ownership.mjs'
 import type {
-  ClientConfig,
+  SnapshotCleanupOptions,
   SnapshotExportOptions,
   SnapshotExportResult,
-  SnapshotSelection,
-  SnapshotCleanupOptions,
   SnapshotPartitionOptions,
   SnapshotPartitionResult,
-} from './types.mjs'
+  SnapshotSelection,
+} from './snapshot-types.mjs'
+import type { ClientConfig } from './types.mjs'
 
 type File = Awaited<ReturnType<typeof open>>
 

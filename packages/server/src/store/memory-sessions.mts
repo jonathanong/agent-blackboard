@@ -1,3 +1,4 @@
+import { redactCredentials } from '../core/redact.mjs'
 import type { Session, SessionEntry } from '../core/types.mjs'
 import { SessionStoreError } from './errors.mjs'
 import { matchesListFilter, resumeIndex, sortSessions } from './memory-session-query.mjs'
@@ -102,7 +103,8 @@ export class MemorySessionStore {
         `session is archived; create a new session to change metadata: ${patch.sessionId}`,
       )
     }
-    const updated = { ...session, data: { ...session.data, ...patch.data } }
+    const { value: redactedData } = redactCredentials(patch.data)
+    const updated = { ...session, data: { ...session.data, ...redactedData } }
     this.#sessions.set(key, updated)
     return updated
   }
@@ -131,10 +133,11 @@ export class MemorySessionStore {
     )
     const effectiveTtlDays = resolveEntryTtlDays(this.#retention, session.data)
     const { expiresAt } = computeEntryExpiry(timestamp, effectiveTtlDays)
+    const { value: redactedData } = redactCredentials(input.data)
     const entry: SessionEntry = {
       sessionId: input.sessionId,
       createdAt: new Date(timestamp).toISOString(),
-      data: input.data,
+      data: redactedData,
       ...(input.schemaId !== undefined ? { schemaId: input.schemaId } : {}),
       ...(input.schemaVersion !== undefined ? { schemaVersion: input.schemaVersion } : {}),
       expiresAt,

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { FileHandle } from 'node:fs/promises'
 import { isDeepStrictEqual } from 'node:util'
-import type { SnapshotManifest, SnapshotSelection } from './types.mjs'
+import type { SnapshotManifest, SnapshotSelection } from './snapshot-types.mjs'
 
 type SnapshotRecord =
   | { type: 'session'; session: unknown }

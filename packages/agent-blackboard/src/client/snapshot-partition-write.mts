@@ -12,7 +12,7 @@ import {
 import { readLines, writeAll } from './snapshot-partition-io.mjs'
 import { assertDirectoryIdentity, captureDirectoryIdentity } from './snapshot-artifact-removal.mjs'
 import { assertExactFile, copyBlock } from './snapshot-partition-copy.mjs'
-import type { SnapshotManifest, SnapshotPartition } from './types.mjs'
+import type { SnapshotManifest, SnapshotPartition } from './snapshot-types.mjs'
 
 type PartitionFileStats = {
   isFile(): boolean

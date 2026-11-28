@@ -12,7 +12,7 @@ import {
 } from './snapshot-partition-format.mjs'
 import { readLines, writeAll } from './snapshot-partition-io.mjs'
 import { assertDirectoryIdentity, captureDirectoryIdentity } from './snapshot-artifact-removal.mjs'
-import type { SnapshotManifest } from './types.mjs'
+import type { SnapshotManifest } from './snapshot-types.mjs'
 
 export interface StagedSnapshot {
   manifest: SnapshotManifest

@@ -5,7 +5,7 @@ import {
   parseSnapshotRecord,
   type SnapshotState,
 } from './snapshot-partition-format.mjs'
-import type { SnapshotManifest } from './types.mjs'
+import type { SnapshotManifest } from './snapshot-types.mjs'
 
 const manifest: SnapshotManifest = {
   schemaVersion: 1,

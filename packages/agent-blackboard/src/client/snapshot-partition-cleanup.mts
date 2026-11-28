@@ -2,7 +2,7 @@ import { constants } from 'node:fs'
 import { chmod, lstat, mkdtemp, open, rename, rmdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import type { SnapshotCleanupOptions } from './types.mjs'
+import type { SnapshotCleanupOptions } from './snapshot-types.mjs'
 import {
   assertCleanupToken,
   assertGeneratedPath,

@@ -1,5 +1,6 @@
 import type { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb'
 import { UpdateCommand } from '@aws-sdk/lib-dynamodb'
+import { redactCredentials } from '../core/redact.mjs'
 import type { Session } from '../core/types.mjs'
 import { SessionStoreError } from './errors.mjs'
 import { dynamoGetSession, itemToSession } from './dynamo-sessions.mjs'
@@ -12,7 +13,8 @@ export async function dynamoPatchSession(
   credId: string,
   patch: SessionPatch,
 ): Promise<Session> {
-  const entries = Object.entries(patch.data)
+  const { value: redactedData } = redactCredentials(patch.data)
+  const entries = Object.entries(redactedData)
   if (entries.length === 0) {
     throw new Error('patchSession requires at least one key in data')
   }

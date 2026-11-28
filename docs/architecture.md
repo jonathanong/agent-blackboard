@@ -155,6 +155,13 @@ or admin shadow report routes (`GET /schemas/:id[/versions/:version]/report`); a
 access session or entry routes. Other schema read routes (`GET /schemas*`) accept either a client
 token or an admin token.
 
+Before storing entry `data` (`POST /sessions/:id/entries`) or session patch `data`
+(`PATCH /sessions/:id`), the server recursively redacts known credential formats — including
+`abb_sk_` and `abb_admin_` tokens, common provider API tokens (GitHub, OpenAI, Anthropic, AWS
+access keys, Slack, Stripe, Google, npm, PyPI), PEM private keys, and generic `Bearer` tokens —
+replacing each match with `[REDACTED:<kind>]`. When one or more values were redacted, the write
+response includes `redactedCount` (a count only, never the redacted value).
+
 ## Streaming
 
 The store exposes entries as an `AsyncIterable`. The HTTP layer can emit JSON arrays, JSONL, or
