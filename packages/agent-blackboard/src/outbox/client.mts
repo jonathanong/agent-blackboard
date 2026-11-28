@@ -11,6 +11,7 @@ import {
   resolveOutboxDir,
   updatePendingError,
 } from './store.mjs'
+import { matchesOutboxTarget, outboxTargetFromConfig } from './target.mjs'
 import type {
   OutboxFlushOptions,
   OutboxFlushResult,
@@ -36,13 +37,19 @@ export async function flushOutbox(
     options.sessionId === undefined
       ? allPending
       : allPending.filter(({ record }) => record.sessionId === options.sessionId)
+  const currentTarget = outboxTargetFromConfig(config)
   let delivered = 0
   let duplicates = 0
   let rejected = 0
+  let skipped = 0
   let remaining = 0
 
   for (let index = 0; index < items.length; index += 1) {
     const { fileName, record } = items[index]!
+    if (!matchesOutboxTarget(record.target, currentTarget)) {
+      skipped += 1
+      continue
+    }
     try {
       const result = await sendAppendEntry(config, {
         sessionId: record.sessionId,
@@ -65,11 +72,26 @@ export async function flushOutbox(
         continue
       }
       updatePendingError(dir, fileName, record, formatError(error))
-      remaining = items.length - index
-      break
+      remaining = skipped + (items.length - index)
+      return {
+        dir,
+        delivered,
+        duplicates,
+        rejected,
+        ...(skipped > 0 ? { skipped } : {}),
+        remaining,
+      }
     }
   }
-  return { dir, delivered, duplicates, rejected, remaining }
+  remaining = skipped
+  return {
+    dir,
+    delivered,
+    duplicates,
+    rejected,
+    ...(skipped > 0 ? { skipped } : {}),
+    remaining,
+  }
 }
 
 export class Outbox {

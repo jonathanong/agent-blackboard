@@ -29,6 +29,7 @@ export type {
   OutboxRejectedRecord,
   OutboxSessionCounts,
   OutboxStatus,
+  OutboxTarget,
 } from './outbox/types.mjs'
 export { Schemas } from './client/schemas.mjs'
 export type { LocalSchemaOptions } from './client/schemas.mjs'

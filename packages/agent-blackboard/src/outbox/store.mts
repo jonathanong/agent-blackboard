@@ -11,6 +11,7 @@ import type {
   OutboxRejectedRecord,
   OutboxSessionCounts,
   OutboxStatus,
+  OutboxTarget,
 } from './types.mjs'
 
 export const DEFAULT_OUTBOX_RELATIVE = '.local/agent-blackboard/outbox'
@@ -21,6 +22,15 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function isValidTarget(value: unknown): boolean {
+  if (value === undefined) return true
+  return (
+    isPlainObject(value) &&
+    typeof value.server === 'string' &&
+    (value.credentialId === undefined || typeof value.credentialId === 'string')
+  )
+}
+
 function isPendingRecord(value: unknown): value is OutboxPendingRecord {
   return (
     isPlainObject(value) &&
@@ -29,7 +39,8 @@ function isPendingRecord(value: unknown): value is OutboxPendingRecord {
     typeof value.sessionId === 'string' &&
     isPlainObject(value.data) &&
     typeof value.sourceEventId === 'string' &&
-    typeof value.lastError === 'string'
+    typeof value.lastError === 'string' &&
+    isValidTarget(value.target)
   )
 }
 
@@ -59,6 +70,7 @@ export function enqueueOutboxEntry(
   input: AppendEntryInput,
   lastError: string,
   now: () => Date = () => new Date(),
+  target?: OutboxTarget,
 ): OutboxPendingRecord {
   const id = randomUUID()
   const timestamp = now()
@@ -71,6 +83,7 @@ export function enqueueOutboxEntry(
     ...(input.schemaVersion !== undefined ? { schemaVersion: input.schemaVersion } : {}),
     sourceEventId: input.sourceEventId ?? `outbox-${id}`,
     lastError,
+    ...(target !== undefined ? { target } : {}),
   }
   const fileName = `${String(timestamp.getTime()).padStart(15, '0')}-${id}.json`
   writeJsonAtomic(join(dir, PENDING_DIR, fileName), record)
@@ -119,10 +132,15 @@ function ensureCounts(
   sessions: Record<string, OutboxSessionCounts>,
   sessionId: string,
 ): OutboxSessionCounts {
-  let counts = sessions[sessionId]
+  let counts = Object.hasOwn(sessions, sessionId) ? sessions[sessionId] : undefined
   if (!counts) {
     counts = { pending: 0, rejected: 0 }
-    sessions[sessionId] = counts
+    Object.defineProperty(sessions, sessionId, {
+      value: counts,
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    })
   }
   return counts
 }
@@ -131,7 +149,7 @@ function ensureCounts(
 export function getOutboxStatus(dir: string): OutboxStatus {
   const pending = readValidatedRecords(join(dir, PENDING_DIR), isPendingRecord)
   const rejected = readValidatedRecords(join(dir, REJECTED_DIR), isRejectedRecord)
-  const sessions: Record<string, OutboxSessionCounts> = {}
+  const sessions = Object.create(null) as Record<string, OutboxSessionCounts>
   for (const { record } of pending.records) ensureCounts(sessions, record.sessionId).pending += 1
   for (const { record } of rejected.records) ensureCounts(sessions, record.sessionId).rejected += 1
   const corruptFiles = [...pending.corruptFiles, ...rejected.corruptFiles]

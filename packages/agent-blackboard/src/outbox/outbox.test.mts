@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -7,6 +7,7 @@ import { Entries } from '../client/entries.mjs'
 import { AgentBlackboardError } from '../client/errors.mjs'
 import { isPermanentRejection, isRetryableAppendError } from './classify.mjs'
 import { Outbox } from './client.mjs'
+import { matchesOutboxTarget, outboxTargetFromConfig } from './target.mjs'
 import {
   DEFAULT_OUTBOX_RELATIVE,
   enqueueOutboxEntry,
@@ -351,5 +352,109 @@ describe('client entry outbox', () => {
     expect(status.pending).toBe(1)
     expect(status.rejected).toBe(0)
     expect(status.corruptFiles).toEqual([corruptPending, malformedPending, corruptRejected])
+  })
+
+  it('tracks prototype-named session ids safely and enforces non-secret target binding on flush', async () => {
+    const outboxDir = tempDir()
+    const tokenCredA1 = ['abb', 'sk', 'credA', 'secretone123456'].join('_')
+    const tokenCredA2 = ['abb', 'sk', 'credA', 'secrettwo123456'].join('_')
+    const tokenCredB = ['abb', 'sk', 'credB', 'secretthr123456'].join('_')
+
+    expect(
+      outboxTargetFromConfig({ baseUrl: 'https://api.example.com/v1', token: tokenCredA1 }),
+    ).toEqual({
+      server: 'https://api.example.com',
+      credentialId: 'credA',
+    })
+    expect(
+      matchesOutboxTarget(
+        { server: 'https://api.example.com', credentialId: 'credA' },
+        { server: 'https://other.example.com', credentialId: 'credA' },
+      ),
+    ).toBe(false)
+
+    // Queue entries for prototype-named sessions under credA against a stopped server
+    const stopped = await startHttpFixture((_req, res) => sendJson(res, 201, {}))
+    const deadUrl = stopped.baseUrl
+    await stopped.close()
+
+    const entriesA = new Entries({ baseUrl: deadUrl, token: tokenCredA1, outboxDir })
+    await entriesA.append({ sessionId: 'constructor', data: { note: 'c' } })
+    await entriesA.append({ sessionId: '__proto__', data: { note: 'p' } })
+
+    // On-disk records never store the raw token or secret
+    const pendingFiles = readdirSync(join(outboxDir, 'pending'))
+    expect(pendingFiles).toHaveLength(2)
+    for (const file of pendingFiles) {
+      const text = readFileSync(join(outboxDir, 'pending', file), 'utf8')
+      expect(text).not.toContain('secretone123456')
+      expect(text).toContain('"credentialId": "credA"')
+    }
+
+    // Status exposes counts for constructor and __proto__ cleanly
+    const status = new Outbox({ baseUrl: deadUrl, token: tokenCredA1, outboxDir }).status()
+    expect(status.pending).toBe(2)
+    expect(Object.prototype.hasOwnProperty.call(status.sessions, 'constructor')).toBe(true)
+    expect(Object.prototype.hasOwnProperty.call(status.sessions, '__proto__')).toBe(true)
+    expect(status.sessions['constructor']).toEqual({ pending: 1, rejected: 0 })
+    expect(status.sessions['__proto__']).toEqual({ pending: 1, rejected: 0 })
+
+    // Flushing with a different credential namespace (credB) skips credA's records without delivering
+    let receivedByServer = 0
+    const server = await startHttpFixture((req, res) => {
+      receivedByServer += 1
+      const body = JSON.parse(req.body) as Record<string, unknown>
+      if (body.data && (body.data as { fail503?: boolean }).fail503) {
+        sendJson(res, 503, { error: 'unavailable' })
+        return
+      }
+      sendJson(res, 201, { sessionId: 's', createdAt: 'now', ...body })
+    })
+    try {
+      const outboxB = new Outbox({ baseUrl: server.baseUrl, token: tokenCredB, outboxDir })
+      expect(await outboxB.flush()).toEqual({
+        dir: outboxDir,
+        delivered: 0,
+        duplicates: 0,
+        rejected: 0,
+        skipped: 2,
+        remaining: 2,
+      })
+      expect(receivedByServer).toBe(0)
+
+      // A credB retryable failure still reports skipped + unattempted remaining
+      enqueueOutboxEntry(
+        outboxDir,
+        { sessionId: 's-b', data: { fail503: true } },
+        'net',
+        undefined,
+        outboxTargetFromConfig({ baseUrl: server.baseUrl, token: tokenCredB }),
+      )
+      expect(await outboxB.flush()).toEqual({
+        dir: outboxDir,
+        delivered: 0,
+        duplicates: 0,
+        rejected: 0,
+        skipped: 2,
+        remaining: 3,
+      })
+
+      // Renewing the secret within the SAME credential namespace (credA) flushes credA's records cleanly
+      const outboxARenewed = new Outbox({
+        baseUrl: server.baseUrl,
+        token: tokenCredA2,
+        outboxDir,
+      })
+      expect(await outboxARenewed.flush()).toEqual({
+        dir: outboxDir,
+        delivered: 2,
+        duplicates: 0,
+        rejected: 0,
+        skipped: 1,
+        remaining: 1,
+      })
+    } finally {
+      await server.close()
+    }
   })
 })

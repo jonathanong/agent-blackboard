@@ -1,3 +1,10 @@
+export interface OutboxTarget {
+  /** Normalized server origin, or `'loopback'` for local loopback servers. */
+  server: string
+  /** Non-secret credential id extracted from `abb_sk_<credId>_<secret>` when present. */
+  credentialId?: string
+}
+
 export interface OutboxPendingRecord {
   id: string
   queuedAt: string
@@ -7,6 +14,8 @@ export interface OutboxPendingRecord {
   schemaVersion?: number
   sourceEventId: string
   lastError: string
+  /** Non-secret server + credential namespace that queued this entry. */
+  target?: OutboxTarget
 }
 
 export interface OutboxRejectedRecord extends OutboxPendingRecord {
@@ -44,6 +53,8 @@ export interface OutboxFlushResult {
   delivered: number
   duplicates: number
   rejected: number
+  /** Count of pending records skipped because they belong to a different server or credential namespace. */
+  skipped?: number
   remaining: number
 }
 

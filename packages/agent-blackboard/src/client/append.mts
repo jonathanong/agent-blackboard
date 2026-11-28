@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { formatError } from '../format-error.mjs'
 import { isRetryableAppendError } from '../outbox/classify.mjs'
 import { enqueueOutboxEntry } from '../outbox/store.mjs'
+import { outboxTargetFromConfig } from '../outbox/target.mjs'
 import { requestJson } from './http.mjs'
 import type {
   AppendEntryInput,
@@ -47,7 +48,13 @@ export async function appendEntry(
     return await sendAppendEntry(config, prepared)
   } catch (error) {
     if (config.outboxDir !== undefined && isRetryableAppendError(error)) {
-      const record = enqueueOutboxEntry(config.outboxDir, prepared, formatError(error))
+      const record = enqueueOutboxEntry(
+        config.outboxDir,
+        prepared,
+        formatError(error),
+        undefined,
+        outboxTargetFromConfig(config),
+      )
       return {
         queued: true,
         outboxId: record.id,
