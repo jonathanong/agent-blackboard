@@ -12,9 +12,10 @@ The session's metadata patch failed because `cc-old-19` is archived, so its repo
 cannot include `jongleberry/pr-shepherd`.
 
 Passing responses do NOT append the pr-shepherd-tagged finding to `cc-old-19`. They start a new
-session (with explicit `sessionId`, `agent: "claude-code"`, `version: "2.1.3"`, and a
-`parentSessionId`), patch its `repositories` to include `jongleberry/pr-shepherd`, then append
-the finding there.
+session with an explicit `sessionId`, `agent: "claude-code"`, and `version: "2.1.3"`, patch its
+`repositories` to include `jongleberry/pr-shepherd`, then append the finding there. Its
+`parentSessionId` may be `null` (a new root) or `cc-old-19`; both pass. Keeping or dropping
+`jongleberry/agent-blackboard` from the new session's repositories both pass.
 
 Failing responses append the tagged finding to `cc-old-19` anyway; retry the patch on
 `cc-old-19` as if it might succeed; or give up without recording the finding.
