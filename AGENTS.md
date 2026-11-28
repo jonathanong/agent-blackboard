@@ -12,14 +12,18 @@ for the product description.
 - `packages/server` — **not published**, deployed only. Lambda + DynamoDB, CloudFormation
   in `packages/server/infra/`.
 - `plugins/agent-blackboard` — Claude Code + Codex plugin (skill + MCP registration).
+- `plugins/agent-journaling` — separate, opinionated Claude Code + Codex plugin: skills that say
+  when to journal friction and how. Skills only; it relies on the agent-blackboard MCP server or CLI.
+  Versioned on its own, not by `sync-plugin-version.mjs`.
 
 ## Commands
 
 - `pnpm lint` — oxlint, oxfmt, knip, dependency-cruiser (chained).
 - `pnpm typecheck` — native `tsc --noEmit`.
 - `pnpm test:coverage` — vitest + v8 coverage; 100% required (project + patch, see `codecov.yml`).
-- `pnpm run evals` / `pnpm run evals:live` / `pnpm run evals:summary` — the plugin's eval suites:
-  plan-only skills on vs. off, and live plugin vs. CLI only (needs a Claude login, runs outside the
+- `pnpm run evals` / `pnpm run evals:live` / `pnpm run evals:journaling` / `pnpm run evals:summary`
+  — the plugins' eval suites: plan-only skills on vs. off, live plugin vs. CLI only, and the
+  journaling plugin's skills on vs. off (needs a Claude login, runs outside the
   sandbox, not in CI). Rules in [`evals/AGENTS.md`](evals/AGENTS.md), scores in
   [`evals/README.md`](evals/README.md).
 - `pnpm run actionlint` — lints `.github/workflows/*.yml`.

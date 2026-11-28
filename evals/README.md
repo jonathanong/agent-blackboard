@@ -12,6 +12,8 @@ snapshots into follow-ups), and an MCP server.
   neither arm. Both arms get the same plain-text list of its tools in the system prompt, and the
   agent writes out the calls it would make. It answers: does the skill make the agent follow a
   rule it would otherwise break?
+- **The journaling suite** ([`evals/journaling/`](journaling/README.md)) measures the separate
+  `agent-journaling` plugin, skills on and off, with its own scores, rules, and run log.
 
 ## Live suite: plugin vs. CLI only
 

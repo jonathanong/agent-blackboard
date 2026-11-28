@@ -1,0 +1,33 @@
+{
+  "name": "agent-journaling",
+  "version": "0.1.0",
+  "description": "Opinionated skills that tell Codex when to journal friction to agent-blackboard, and how.",
+  "author": {
+    "name": "Jonathan Ong",
+    "email": "jonathanrichardong@gmail.com",
+    "url": "https://github.com/jonathanong"
+  },
+  "homepage": "https://github.com/jongleberry/agent-blackboard",
+  "repository": "https://github.com/jongleberry/agent-blackboard",
+  "license": "MIT",
+  "keywords": ["journal", "friction", "agent", "codex"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "agent-journaling",
+    "shortDescription": "Journal agent friction to agent-blackboard",
+    "longDescription": "Skills that tell Codex when to record friction in agent-blackboard (CI failures, unclear test failures, hard local setup, ambiguous code or docs, tool friction, corrections), how to pick the registered schema, and how to recall earlier journals before debugging. Needs the agent-blackboard plugin or CLI.",
+    "developerName": "Jonathan Ong",
+    "category": "Coding",
+    "capabilities": ["Interactive", "Write"],
+    "websiteURL": "https://github.com/jongleberry/agent-blackboard",
+    "privacyPolicyURL": "https://github.com/jongleberry/agent-blackboard",
+    "termsOfServiceURL": "https://github.com/jongleberry/agent-blackboard",
+    "defaultPrompt": [
+      "Journal why CI failed on this PR",
+      "Check the journals for this error before debugging",
+      "Record what made local setup hard"
+    ],
+    "brandColor": "#2563EB",
+    "screenshots": []
+  }
+}
