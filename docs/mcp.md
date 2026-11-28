@@ -22,9 +22,46 @@ Every argument is optional. Omit `path` to create a unique file under the system
 directory. Supported filters are `parentSessionId`, `agent`, `version`, `data`, `dataArrayContains`, and
 `inactiveForHours`; archived sessions are never included.
 
-The result contains only `path`, counts (including bytes), a SHA-256 checksum, and the verified
-terminal manifest. Snapshot records never cross the MCP connection. The completed file is
-read-only, and any partial, malformed, oversized, or otherwise incomplete output is deleted.
+The result contains `path`, counts (including bytes), a SHA-256 checksum, the verified
+terminal manifest, and — when `path` is omitted — a `cleanupToken` capability required to
+partition or clean up the generated file. Snapshot records never cross the MCP connection. The
+completed file is read-only, and any partial, malformed, oversized, or otherwise incomplete output
+is deleted.
+
+## `snapshot_partition`
+
+Splits a generated temporary snapshot (from `snapshot_export` without `path`) into bounded,
+session-preserving read-only partition files:
+
+```json
+{
+  "path": "/tmp/agent-blackboard-snapshot-<uuid>.jsonl",
+  "cleanupToken": "<cleanup-token>",
+  "maxSessions": 25,
+  "maxBytes": 1048576,
+  "checksum": "<sha256-hex>",
+  "counts": { "sessions": 40, "entries": 210, "records": 251, "bytes": 48200 }
+}
+```
+
+`path` and `cleanupToken` are required; `maxSessions`, `maxBytes`, `checksum`, and `counts` are
+optional. Enforces the same generated-path and ownership checks as `agent-blackboard snapshot partition`,
+returning `{ "directory", "partitions", "cleanupToken" }`.
+
+## `snapshot_cleanup`
+
+Deletes a generated temporary snapshot file and/or partition directory:
+
+```json
+{
+  "path": "/tmp/agent-blackboard-snapshot-<uuid>.jsonl",
+  "directory": "/tmp/agent-blackboard-partitions-<suffix>",
+  "cleanupToken": "<cleanup-token>"
+}
+```
+
+Requires `cleanupToken` plus `path`, `directory`, or both. Enforces the same ownership checks as
+`agent-blackboard snapshot cleanup` and returns `{ "removed": true }`.
 
 ## `session_create`
 

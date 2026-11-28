@@ -11,34 +11,10 @@ import {
 
 import { OUTBOX_TOOLS } from './schemas-outbox-tools.mjs'
 import { SCHEMA_REGISTRY_TOOLS } from './schemas-registry-tools.mjs'
+import { SNAPSHOT_TOOLS } from './schemas-snapshot-tools.mjs'
 
 export const ENTRY_TOOLS: Tool[] = [
-  {
-    name: 'snapshot_export',
-    description:
-      'Streams an immutable non-archived snapshot into a local private JSONL file and returns only its path, counts, checksum, and manifest.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        path: { type: 'string', description: 'Optional new absolute destination path.' },
-        agent: { type: 'string', description: 'Exact agent name to include.' },
-        version: { type: 'string', description: 'Exact agent version to include.' },
-        parentSessionId: {
-          type: ['string', 'null'],
-          pattern: '^[A-Za-z0-9._:-]+$',
-          description: 'Exact parent id; null selects root sessions.',
-        },
-        data: { type: 'object', description: 'Top-level session data fields to match exactly.' },
-        dataArrayContains: { type: 'object', description: 'Exact string membership in arrays.' },
-        inactiveForHours: {
-          type: 'number',
-          exclusiveMinimum: 0,
-          description: 'Only sessions inactive for this many hours (createdAt if no entries).',
-        },
-      },
-    },
-    annotations: ADDITIVE,
-  },
+  ...SNAPSHOT_TOOLS,
   {
     name: 'session_create',
     description: 'Creates a root or subagent session before entries are appended.',
