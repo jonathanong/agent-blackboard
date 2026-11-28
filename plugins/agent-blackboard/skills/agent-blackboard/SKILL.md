@@ -106,4 +106,5 @@ the pure-Node package boundary.
 
 This skill only covers **how** to create sessions and append and get entries. It does not prescribe
 **what** to record — write, or look for, a project-specific skill that layers that guidance on top
-of this one.
+of this one. For turning accumulated sessions into evidence-backed follow-ups via snapshots, use the
+companion [`distill`](../distill/SKILL.md) skill.
