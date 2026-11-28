@@ -24,28 +24,29 @@ function replaceWhole(kind: string): () => string {
 const RULES: readonly RedactionRule[] = [
   {
     kind: 'agent_blackboard_client_token',
-    pattern: /\babb_sk_[A-Za-z0-9_-]{8,}\b/g,
+    pattern: /(?<![A-Za-z0-9_-])abb_sk_[A-Za-z0-9_-]{8,}(?![A-Za-z0-9_-])/g,
     replace: replaceWhole('agent_blackboard_client_token'),
   },
   {
     kind: 'agent_blackboard_admin_token',
-    pattern: /\babb_admin_[A-Za-z0-9_-]{8,}\b/g,
+    pattern: /(?<![A-Za-z0-9_-])abb_admin_[A-Za-z0-9_-]{8,}(?![A-Za-z0-9_-])/g,
     replace: replaceWhole('agent_blackboard_admin_token'),
   },
   {
     kind: 'private_key',
     pattern:
-      /-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9 ]+ )?PRIVATE KEY-----/g,
+      /-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----(?:[\s\S]*?-----END (?:[A-Z0-9 ]+ )?PRIVATE KEY-----|[\s\S]*)/g,
     replace: replaceWhole('private_key'),
   },
   {
     kind: 'anthropic_api_key',
-    pattern: /\bsk-ant-(?:api\d{2}-|admin\d{2}-)?[A-Za-z0-9_-]{20,}\b/g,
+    pattern:
+      /(?<![A-Za-z0-9_-])sk-ant-(?:api\d{2}-|admin\d{2}-)?[A-Za-z0-9_-]{20,}(?![A-Za-z0-9_-])/g,
     replace: replaceWhole('anthropic_api_key'),
   },
   {
     kind: 'openai_api_key',
-    pattern: /\bsk-(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]{20,}\b/g,
+    pattern: /(?<![A-Za-z0-9_-])sk-(?:proj-|svcacct-|admin-)?[A-Za-z0-9_-]{20,}(?![A-Za-z0-9_-])/g,
     replace: replaceWhole('openai_api_key'),
   },
   {
@@ -60,7 +61,7 @@ const RULES: readonly RedactionRule[] = [
   },
   {
     kind: 'slack_token',
-    pattern: /\bxox[baprs]-[0-9A-Za-z-]{10,}\b/g,
+    pattern: /(?<![A-Za-z0-9_-])xox[baprs]-[0-9A-Za-z-]{10,}(?![A-Za-z0-9_-])/g,
     replace: replaceWhole('slack_token'),
   },
   {
@@ -70,7 +71,7 @@ const RULES: readonly RedactionRule[] = [
   },
   {
     kind: 'google_api_key',
-    pattern: /\bAIza[0-9A-Za-z_-]{35}\b/g,
+    pattern: /(?<![A-Za-z0-9_-])AIza[0-9A-Za-z_-]{35}(?![A-Za-z0-9_-])/g,
     replace: replaceWhole('google_api_key'),
   },
   {
@@ -80,7 +81,7 @@ const RULES: readonly RedactionRule[] = [
   },
   {
     kind: 'pypi_token',
-    pattern: /\bpypi-[A-Za-z0-9_-]{20,}\b/g,
+    pattern: /(?<![A-Za-z0-9_-])pypi-[A-Za-z0-9_-]{20,}(?![A-Za-z0-9_-])/g,
     replace: replaceWhole('pypi_token'),
   },
   {
@@ -118,9 +119,15 @@ function redactValue(input: unknown): RedactionResult<unknown> {
     let redactedCount = 0
     const next: Record<string, unknown> = {}
     for (const [key, item] of Object.entries(input)) {
-      const result = redactValue(item)
-      redactedCount += result.redactedCount
-      next[key] = result.value
+      const keyResult = redactString(key)
+      const valueResult = redactValue(item)
+      redactedCount += keyResult.redactedCount + valueResult.redactedCount
+      Object.defineProperty(next, keyResult.value, {
+        value: valueResult.value,
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      })
     }
     return { value: next, redactedCount }
   }

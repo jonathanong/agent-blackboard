@@ -156,11 +156,13 @@ access session or entry routes. Other schema read routes (`GET /schemas*`) accep
 token or an admin token.
 
 Before storing entry `data` (`POST /sessions/:id/entries`) or session patch `data`
-(`PATCH /sessions/:id`), the server recursively redacts known credential formats — including
-`abb_sk_` and `abb_admin_` tokens, common provider API tokens (GitHub, OpenAI, Anthropic, AWS
-access keys, Slack, Stripe, Google, npm, PyPI), PEM private keys, and generic `Bearer` tokens —
-replacing each match with `[REDACTED:<kind>]`. When one or more values were redacted, the write
-response includes `redactedCount` (a count only, never the redacted value).
+(`PATCH /sessions/:id`), the server recursively redacts known credential formats across both object
+keys and string values — including `abb_sk_` and `abb_admin_` tokens, common provider API tokens
+(GitHub, OpenAI, Anthropic, AWS access keys, Slack, Stripe, Google, npm, PyPI), PEM private keys
+(including truncated blocks), and generic `Bearer` tokens — replacing each match with
+`[REDACTED:<kind>]`. For entry writes, redaction runs before JSON Schema validation so stored entry
+data always matches the validated payload. When one or more values were redacted, the write response
+includes `redactedCount` (a count only, never the redacted value).
 
 ## Streaming
 
