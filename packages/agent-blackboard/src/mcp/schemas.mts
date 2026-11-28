@@ -9,6 +9,7 @@ import {
   SESSION_ID,
 } from './schema-fields.mjs'
 
+import { OUTBOX_TOOLS } from './schemas-outbox-tools.mjs'
 import { SCHEMA_REGISTRY_TOOLS } from './schemas-registry-tools.mjs'
 
 export const ENTRY_TOOLS: Tool[] = [
@@ -185,5 +186,6 @@ export const ENTRY_TOOLS: Tool[] = [
     },
     annotations: READ_ONLY,
   },
+  ...OUTBOX_TOOLS,
   ...SCHEMA_REGISTRY_TOOLS,
 ]

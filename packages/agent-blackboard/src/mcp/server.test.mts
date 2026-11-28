@@ -19,7 +19,7 @@ function text(content: unknown): string {
   return (content as Array<{ text: string }>)[0]!.text
 }
 
-it('lists twelve tools and returns JSON text or MCP errors', async () => {
+it('lists fifteen tools and returns JSON text or MCP errors', async () => {
   const entry = { sessionId: 's', createdAt: 'now', data: {} }
   const fixture = await startHttpFixture((req, res) => {
     if (new URL(req.url, 'http://localhost').pathname !== '/snapshot') {
@@ -86,6 +86,9 @@ it('lists twelve tools and returns JSON text or MCP errors', async () => {
     expect(tools.map((tool) => tool.name).sort()).toEqual([
       'entry_append',
       'entry_get',
+      'outbox_flush',
+      'outbox_prune_rejected',
+      'outbox_status',
       'schema_get',
       'schema_list',
       'schema_pull',
@@ -106,6 +109,24 @@ it('lists twelve tools and returns JSON text or MCP errors', async () => {
         openWorldHint: false,
       },
       entry_get: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      outbox_flush: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      outbox_prune_rejected: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      outbox_status: {
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,

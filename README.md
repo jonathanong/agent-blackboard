@@ -214,4 +214,5 @@ unless `--sentry=required` is supplied explicitly.
 | `AGENT_BLACKBOARD_TOKEN`              | client/CLI/MCP | Client credential                                               |
 | `AGENT_BLACKBOARD_ADMIN_TOKEN`        | CLI            | Admin credential                                                |
 | `AGENT_BLACKBOARD_SCHEMAS_DIR`        | client/CLI/MCP | Optional local schema cache directory override                  |
+| `AGENT_BLACKBOARD_OUTBOX_DIR`         | client/CLI/MCP | Optional local entry outbox directory override                  |
 | `AGENT_BLACKBOARD_SENTRY_DSN`         | deploy CLI     | Optional public Lambda Sentry DSN                               |

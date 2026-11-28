@@ -1,4 +1,5 @@
 import { appendEntry } from '../client/append.mjs'
+import { resolveOutboxDir } from '../outbox/store.mjs'
 import { toolSessionId, type SessionResolutionContext } from './session-resolution.mjs'
 import { expectObject, optionalPositiveInt, requiredString } from './validate.mjs'
 import type { AppendEntryResult, ClientConfig } from '../client/types.mjs'
@@ -18,7 +19,9 @@ export function handleEntryAppend(
     args.sourceEventId === undefined
       ? undefined
       : requiredString(args.sourceEventId, 'sourceEventId')
-  return appendEntry(config, {
+  const outboxDir =
+    config.outboxDir ?? (resolution ? resolveOutboxDir(resolution.cwd, resolution.env) : undefined)
+  return appendEntry(outboxDir === undefined ? config : { ...config, outboxDir }, {
     sessionId: toolSessionId(args, resolution),
     data: expectObject(args.data, 'data'),
     ...(schemaId !== undefined ? { schemaId } : {}),

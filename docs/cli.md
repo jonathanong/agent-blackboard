@@ -158,6 +158,26 @@ agent-blackboard credentials delete --id <credential-id>
 Creating a credential prints its raw token once. Names are not unique; deletion by name removes all
 matches. Credential commands are never exposed over MCP.
 
+## Outbox
+
+When `agent-blackboard append` cannot reach the server (network error, `5xx`, `429`, `408`, or
+expired `401` credential), it buffers the entry in `<worktree>/.local/agent-blackboard/outbox`
+(override with `AGENT_BLACKBOARD_OUTBOX_DIR`), exits `0`, and prints a JSON object with
+`"queued": true` (so callers that check exit status should inspect `queued` if they need to
+distinguish immediate delivery from buffered writes). Permanent `4xx` rejections (such as `400`,
+`403`, `404`, or `409`) still fail immediately with a non-zero exit code without queuing.
+
+```sh
+agent-blackboard outbox status [--dir <path>]
+agent-blackboard outbox flush [--session-id <id>] [--dir <path>]
+agent-blackboard outbox prune [--id <id>] [--session-id <id>] [--dir <path>]
+```
+
+`outbox status` reports pending and rejected counts per session plus rejected error details without
+contacting the server. `outbox flush` delivers queued entries in order (preserving `sourceEventId`
+for idempotency) and moves permanent `4xx` rejections aside into `rejected/` so they do not block
+the queue. `outbox prune` removes rejected records after inspection or repair.
+
 ## MCP server
 
 ```sh

@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { extname } from 'node:path'
 import { appendEntry } from '../client/append.mjs'
+import { resolveOutboxDir } from '../outbox/store.mjs'
 import { parseSchemaRef } from '../schemas/id.mjs'
 import { parseArgs, stringFlag } from './args.mjs'
 import type { CliContext } from './context.mjs'
@@ -72,7 +73,11 @@ export async function runAppend(argv: string[], ctx: CliContext): Promise<void> 
   const data = file
     ? await readFileData(file)
     : parseJsonObject(positional[0] ?? (await readStdin(ctx.stdin)))
-  const entry = await appendEntry(clientConfigFromEnv(ctx.env, createRevisionNotifier(ctx)), {
+  const config = {
+    ...clientConfigFromEnv(ctx.env, createRevisionNotifier(ctx)),
+    outboxDir: resolveOutboxDir(ctx.cwd, ctx.env),
+  }
+  const entry = await appendEntry(config, {
     sessionId,
     data,
     ...(parsedSchema ? { schemaId: parsedSchema.id } : {}),

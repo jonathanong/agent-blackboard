@@ -110,6 +110,25 @@ it('dispatches every entry/session/schema tool and rejects unknown names', async
     await expect(
       dispatchTool('schema_validate', { schema: 'finding', data: {}, dir }, config),
     ).resolves.toEqual({ valid: true, schema: 'finding@1', revision: 1, errors: [] })
+    await expect(dispatchTool('outbox_status', { dir }, config)).resolves.toEqual({
+      dir,
+      pending: 0,
+      rejected: 0,
+      sessions: {},
+      rejectedRecords: [],
+    })
+    await expect(dispatchTool('outbox_flush', { dir }, config)).resolves.toEqual({
+      dir,
+      delivered: 0,
+      duplicates: 0,
+      rejected: 0,
+      remaining: 0,
+    })
+    await expect(dispatchTool('outbox_prune_rejected', { dir }, config)).resolves.toEqual({
+      dir,
+      removed: 0,
+      remainingRejected: 0,
+    })
     expect(() => dispatchTool('nope', {}, config)).toThrow('Unknown tool: nope')
   } finally {
     await fixture.close()

@@ -1,12 +1,23 @@
+import { randomUUID } from 'node:crypto'
+import { formatError } from '../format-error.mjs'
+import { isRetryableAppendError } from '../outbox/classify.mjs'
+import { enqueueOutboxEntry } from '../outbox/store.mjs'
+import { outboxTargetFromConfig } from '../outbox/target.mjs'
 import { requestJson } from './http.mjs'
-import type { AppendEntryInput, AppendEntryResult, ClientConfig } from './types.mjs'
+import type {
+  AppendEntryInput,
+  AppendEntryResult,
+  ClientConfig,
+  StoredEntryResult,
+} from './types.mjs'
 
 const JSON_HEADERS = { 'content-type': 'application/json' }
 
-export async function appendEntry(
+/** Sends `POST /sessions/:id/entries` directly without outbox fallback. */
+export async function sendAppendEntry(
   config: ClientConfig,
   input: AppendEntryInput,
-): Promise<AppendEntryResult> {
+): Promise<StoredEntryResult> {
   return requestJson(config, `/sessions/${encodeURIComponent(input.sessionId)}/entries`, {
     method: 'POST',
     headers: JSON_HEADERS,
@@ -17,4 +28,45 @@ export async function appendEntry(
       ...(input.sourceEventId !== undefined ? { sourceEventId: input.sourceEventId } : {}),
     }),
   })
+}
+
+export async function appendEntry(
+  config: ClientConfig,
+  input: AppendEntryInput,
+): Promise<AppendEntryResult> {
+  // When outbox fallback is enabled, freeze the payload and bind a stable sourceEventId
+  // before the first POST so a stored-but-unacknowledged response deduplicates on flush.
+  const prepared: AppendEntryInput =
+    config.outboxDir !== undefined
+      ? {
+          ...input,
+          data: structuredClone(input.data),
+          sourceEventId: input.sourceEventId ?? `outbox-${randomUUID()}`,
+        }
+      : input
+  try {
+    return await sendAppendEntry(config, prepared)
+  } catch (error) {
+    if (config.outboxDir !== undefined && isRetryableAppendError(error)) {
+      const record = enqueueOutboxEntry(
+        config.outboxDir,
+        prepared,
+        formatError(error),
+        undefined,
+        outboxTargetFromConfig(config),
+      )
+      return {
+        queued: true,
+        outboxId: record.id,
+        sessionId: record.sessionId,
+        data: record.data,
+        ...(record.schemaId !== undefined ? { schemaId: record.schemaId } : {}),
+        ...(record.schemaVersion !== undefined ? { schemaVersion: record.schemaVersion } : {}),
+        sourceEventId: record.sourceEventId,
+        queuedAt: record.queuedAt,
+        error: record.lastError,
+      }
+    }
+    throw error
+  }
 }
