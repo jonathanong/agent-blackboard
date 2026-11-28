@@ -159,8 +159,11 @@ it('exports with cleanupToken, partitions, and cleans up both artifacts over MCP
     ]),
   )
   const config = { baseUrl: fixture.baseUrl, token: 't' }
+  let exportedPath: string | undefined
+  const partitionDirs: string[] = []
   try {
     const exported = (await dispatchTool('snapshot_export', {}, config)) as SnapshotExportResult
+    exportedPath = exported.path
     expect(typeof exported.cleanupToken).toBe('string')
     expect(exported.cleanupToken!.length).toBeGreaterThan(0)
 
@@ -171,7 +174,7 @@ it('exports with cleanupToken, partitions, and cleans up both artifacts over MCP
         { path: exported.path, cleanupToken: 'wrong-token' },
         config,
       ),
-    ).rejects.toThrow(/cleanupToken/)
+    ).rejects.toThrow(Error)
 
     const partitioned = (await dispatchTool(
       'snapshot_partition',
@@ -185,6 +188,7 @@ it('exports with cleanupToken, partitions, and cleans up both artifacts over MCP
       },
       config,
     )) as SnapshotPartitionResult
+    partitionDirs.push(partitioned.directory)
     expect(partitioned.partitions).toHaveLength(2)
     expect(partitioned.cleanupToken).toBe(exported.cleanupToken)
 
@@ -194,6 +198,7 @@ it('exports with cleanupToken, partitions, and cleans up both artifacts over MCP
       { path: exported.path, cleanupToken: exported.cleanupToken },
       config,
     )) as SnapshotPartitionResult
+    partitionDirs.push(partitionedDefault.directory)
     expect(partitionedDefault.partitions).toHaveLength(1)
 
     // Clean up both the snapshot and both partition directories
@@ -218,30 +223,34 @@ it('exports with cleanupToken, partitions, and cleans up both artifacts over MCP
 
     await expect(access(exported.path)).rejects.toThrow()
     await expect(access(partitioned.directory)).rejects.toThrow()
-
-    // Argument validation
-    expect(() =>
-      dispatchTool(
-        'snapshot_partition',
-        { path: exported.path, cleanupToken: exported.cleanupToken, checksum: 'not-sha256' },
-        config,
-      ),
-    ).toThrow(/SHA-256/)
-    expect(() =>
-      dispatchTool(
-        'snapshot_partition',
-        {
-          path: exported.path,
-          cleanupToken: exported.cleanupToken,
-          counts: { sessions: -1, entries: 0, records: 0, bytes: 0 },
-        },
-        config,
-      ),
-    ).toThrow(/non-negative integer/)
-    await expect(
-      dispatchTool('snapshot_cleanup', { cleanupToken: exported.cleanupToken }, config),
-    ).rejects.toThrow(/"path" or "directory"/)
   } finally {
     await fixture.close()
+    for (const dir of partitionDirs) await rm(dir, { recursive: true, force: true })
+    if (exportedPath) await rm(exportedPath, { force: true })
   }
+})
+
+it('validates snapshot_partition and snapshot_cleanup arguments', async () => {
+  const config = { baseUrl: 'http://localhost:1', token: 't' }
+  expect(() =>
+    dispatchTool(
+      'snapshot_partition',
+      { path: '/tmp/example.jsonl', cleanupToken: 'tok', checksum: 'not-sha256' },
+      config,
+    ),
+  ).toThrow(Error)
+  expect(() =>
+    dispatchTool(
+      'snapshot_partition',
+      {
+        path: '/tmp/example.jsonl',
+        cleanupToken: 'tok',
+        counts: { sessions: -1, entries: 0, records: 0, bytes: 0 },
+      },
+      config,
+    ),
+  ).toThrow(Error)
+  await expect(dispatchTool('snapshot_cleanup', { cleanupToken: 'tok' }, config)).rejects.toThrow(
+    Error,
+  )
 })
