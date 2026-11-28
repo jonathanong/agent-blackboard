@@ -81,5 +81,7 @@ describe.skipIf(!ENDPOINT)('DynamoDB Local session/entry integration', () => {
     })
   })
 
-  runStoreConformance(() => createDynamoStore({ client: doc, tableName: TABLE_NAME }))
+  runStoreConformance((options) =>
+    createDynamoStore({ client: doc, tableName: TABLE_NAME, ...options }),
+  )
 })

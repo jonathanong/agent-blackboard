@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseSentryDeployOptions } from './deploy-options.mjs'
+import { parseSentryDeployOptions, validateRetentionDeployOptions } from './deploy-options.mjs'
 
 const cleanGit = (args) => {
   if (args.join(' ') === 'rev-parse HEAD') return 'a'.repeat(40) + '\n'
@@ -73,5 +73,43 @@ describe('parseSentryDeployOptions', () => {
     expect(() => parseSentryDeployOptions(['--unknown'], {}, cleanGit)).toThrow(
       'Unknown deploy argument',
     )
+  })
+})
+
+describe('validateRetentionDeployOptions', () => {
+  it('accepts absent or valid TTL days and overrides', () => {
+    expect(() => validateRetentionDeployOptions({})).not.toThrow()
+    expect(() =>
+      validateRetentionDeployOptions({
+        AGENT_BLACKBOARD_TTL_DAYS: '30',
+        AGENT_BLACKBOARD_TTL_OVERRIDES: '{"org/repo":7,"ORG/REPO":7}',
+      }),
+    ).not.toThrow()
+  })
+
+  it('rejects malformed TTL days and overrides before deploy', () => {
+    expect(() => validateRetentionDeployOptions({ AGENT_BLACKBOARD_TTL_DAYS: '0' })).toThrow(
+      /AGENT_BLACKBOARD_TTL_DAYS/,
+    )
+    expect(() => validateRetentionDeployOptions({ AGENT_BLACKBOARD_TTL_DAYS: 'abc' })).toThrow(
+      /AGENT_BLACKBOARD_TTL_DAYS/,
+    )
+    expect(() =>
+      validateRetentionDeployOptions({ AGENT_BLACKBOARD_TTL_OVERRIDES: '{bad' }),
+    ).toThrow(/JSON object/)
+    expect(() => validateRetentionDeployOptions({ AGENT_BLACKBOARD_TTL_OVERRIDES: '[]' })).toThrow(
+      /JSON object/,
+    )
+    expect(() =>
+      validateRetentionDeployOptions({ AGENT_BLACKBOARD_TTL_OVERRIDES: '{" ":7}' }),
+    ).toThrow(/non-empty/)
+    expect(() =>
+      validateRetentionDeployOptions({ AGENT_BLACKBOARD_TTL_OVERRIDES: '{"org/a":0}' }),
+    ).toThrow(/positive integer/)
+    expect(() =>
+      validateRetentionDeployOptions({
+        AGENT_BLACKBOARD_TTL_OVERRIDES: '{"org/a":7,"ORG/A":14}',
+      }),
+    ).toThrow(/conflicting overrides/)
   })
 })

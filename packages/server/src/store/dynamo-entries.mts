@@ -4,6 +4,7 @@ import type { Session, SessionEntry } from '../core/types.mjs'
 import { entrySk, entriesPk, sessionSk, sessionsPk } from './dynamo-keys.mjs'
 import { dynamoGetSession } from './dynamo-sessions.mjs'
 import { SessionStoreError } from './errors.mjs'
+import { computeEntryExpiry, resolveEntryTtlDays, type RetentionPolicy } from './retention.mjs'
 import type { GetEntriesOptions, NewSessionEntry } from './store.mjs'
 
 const QUERY_PAGE_LIMIT = 100
@@ -16,6 +17,7 @@ export function itemToEntry(item: Record<string, unknown>): SessionEntry {
     data: item.data as Record<string, unknown>,
     ...(typeof item.schemaId === 'string' ? { schemaId: item.schemaId } : {}),
     ...(typeof item.schemaVersion === 'number' ? { schemaVersion: item.schemaVersion } : {}),
+    ...(typeof item.ttl === 'number' ? { expiresAt: new Date(item.ttl * 1000).toISOString() } : {}),
   }
 }
 
@@ -33,15 +35,24 @@ async function requireSession(
 export async function dynamoAppendEntry(
   doc: DynamoDBDocumentClient,
   tableName: string,
-  ttlDays: number,
+  retention: RetentionPolicy,
   now: () => Date,
   input: NewSessionEntry,
 ): Promise<SessionEntry> {
+  let effectiveTtlDays = retention.ttlDays
   let timestamp = now().getTime()
+  if (retention.ttlOverrides.size > 0) {
+    const session = await requireSession(doc, tableName, input.credId, input.sessionId)
+    effectiveTtlDays = resolveEntryTtlDays(retention, session.data)
+    timestamp = Math.max(
+      timestamp,
+      session.lastEntryAt === null ? 0 : Date.parse(session.lastEntryAt) + 1,
+    )
+  }
   for (let offset = 0; offset < TIMESTAMP_RETRIES; offset++) {
     const createdAt = new Date(timestamp).toISOString()
-    const ttl = Math.floor(timestamp / 1000) + ttlDays * 86400
-    const entry: SessionEntry = {
+    const { ttl, expiresAt } = computeEntryExpiry(timestamp, effectiveTtlDays)
+    const storedEntry = {
       sessionId: input.sessionId,
       createdAt,
       data: input.data,
@@ -69,7 +80,7 @@ export async function dynamoAppendEntry(
                   PK: entriesPk(input.credId, input.sessionId),
                   SK: entrySk(createdAt),
                   entityType: 'entry',
-                  ...entry,
+                  ...storedEntry,
                   ttl,
                 },
                 ConditionExpression: 'attribute_not_exists(PK)',
@@ -78,10 +89,11 @@ export async function dynamoAppendEntry(
           ],
         }),
       )
-      return entry
+      return { ...storedEntry, expiresAt }
     } catch (error) {
       if (!(error instanceof Error) || error.name !== 'TransactionCanceledException') throw error
       const session = await requireSession(doc, tableName, input.credId, input.sessionId)
+      effectiveTtlDays = resolveEntryTtlDays(retention, session.data)
       timestamp = Math.max(
         timestamp + 1,
         session.lastEntryAt === null ? 0 : Date.parse(session.lastEntryAt) + 1,

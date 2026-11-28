@@ -123,4 +123,75 @@ describe('migrateEntryMetadata', () => {
       entries: 0,
     })
   })
+
+  it('applies per-repository TTL overrides using scanned and fetched session data', async () => {
+    const commands = []
+    const doc = client((command) => {
+      commands.push(command)
+      if (command.constructor.name === 'GetCommand') {
+        if (command.input.Key.PK === 'SESSIONS#c' && command.input.Key.SK === 'SESSION#s2') {
+          return { Item: { data: { repositories: ['org/other', 'Org/Short', 42] } } }
+        }
+        return {}
+      }
+      if (command.constructor.name === 'ScanCommand') {
+        return {
+          Items: [
+            { PK: 'SESSIONS#c', SK: 'SESSION#s1', data: { repository: 'org/medium' } },
+            {
+              PK: 'ENTRIES#c#s1',
+              SK: 'ENTRY#1',
+              sessionId: 's1',
+              createdAt: '2026-01-01T00:00:00.000Z',
+            },
+            {
+              PK: 'ENTRIES#c#s2',
+              SK: 'ENTRY#2',
+              sessionId: 's2',
+              createdAt: '2026-01-01T00:00:00.000Z',
+            },
+            {
+              PK: 'ENTRIES#c#s3',
+              SK: 'ENTRY#3',
+              sessionId: 's3',
+              createdAt: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+        }
+      }
+      return {}
+    })
+
+    await expect(
+      migrateEntryMetadata({
+        doc,
+        tableName: 'T',
+        ttlDays: 90,
+        ttlOverrides: JSON.stringify({ 'org/medium': 14, 'org/short': 7, 'org/other': 30 }),
+      }),
+    ).resolves.toEqual({ migrated: true, sessions: 0, entries: 3 })
+
+    const baseEpoch = Math.floor(Date.parse('2026-01-01T00:00:00.000Z') / 1000)
+    const entryUpdates = commands.filter(
+      (command) =>
+        command.constructor.name === 'UpdateCommand' &&
+        command.input.UpdateExpression === 'SET #ttl = :ttl',
+    )
+    expect(entryUpdates.map((u) => u.input.ExpressionAttributeValues[':ttl'])).toEqual([
+      baseEpoch + 14 * 86400,
+      baseEpoch + 7 * 86400,
+      baseEpoch + 90 * 86400,
+    ])
+  })
+
+  it('rejects malformed TTL override configuration before scanning', async () => {
+    const doc = client(() => ({}))
+    await expect(
+      migrateEntryMetadata({ doc, tableName: 'T', ttlDays: 90, ttlOverrides: '[]' }),
+    ).rejects.toThrow('JSON object')
+    await expect(
+      migrateEntryMetadata({ doc, tableName: 'T', ttlDays: 90, ttlOverrides: '{"org/a":0}' }),
+    ).rejects.toThrow('invalid TTL override')
+    expect(doc.send).not.toHaveBeenCalled()
+  })
 })

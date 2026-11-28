@@ -41,4 +41,12 @@ describe('CloudFormation template', () => {
       '          AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT: !Ref SchemaEnforcement',
     )
   })
+
+  it('exposes optional AgentBlackboardTtlOverrides parameter wired into Lambda env', async () => {
+    const template = await readFile(new URL('../infra/template.yaml', import.meta.url), 'utf8')
+    expect(template).toContain('  AgentBlackboardTtlOverrides:')
+    expect(template).toContain(
+      '          AGENT_BLACKBOARD_TTL_OVERRIDES: !Ref AgentBlackboardTtlOverrides',
+    )
+  })
 })

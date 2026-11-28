@@ -54,7 +54,7 @@ export type { DynamoStoreOptions } from './dynamo-client.mjs'
 
 /** DynamoDB-backed single-table store for credentials, sessions, entries, and schemas. */
 export function createDynamoStore(options: DynamoStoreOptions = {}): BlackboardStore {
-  const { doc, tableName, ttlDays, now } = resolveDynamoConfig(options)
+  const { doc, tableName, retention, now } = resolveDynamoConfig(options)
   return {
     createSession(input: NewSession): Promise<Session> {
       return dynamoCreateSession(doc, tableName, now, input)
@@ -72,7 +72,7 @@ export function createDynamoStore(options: DynamoStoreOptions = {}): BlackboardS
       return dynamoArchiveSession(doc, tableName, now, credId, sessionId)
     },
     appendEntry(entry: NewSessionEntry): Promise<SessionEntry> {
-      return dynamoAppendEntry(doc, tableName, ttlDays, now, entry)
+      return dynamoAppendEntry(doc, tableName, retention, now, entry)
     },
     getEntries(
       credId: string,
@@ -122,7 +122,7 @@ export function createDynamoStore(options: DynamoStoreOptions = {}): BlackboardS
       return dynamoGetSchemaBundle(doc, tableName)
     },
     recordSchemaShadowFailure(input: RecordSchemaShadowFailureInput): Promise<void> {
-      return dynamoRecordSchemaShadowFailure(doc, tableName, ttlDays, now, input)
+      return dynamoRecordSchemaShadowFailure(doc, tableName, retention.ttlDays, now, input)
     },
     getSchemaShadowReport(
       id: string,

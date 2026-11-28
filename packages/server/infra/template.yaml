@@ -13,6 +13,14 @@ Parameters:
       Days each entry is retained from its creation time before DynamoDB TTL
       deletes it. Session metadata does not expire.
 
+  AgentBlackboardTtlOverrides:
+    Type: String
+    Default: ''
+    Description: >-
+      Optional JSON object mapping repository names to per-repository retention
+      days (overrides AgentBlackboardTtlDays for sessions tagged with those
+      repositories).
+
   AdminCredentials:
     Type: String
     NoEcho: true
@@ -172,6 +180,7 @@ Resources:
         Variables:
           AGENT_BLACKBOARD_TABLE: !Ref AgentBlackboardTable
           AGENT_BLACKBOARD_TTL_DAYS: !Ref AgentBlackboardTtlDays
+          AGENT_BLACKBOARD_TTL_OVERRIDES: !Ref AgentBlackboardTtlOverrides
           AGENT_BLACKBOARD_ADMIN_CREDENTIALS: !Ref AdminCredentials
           SENTRY_ENABLED: !Ref SentryEnabled
           SENTRY_DSN: !Ref SentryDsn

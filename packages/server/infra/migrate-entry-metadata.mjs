@@ -48,8 +48,61 @@ async function updateIfPresent(doc, input) {
   }
 }
 
-async function migrateItem(doc, tableName, ttlDays, item) {
+function parseTtlOverrides(raw) {
+  const map = new Map()
+  if (!raw || typeof raw !== 'string' || raw.trim() === '') return map
+  const parsed = JSON.parse(raw)
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error('AGENT_BLACKBOARD_TTL_OVERRIDES must be a JSON object')
+  }
+  for (const [key, value] of Object.entries(parsed)) {
+    const repo = key.trim().toLowerCase()
+    if (!repo || !Number.isSafeInteger(value) || value < 1) {
+      throw new Error(`invalid TTL override for "${key}"`)
+    }
+    map.set(repo, value)
+  }
+  return map
+}
+
+function resolveEffectiveTtlDays(ttlDays, overrides, sessionData) {
+  if (overrides.size === 0 || !sessionData || typeof sessionData !== 'object') return ttlDays
+  const repos = []
+  if (typeof sessionData.repository === 'string') repos.push(sessionData.repository)
+  if (Array.isArray(sessionData.repositories)) {
+    for (const repo of sessionData.repositories) {
+      if (typeof repo === 'string') repos.push(repo)
+    }
+  }
+  let shortest
+  for (const rawRepo of repos) {
+    const override = overrides.get(rawRepo.trim().toLowerCase())
+    if (override !== undefined && (shortest === undefined || override < shortest)) {
+      shortest = override
+    }
+  }
+  return shortest ?? ttlDays
+}
+
+async function getSessionData(doc, tableName, owner, cache) {
+  const key = `${owner.PK}\0${owner.SK}`
+  if (cache.has(key)) return cache.get(key)
+  const result = await doc.send(
+    new GetCommand({
+      TableName: tableName,
+      Key: owner,
+      ProjectionExpression: '#data',
+      ExpressionAttributeNames: { '#data': 'data' },
+    }),
+  )
+  const data = result.Item?.data
+  cache.set(key, data)
+  return data
+}
+
+async function migrateItem(doc, tableName, ttlDays, overrides, sessionDataCache, item) {
   if (typeof item.PK === 'string' && item.PK.startsWith(SESSION_PK_PREFIX)) {
+    if (overrides.size > 0) sessionDataCache.set(`${item.PK}\0${item.SK}`, item.data)
     if (item.ttl === undefined) return { sessions: 0, entries: 0 }
     const changed = await updateIfPresent(doc, {
       TableName: tableName,
@@ -63,7 +116,9 @@ async function migrateItem(doc, tableName, ttlDays, item) {
 
   const owner = entryOwner(item)
   if (!owner) return { sessions: 0, entries: 0 }
-  const ttl = entryTtl(item.createdAt, ttlDays)
+  const sessionData =
+    overrides.size > 0 ? await getSessionData(doc, tableName, owner, sessionDataCache) : undefined
+  const ttl = entryTtl(item.createdAt, resolveEffectiveTtlDays(ttlDays, overrides, sessionData))
   const entryChanged = await updateIfPresent(doc, {
     TableName: tableName,
     Key: { PK: item.PK, SK: item.SK },
@@ -89,7 +144,14 @@ export function migrationClient(region) {
   })
 }
 
-export async function migrateEntryMetadata({ doc, tableName, ttlDays, now = () => new Date() }) {
+export async function migrateEntryMetadata({
+  doc,
+  tableName,
+  ttlDays,
+  ttlOverrides,
+  now = () => new Date(),
+}) {
+  const overrides = parseTtlOverrides(ttlOverrides)
   const marker = await doc.send(
     new GetCommand({ TableName: tableName, Key: MARKER_KEY, ConsistentRead: true }),
   )
@@ -97,18 +159,23 @@ export async function migrateEntryMetadata({ doc, tableName, ttlDays, now = () =
 
   let sessions = 0
   let entries = 0
+  const sessionDataCache = new Map()
   let exclusiveStartKey
   do {
     const page = await doc.send(
       new ScanCommand({
         TableName: tableName,
-        ProjectionExpression: 'PK, SK, sessionId, createdAt, #ttl',
-        ExpressionAttributeNames: { '#ttl': 'ttl' },
+        ProjectionExpression:
+          overrides.size > 0
+            ? 'PK, SK, sessionId, createdAt, #ttl, #data'
+            : 'PK, SK, sessionId, createdAt, #ttl',
+        ExpressionAttributeNames:
+          overrides.size > 0 ? { '#ttl': 'ttl', '#data': 'data' } : { '#ttl': 'ttl' },
         ExclusiveStartKey: exclusiveStartKey,
       }),
     )
     for (const item of page.Items ?? []) {
-      const changed = await migrateItem(doc, tableName, ttlDays, item)
+      const changed = await migrateItem(doc, tableName, ttlDays, overrides, sessionDataCache, item)
       sessions += changed.sessions
       entries += changed.entries
     }

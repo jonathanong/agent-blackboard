@@ -36,6 +36,7 @@ export interface SessionEntry {
   data: Record<string, unknown>
   schemaId?: string
   schemaVersion?: number
+  expiresAt?: string
 }
 
 export interface AppendEntryResult extends SessionEntry {

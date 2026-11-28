@@ -17,6 +17,7 @@ import { resolveEnforcementMode } from './schemas/enforce.mjs'
 import { assertSchemaEnforcementReady } from './schemas/readiness.mjs'
 import { createDynamoStore } from './store/dynamo.mjs'
 import { MemoryBlackboardStore } from './store/memory.mjs'
+import { resolveRetentionPolicy } from './store/retention.mjs'
 import type { BlackboardStore } from './store/store.mjs'
 
 export interface ServerDeps {
@@ -146,9 +147,14 @@ export function adminEnvFromProcess(): ServerEnv {
 }
 
 export function storeFromProcess(): BlackboardStore {
-  return process.env.AGENT_BLACKBOARD_STORE === 'memory'
-    ? new MemoryBlackboardStore()
-    : createDynamoStore()
+  if (process.env.AGENT_BLACKBOARD_STORE === 'memory') {
+    const policy = resolveRetentionPolicy({ env: process.env })
+    return new MemoryBlackboardStore({
+      ttlDays: policy.ttlDays,
+      ttlOverrides: Object.fromEntries(policy.ttlOverrides),
+    })
+  }
+  return createDynamoStore()
 }
 
 /* v8 ignore start -- script entrypoint: only runs under `node local-server.mts`

@@ -9,6 +9,7 @@ import { MemoryCredentialStore } from './memory-credentials.mjs'
 import { MemorySchemaShadowStore } from './memory-schemas-shadow.mjs'
 import { MemorySchemaStore } from './memory-schemas.mjs'
 import { MemorySessionStore } from './memory-sessions.mjs'
+import { resolveRetentionPolicy, type TtlOverrides } from './retention.mjs'
 import type {
   BlackboardStore,
   CredentialIdOrName,
@@ -31,6 +32,8 @@ import type {
 
 export interface MemoryStoreOptions {
   now?: () => Date
+  ttlDays?: number
+  ttlOverrides?: TtlOverrides
 }
 
 /** In-memory `BlackboardStore` for unit tests and local dev. */
@@ -43,8 +46,12 @@ export class MemoryBlackboardStore implements BlackboardStore {
 
   constructor(options: MemoryStoreOptions = {}) {
     const now = options.now ?? ((): Date => new Date())
+    const retention = resolveRetentionPolicy({
+      ttlDays: options.ttlDays,
+      ttlOverrides: options.ttlOverrides,
+    })
     this.#now = now
-    this.#sessions = new MemorySessionStore(now)
+    this.#sessions = new MemorySessionStore(now, retention)
     this.#credentials = new MemoryCredentialStore(now)
     this.#schemas = new MemorySchemaStore(now)
   }

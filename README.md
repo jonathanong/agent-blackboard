@@ -207,6 +207,7 @@ unless `--sentry=required` is supplied explicitly.
 | ------------------------------------- | -------------- | --------------------------------------------------------------- |
 | `AGENT_BLACKBOARD_TABLE`              | server         | DynamoDB table name                                             |
 | `AGENT_BLACKBOARD_TTL_DAYS`           | server         | Entry retention; default 90 days                                |
+| `AGENT_BLACKBOARD_TTL_OVERRIDES`      | server         | Optional JSON object mapping repository names to retention days |
 | `AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT` | server         | `optional` (default), `shadow`, or `required` write-time policy |
 | `AGENT_BLACKBOARD_ADMIN_CREDENTIALS`  | server         | Base64 JSON admin credential list                               |
 | `AGENT_BLACKBOARD_URL`                | client/CLI/MCP | Server base URL                                                 |

@@ -11,10 +11,11 @@
 // Usage: pnpm --filter agent-blackboard-server run deploy
 // Env: AWS_REGION or AWS_DEFAULT_REGION (or `aws configure`'s default),
 //      AGENT_BLACKBOARD_ADMIN_CREDENTIALS (required), AGENT_BLACKBOARD_TTL_DAYS (optional),
+//      AGENT_BLACKBOARD_TTL_OVERRIDES (optional, JSON object mapping repository to TTL days),
 //      AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT (optional, "optional", "shadow", or "required"),
 //      STACK_NAME (optional, default "agent-blackboard").
 import { bundle } from './bundle.mjs'
-import { parseSentryDeployOptions } from './deploy-options.mjs'
+import { parseSentryDeployOptions, validateRetentionDeployOptions } from './deploy-options.mjs'
 import { migrateEntryMetadata, migrationClient } from './migrate-entry-metadata.mjs'
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
@@ -115,6 +116,7 @@ export async function deploy(argv = process.argv.slice(2)) {
   const sentry = parseSentryDeployOptions(argv, process.env, (args) =>
     execFileSync('git', args, { cwd: path.resolve(infraDir, '../../..'), encoding: 'utf8' }),
   )
+  validateRetentionDeployOptions(process.env)
 
   const { zipPath } = await bundle()
   const hash = createHash('sha256')
@@ -136,6 +138,8 @@ export async function deploy(argv = process.argv.slice(2)) {
   ]
   if (process.env.AGENT_BLACKBOARD_TTL_DAYS)
     overrides.push(`AgentBlackboardTtlDays=${process.env.AGENT_BLACKBOARD_TTL_DAYS}`)
+  if (process.env.AGENT_BLACKBOARD_TTL_OVERRIDES)
+    overrides.push(`AgentBlackboardTtlOverrides=${process.env.AGENT_BLACKBOARD_TTL_OVERRIDES}`)
   if (process.env.AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT)
     overrides.push(`SchemaEnforcement=${process.env.AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT}`)
 
@@ -172,6 +176,7 @@ export async function deploy(argv = process.argv.slice(2)) {
     doc: migrationClient(region),
     tableName,
     ttlDays,
+    ttlOverrides: parameters.AgentBlackboardTtlOverrides,
   })
   console.error(`Entry metadata migration: ${JSON.stringify(migration)}`)
   return outputs
