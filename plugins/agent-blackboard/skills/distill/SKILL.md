@@ -76,8 +76,10 @@ Run cleanup in a `finally`-style step regardless of success, empty results, or e
 
 5. **Archive sessions only when asked.**
    - By default, leave every session unarchived (`archivedSessions: []`).
-   - Only when the caller explicitly requested archival, call `session_archive({ "sessionId": "<id>" })`
-     for each eligible distilled session and record its `archivedAt`.
+   - Only when the caller explicitly requested archival, re-read each eligible distilled session via
+     `session_search({ "sessionId": "<id>" })`. Call `session_archive({ "sessionId": "<id>" })`
+     only when its current `lastEntryAt` equals the `lastEntryAt` in the export. Otherwise skip it
+     and leave it out of `archivedSessions`. Record `archivedAt` for each archived session.
    - In a repository-scoped sweep, do **not** archive a session whose `data.repositories` lists
      other repositories that were not part of this sweep.
 
@@ -101,5 +103,5 @@ When MCP is unavailable, run the identical sequence through `agent-blackboard`:
 
 - `agent-blackboard snapshot export [filters...]`
 - `agent-blackboard snapshot partition --path <path> --cleanup-token <token>`
-- `agent-blackboard sessions archive <id>` (only when explicitly asked)
+- `agent-blackboard sessions get <id>` and `agent-blackboard sessions archive <id>` (only when explicitly asked and `lastEntryAt` still matches the export)
 - `agent-blackboard snapshot cleanup --path <path> [--directory <dir>] --cleanup-token <token>`
