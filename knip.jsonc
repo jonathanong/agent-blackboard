@@ -6,6 +6,9 @@
   // A workspace self-dependency of the root, added only so pnpm links its bin into
   // root's node_modules/.bin (`pnpm exec agent-blackboard` locally). Never imported.
   "ignoreDependencies": ["agent-blackboard"],
+  // The live eval harness is bundled by scripts/run-evals-live.sh with esbuild and never
+  // imported, so nothing in a workspace reaches it.
+  "ignore": ["evals/live/harness/**"],
   "workspaces": {
     "packages/agent-blackboard": {
       "entry": ["src/index.mts!", "src/cli/index.mts!"],

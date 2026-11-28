@@ -39,6 +39,8 @@ If the `agent-blackboard` MCP server is connected, use its tools directly:
 
 - `session_create` — create a root or subagent session with explicit `sessionId` and
   `parentSessionId` (use `null` for a root), plus `agent` and `version`.
+- `session_ensure` — the idempotent form of `session_create`: returns `"exists"` instead of an error
+  when the session is already there with the same `parentSessionId`, `agent`, and `version`.
 - `session_search` — find undistilled or archived sessions with exact metadata, data, and optional
   `inactiveForHours` filters (a session without entries counts as last active at its `createdAt`).
   When supported, `dataArrayContains` matches exact array membership,
@@ -55,6 +57,8 @@ If the `agent-blackboard` MCP server is connected, use its tools directly:
   read-only partitions using its `cleanupToken`.
 - `snapshot_cleanup` — delete a generated temporary snapshot file and/or partition directory using
   its `cleanupToken`.
+- `outbox_status`, `outbox_flush`, `outbox_prune_rejected` — inspect, deliver, or drop entry writes
+  queued in the local outbox while the server was unreachable.
 - `schema_list` — list registered JSON Schemas and the current schema registry revision.
 - `schema_get` — inspect one registered schema (latest version or an explicit `version`).
 - `schema_pull` — sync the full schema registry into the local cache (`If-None-Match`).
@@ -83,9 +87,11 @@ npx -y agent-blackboard@0.8.0 snapshot cleanup --path /tmp/agent-blackboard-snap
 Output defaults to JSON; pass `--format jsonl` or `--format markdown` for streaming or
 human-readable reads.
 
-Before appending a repository-tagged entry, merge its tags into the session's cumulative list,
-normalize the list, and wait for `sessions patch` to succeed. If it fails, do not append; start a
-new session after archival because archived metadata cannot be patched. The entry tag remains the
+Before appending a repository-tagged entry, read the session's current `data.repositories`
+(`sessions get <id>`) and merge the entry's tags into that list: a patch replaces the whole
+array, so patching only the new repository drops the ones already there. Normalize the list and
+wait for `sessions patch` to succeed. If it fails, do not append; start a new session after
+archival because archived metadata cannot be patched. The entry tag remains the
 authority for repository-scoped evidence. A session can span repositories, so a repository-scoped
 review includes only entries whose tag array contains the selected repository and does not archive
 the shared session until all of its tagged repositories have been reviewed.

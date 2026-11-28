@@ -27,7 +27,10 @@
     "knip": "knip",
     "dependency-cruiser": "depcruise packages",
     "actionlint": "github-actionlint",
-    "lint:links": "lychee --config lychee.toml '**/*.md' '**/*.json'"
+    "lint:links": "lychee --config lychee.toml '**/*.md' '**/*.json'",
+    "evals": "./scripts/run-evals.sh",
+    "evals:live": "./scripts/run-evals-live.sh",
+    "evals:summary": "python3 scripts/eval-summary.py"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

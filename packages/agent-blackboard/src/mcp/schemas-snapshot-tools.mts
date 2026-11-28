@@ -77,7 +77,7 @@ export const SNAPSHOT_TOOLS: Tool[] = [
   {
     name: 'snapshot_cleanup',
     description:
-      'Removes a generated temporary snapshot file and/or partition directory using the cleanupToken from snapshot_export or snapshot_partition.',
+      'Removes a generated temporary snapshot file and/or partition directory using the cleanupToken from snapshot_export or snapshot_partition. Pass path, directory, or both: the token alone removes nothing and is rejected.',
     inputSchema: {
       type: 'object',
       properties: {

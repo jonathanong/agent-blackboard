@@ -3,6 +3,7 @@ exclude_path = [
   "(^|/)dist($|/)",
   "(^|/)coverage($|/)",
   "(^|/)\\.git($|/)",
+  "(^|/)evals/results($|/)",
 ]
 
 # Accept 403 (npmjs.com and some others bot-reject plain HTTP clients) and 429 (rate-limited).

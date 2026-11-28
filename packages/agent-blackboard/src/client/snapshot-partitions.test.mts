@@ -17,7 +17,7 @@ import {
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, expect, it } from 'vitest'
 import {
   assertSnapshotMarker,
   createCleanupToken,
@@ -33,6 +33,22 @@ import { assertPartitionFile, writePartitions } from './snapshot-partition-write
 import { Snapshots } from './snapshots.mjs'
 
 const snapshotsToRemove = new Set<string>()
+
+// The leak checks below diff a listing of tmpdir(). Other test files create partition
+// directories there in parallel, so give this file's worker a private TMPDIR.
+const sharedTmpdir = process.env.TMPDIR
+let privateTmpdir: string
+
+beforeAll(async () => {
+  privateTmpdir = await mkdtemp(join(tmpdir(), 'snapshot-partitions-test-'))
+  process.env.TMPDIR = privateTmpdir
+})
+
+afterAll(async () => {
+  if (sharedTmpdir === undefined) delete process.env.TMPDIR
+  else process.env.TMPDIR = sharedTmpdir
+  await rm(privateTmpdir, { recursive: true, force: true })
+})
 
 afterEach(async () => {
   await Promise.all(

@@ -1,0 +1,49 @@
+schema_version: '1.1'
+name: live-subagent-sessions-direct-parent
+runs: 3
+tags: [live, agent-blackboard, priority-high]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  model: claude-sonnet-5-5
+  max_turns: 30
+  timeout_seconds: 600
+  allowed_tools:
+    [
+      Bash,
+      Read,
+      Write,
+      Edit,
+      Glob,
+      Grep,
+      Skill,
+      mcp__plugin_agent-blackboard_agent-blackboard__session_create,
+      mcp__plugin_agent-blackboard_agent-blackboard__session_ensure,
+      mcp__plugin_agent-blackboard_agent-blackboard__session_search,
+      mcp__plugin_agent-blackboard_agent-blackboard__session_patch,
+      mcp__plugin_agent-blackboard_agent-blackboard__session_archive,
+      mcp__plugin_agent-blackboard_agent-blackboard__entry_append,
+      mcp__plugin_agent-blackboard_agent-blackboard__entry_get,
+      mcp__plugin_agent-blackboard_agent-blackboard__snapshot_export,
+      mcp__plugin_agent-blackboard_agent-blackboard__snapshot_partition,
+      mcp__plugin_agent-blackboard_agent-blackboard__snapshot_cleanup,
+      mcp__plugin_agent-blackboard_agent-blackboard__outbox_status,
+      mcp__plugin_agent-blackboard_agent-blackboard__outbox_flush,
+      mcp__plugin_agent-blackboard_agent-blackboard__outbox_prune_rejected,
+    ]
+  append_system_prompt: |
+    You are working in a scratch directory on a machine set up for agent-blackboard, the
+    team's session journal, and it is already configured with a server URL and token. Do not
+    look for, print, or change that configuration. Do not read or edit the `.eval-blackboard/`
+    directory: it belongs to the test harness.
+
+    Team convention: record real friction, decisions, and findings in agent-blackboard as you work.
+
+    You are claude-code 2.1.3. Do the work now; do not ask for confirmation.
+  prompt: |
+    I'm the orchestrator for a refactor in jongleberry/agent-blackboard. My own blackboard session is
+    `cc-root-7f2`, already created. I'm about to dispatch two workers, `worker-api` and `worker-cli`
+    (both claude-code 2.1.3), and `worker-cli` will hand a chunk of its work to its own helper,
+    `helper-cli-docs`. Set up the journaling for all three now, before I dispatch them: give each its
+    place on the blackboard and record one first entry for each saying what it will work on, so I
+    can trace who did what afterwards. Then tell me what to pass each worker.
