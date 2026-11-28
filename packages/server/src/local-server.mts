@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url'
 import { handleRequest, type ServerEnv } from './core/handle-request.mjs'
 import type { BodyChunk, HandlerRequest, HandlerResponse } from './core/types.mjs'
 import { resolveEnforcementMode } from './schemas/enforce.mjs'
+import { assertSchemaEnforcementReady } from './schemas/readiness.mjs'
 import { createDynamoStore } from './store/dynamo.mjs'
 import { MemoryBlackboardStore } from './store/memory.mjs'
 import type { BlackboardStore } from './store/store.mjs'
@@ -116,6 +117,15 @@ export function createServer(deps: ServerDeps): Server {
   })
 }
 
+export async function startServer(deps: ServerDeps, port = 0): Promise<Server> {
+  await assertSchemaEnforcementReady(deps.store, deps.env ?? {})
+  const server = createServer(deps)
+  await new Promise<void>((resolve) => {
+    server.listen(port, resolve)
+  })
+  return server
+}
+
 // ---- Script entrypoint: `node local-server.mts` / `pnpm run dev` ----
 
 export function adminEnvFromProcess(): ServerEnv {
@@ -149,11 +159,16 @@ const isMain = process.argv[1] && fileURLToPath(import.meta.url) === realpathSyn
 if (isMain) {
   const port = process.env.PORT ? Number(process.env.PORT) : 3000
   const usingMemory = process.env.AGENT_BLACKBOARD_STORE === 'memory'
-  const server = createServer({ store: storeFromProcess(), env: adminEnvFromProcess() })
-  server.listen(port, () => {
-    console.log(
-      `agent-blackboard local server listening on http://localhost:${port} (store: ${usingMemory ? 'memory' : 'dynamodb'})`,
-    )
-  })
+  void startServer({ store: storeFromProcess(), env: adminEnvFromProcess() }, port).then(
+    () => {
+      console.log(
+        `agent-blackboard local server listening on http://localhost:${port} (store: ${usingMemory ? 'memory' : 'dynamodb'})`,
+      )
+    },
+    (error: unknown) => {
+      logError('failed to start local server', error)
+      process.exitCode = 1
+    },
+  )
 }
 /* v8 ignore stop */

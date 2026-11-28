@@ -105,25 +105,26 @@ DynamoDB transactions combine the session metadata update with each entry write,
 
 ## HTTP API
 
-| Method          | Path                                     | Purpose                                                                        |
-| --------------- | ---------------------------------------- | ------------------------------------------------------------------------------ |
-| `POST`          | `/sessions`                              | Create `{ id, parentSessionId, agent, version }`                               |
-| `GET`           | `/sessions`                              | List sessions; supports archive and inactivity filters                         |
-| `GET`           | `/sessions/:id`                          | Get session metadata                                                           |
-| `PATCH`         | `/sessions/:id`                          | Patch `{ data }` or archive with `{ archived: true }`                          |
-| `POST`          | `/sessions/:id/entries`                  | Append `{ data, schemaId?, schemaVersion? }` (validates against registry)      |
-| `GET`           | `/sessions/:id/entries`                  | Stream entries (`json`, `jsonl`, or `markdown`)                                |
-| `GET`           | `/snapshot`                              | Stream all selected active sessions and entries as JSONL                       |
-| `GET`           | `/schemas`                               | List schema summaries (`?include=versions` returns full bundle; supports ETag) |
-| `GET`           | `/schemas/:id`                           | Get latest version and metadata for a schema                                   |
-| `GET`           | `/schemas/:id/versions`                  | List immutable version history for a schema                                    |
-| `GET`           | `/schemas/:id/versions/:version`         | Get a specific immutable schema version                                        |
-| `PUT`           | `/schemas/:id`                           | Admin-only: publish next JSON Schema 2020-12 version (`breaking?`, `shadow?`)  |
-| `POST`          | `/schemas/:id/versions/:version/promote` | Admin-only: switch a shadow schema version to `enforced`                       |
-| `GET`           | `/schemas/:id/report`                    | Admin-only: shadow failure counts and recent examples across schema versions   |
-| `GET`           | `/schemas/:id/versions/:version/report`  | Admin-only: shadow failure counts and recent examples for one schema version   |
-| `DELETE`        | `/schemas/:id`                           | Admin-only: deprecate a schema without deleting its history                    |
-| `/credentials*` | admin routes                             | Manage client credentials                                                      |
+| Method          | Path                                     | Purpose                                                                                |
+| --------------- | ---------------------------------------- | -------------------------------------------------------------------------------------- |
+| `POST`          | `/sessions`                              | Create `{ id, parentSessionId, agent, version }`                                       |
+| `GET`           | `/sessions`                              | List sessions; supports archive and inactivity filters                                 |
+| `GET`           | `/sessions/:id`                          | Get session metadata                                                                   |
+| `PATCH`         | `/sessions/:id`                          | Patch `{ data }` or archive with `{ archived: true }`                                  |
+| `POST`          | `/sessions/:id/entries`                  | Append `{ data, schemaId?, schemaVersion? }` (validates against registry)              |
+| `GET`           | `/sessions/:id/entries`                  | Stream entries (`json`, `jsonl`, or `markdown`)                                        |
+| `GET`           | `/snapshot`                              | Stream all selected active sessions and entries as JSONL                               |
+| `GET`           | `/schemas`                               | List schema summaries (`?include=versions` returns full bundle; supports ETag)         |
+| `GET`           | `/schemas/:id`                           | Get latest version and metadata for a schema                                           |
+| `GET`           | `/schemas/:id/versions`                  | List immutable version history for a schema                                            |
+| `GET`           | `/schemas/:id/versions/:version`         | Get a specific immutable schema version                                                |
+| `PUT`           | `/schemas/:id`                           | Admin-only: publish next JSON Schema 2020-12 version (`breaking?`, `shadow?`)          |
+| `POST`          | `/schemas/:id/versions/:version/promote` | Admin-only: switch a shadow schema version to `enforced`                               |
+| `GET`           | `/schemas/:id/report`                    | Admin-only: shadow failure counts and recent examples across schema versions           |
+| `GET`           | `/schemas/:id/versions/:version/report`  | Admin-only: shadow failure counts and recent examples for one schema version           |
+| `DELETE`        | `/schemas/:id`                           | Admin-only: deprecate a schema without deleting its history                            |
+| `GET`           | `/health`                                | Unauthenticated readiness check (`200` ok, `503` if `required` has no enforced schema) |
+| `/credentials*` | admin routes                             | Manage client credentials                                                              |
 
 Every authenticated response includes `x-schema-registry-revision: <n>` so clients can detect when
 their local pulled schema cache is behind the server. `GET /schemas` and
@@ -134,7 +135,9 @@ Entry writes naming `schemaId` are validated against the registered JSON Schema 
 `AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT` controls the server-wide policy: `optional` (default — allows
 entries without `schemaId`, enforces named schemas unless that version is in `shadow` mode),
 `shadow` (validates every entry naming a schema but rejects nothing), or `required` (also rejects
-entries missing `schemaId`). When a newer version is registered in `shadow` mode on top of an
+entries missing `schemaId`). In `required` mode, the registry must hold at least one active
+(non-deprecated) enforced schema: `local-server` refuses to start otherwise, and `GET /health`
+returns `503` with guidance to register and promote a schema or switch to `shadow`. When a newer version is registered in `shadow` mode on top of an
 already-enforced version, unpinned writes continue enforcing the latest prior enforced version and
 also shadow-validate against the newer shadow version. When a validation fails in per-version or
 global shadow mode, the server accepts the entry (`201`), attaches a `warning` object (`code`,

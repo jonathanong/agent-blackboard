@@ -9,6 +9,7 @@ import {
   currentTime,
   parseIncomingRequest,
   respond,
+  startServer,
   storeFromProcess,
 } from './local-server.mjs'
 import { MemoryBlackboardStore } from './store/memory.mjs'
@@ -420,5 +421,42 @@ describe('createServer (end-to-end over a real socket)', () => {
       const notFound = await fetch(`${baseUrl}/nope`)
       expect(notFound.status).toBe(404)
     })
+  })
+
+  it('startServer refuses required mode with an empty registry and starts once a schema is promoted', async () => {
+    const store = new MemoryBlackboardStore()
+    const env = { AGENT_BLACKBOARD_SCHEMA_ENFORCEMENT: 'required' }
+    await expect(startServer({ store, env })).rejects.toThrow(
+      /register and promote a schema.*shadow/,
+    )
+
+    await store.putSchemaVersion({
+      id: 'finding',
+      schema: { type: 'object' },
+      actor: 'ops',
+      expectedVersion: 0,
+      mode: 'shadow',
+    })
+    await store.promoteSchemaVersion('finding', 1, 'ops')
+
+    const server = await startServer({ store, env })
+    try {
+      const { port } = server.address() as AddressInfo
+      const health = await fetch(`http://127.0.0.1:${port}/health`)
+      expect(health.status).toBe(200)
+      expect(await health.json()).toEqual({
+        status: 'ok',
+        schemaEnforcement: { mode: 'required', ready: true },
+      })
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      )
+    }
+
+    const optionalServer = await startServer({ store: new MemoryBlackboardStore() })
+    await new Promise<void>((resolve, reject) =>
+      optionalServer.close((error) => (error ? reject(error) : resolve())),
+    )
   })
 })
